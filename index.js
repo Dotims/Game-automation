@@ -10,13 +10,11 @@ const GAME_URL = "https://www.margonem.pl/";
 const DEFAULT_CONFIG = {
     minLvl: 1, 
     maxLvl: 100,
+    autoHeal: false,
     maps: [
-        "Mrowisko", 
-        "Mrowisko p.1", 
-        "Mrowisko p.2", 
-        "Kopiec Mrówek p.2",
-        "Kopiec Mrówek p.1",
-        "Kopiec Mrówek"
+        "Grota Malowanej Śmierci", 
+        "Dziewicza Knieja", 
+        "Skalista Wyżyna", 
     ]
 };
 
@@ -81,63 +79,66 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
                     if (!window.BOT_CONFIG) {
                         const saved = localStorage.getItem('MARGO_BOT_CFG');
                         window.BOT_CONFIG = saved ? JSON.parse(saved) : defConfig;
-                        window.BOT_ACTIVE = false; // Domyślnie wyłączony po odświeżeniu dla bezpieczeństwa
+                        window.BOT_ACTIVE = false; 
                     }
 
                     // --- RYSOWANIE UI ---
-                    if (!document.getElementById('margo-bot-panel')) {
-                        const div = document.createElement('div');
-                        div.id = 'margo-bot-panel';
-                        div.style.cssText = 'position:fixed; top:10px; left:10px; z-index:9999; background:rgba(0,0,0,0.85); color:white; padding:10px; border-radius:8px; border:2px solid #555; font-family:Arial; font-size:12px; width:180px;';
+                    // ZAWSZE usuwamy stary panel, żeby odświeżyć checkbox
+                    const existingPanel = document.getElementById('margo-bot-panel');
+                    if (existingPanel) existingPanel.remove();
 
-                        div.innerHTML = `
-                            <div style="font-weight:bold; font-size:14px; margin-bottom:5px; text-align:center;">🤖 MargoBot v3</div>
-                            <div id="bot-status" style="color:#f44336; font-weight:bold; text-align:center; margin-bottom:10px;">OFF</div>
-                            
-                            <label>Lvl Min: <input type="number" id="inp-min" style="width:40px; color:black;" value="${window.BOT_CONFIG.minLvl}"></label>
-                            <label>Max: <input type="number" id="inp-max" style="width:40px; color:black;" value="${window.BOT_CONFIG.maxLvl}"></label>
-                            <div style="margin:5px 0;">Mapy (rozdziel średnikiem ';'):</div>
-                            <textarea id="inp-maps" style="width:100%; height:60px; color:black; font-size:10px;">${window.BOT_CONFIG.maps.join(';')}</textarea>
-                            
-                            <button id="btn-save" style="width:100%; margin-top:5px; background:#2196F3; border:none; color:white; padding:4px; cursor:pointer;">Zapisz Ustawienia</button>
-                            <button id="btn-toggle" style="width:100%; margin-top:10px; background:#4CAF50; border:none; color:white; padding:8px; font-weight:bold; cursor:pointer;">START</button>
-                        `;
-                        document.body.appendChild(div);
+                    const div = document.createElement('div');
+                    div.id = 'margo-bot-panel';
+                    div.style.cssText = 'position:fixed; top:10px; left:10px; z-index:9999; background:rgba(0,0,0,0.85); color:white; padding:10px; border-radius:8px; border:2px solid #555; font-family:Arial; font-size:12px; width:180px;';
 
-                        // Obsługa zdarzeń
-                        const updateUI = () => {
-                            const st = document.getElementById('bot-status');
-                            const btn = document.getElementById('btn-toggle');
-                            const panel = document.getElementById('margo-bot-panel');
-                            if (window.BOT_ACTIVE) {
-                                st.innerText = 'ON'; st.style.color = '#4CAF50';
-                                btn.innerText = 'STOP'; btn.style.backgroundColor = '#f44336';
-                                panel.style.borderColor = '#4CAF50';
-                            } else {
-                                st.innerText = 'OFF'; st.style.color = '#f44336';
-                                btn.innerText = 'START'; btn.style.backgroundColor = '#4CAF50';
-                                panel.style.borderColor = '#f44336';
-                            }
-                        };
-
-                        document.getElementById('btn-toggle').onclick = () => {
-                            window.BOT_ACTIVE = !window.BOT_ACTIVE;
-                            updateUI();
-                        };
-
-                        document.getElementById('btn-save').onclick = () => {
-                            const min = parseInt(document.getElementById('inp-min').value);
-                            const max = parseInt(document.getElementById('inp-max').value);
-                            const mapsVal = document.getElementById('inp-maps').value;
-                            const maps = mapsVal.split(';').map(s => s.trim()).filter(s => s.length > 0);
-
-                            window.BOT_CONFIG = { minLvl: min, maxLvl: max, maps: maps };
-                            localStorage.setItem('MARGO_BOT_CFG', JSON.stringify(window.BOT_CONFIG));
-                            alert('Zapisano!');
-                        };
+                    div.innerHTML = `
+                        <div style="font-weight:bold; font-size:14px; margin-bottom:5px; text-align:center;">🤖 MargoBot v3</div>
+                        <div id="bot-status" style="color:#f44336; font-weight:bold; text-align:center; margin-bottom:10px;">OFF</div>
                         
+                        <label>Lvl Min: <input type="number" id="inp-min" style="width:40px; color:black;" value="${window.BOT_CONFIG.minLvl}"></label>
+                        <label>Max: <input type="number" id="inp-max" style="width:40px; color:black;" value="${window.BOT_CONFIG.maxLvl}"></label>
+                        <label style="margin-left:5px;"><input type="checkbox" id="inp-heal" ${window.BOT_CONFIG.autoHeal ? 'checked' : ''}> Auto Heal</label>
+                        <div style="margin:5px 0;">Mapy (rozdziel średnikiem ';'):</div>
+                        <textarea id="inp-maps" style="width:100%; height:80px; color:black; font-size:10px; white-space:nowrap; overflow:auto;">${window.BOT_CONFIG.maps.join(';')}</textarea>
+                        
+                        <button id="btn-save" style="width:100%; margin-top:5px; background:#2196F3; border:none; color:white; padding:4px; cursor:pointer;">Zapisz Ustawienia</button>
+                        <button id="btn-toggle" style="width:100%; margin-top:10px; background:#4CAF50; border:none; color:white; padding:8px; font-weight:bold; cursor:pointer;">START</button>
+                    `;
+                    document.body.appendChild(div);
+
+                    // Obsługa zdarzeń
+                    const updateUI = () => {
+                        const st = document.getElementById('bot-status');
+                        const btn = document.getElementById('btn-toggle');
+                        const panel = document.getElementById('margo-bot-panel');
+                        if (window.BOT_ACTIVE) {
+                            st.innerText = 'ON'; st.style.color = '#4CAF50';
+                            btn.innerText = 'STOP'; btn.style.backgroundColor = '#f44336';
+                            panel.style.borderColor = '#4CAF50';
+                        } else {
+                            st.innerText = 'OFF'; st.style.color = '#f44336';
+                            btn.innerText = 'START'; btn.style.backgroundColor = '#4CAF50';
+                            panel.style.borderColor = '#f44336';
+                        }
+                    };
+
+                    document.getElementById('btn-toggle').onclick = () => {
+                        window.BOT_ACTIVE = !window.BOT_ACTIVE;
                         updateUI();
-                    }
+                    };
+
+                    document.getElementById('btn-save').onclick = () => {
+                        const min = parseInt(document.getElementById('inp-min').value);
+                        const max = parseInt(document.getElementById('inp-max').value);
+                        const heal = document.getElementById('inp-heal').checked;
+                        const mapsVal = document.getElementById('inp-maps').value;
+                        const maps = mapsVal.split(';').map(s => s.trim()).filter(s => s.length > 0);
+
+                        window.BOT_CONFIG = { minLvl: min, maxLvl: max, autoHeal: heal, maps: maps };
+                        localStorage.setItem('MARGO_BOT_CFG', JSON.stringify(window.BOT_CONFIG));
+                        alert('Zapisano! Zrestartuj bota (OFF->ON).');
+                    };
+                    updateUI();
 
                     return { active: window.BOT_ACTIVE, config: window.BOT_CONFIG };
                 }, DEFAULT_CONFIG);
@@ -175,12 +176,52 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
                         }
                     }
 
-                    let gateways = map.gw ? Object.values(map.gw) : [];
+                    // Gateways - Przetwarzanie
+                    let gateways = [];
+                    if (map.gw) {
+                        for (let gid in map.gw) {
+                            const gw = map.gw[gid];
+                            const name = gw.label || gw.tip || gw.name || "";
+                            gateways.push({ x: gw.x, y: gw.y, name: name, id: gid });
+                        }
+                    }
+
+                    // --- AUTO HEAL (ROBUST PARSING) ---
+                    let healItem = null;
+                    
+                    // Helper do parsowania DOM tipa
+                    const parseTipAmount = (tip) => {
+                        const div = document.createElement('div');
+                        div.innerHTML = tip;
+                        const dmgSpan = div.querySelector('.damage');
+                        if (dmgSpan && (div.textContent.includes('Leczy') || div.textContent.includes('Przywraca'))) {
+                            return parseInt(dmgSpan.textContent.replace(/\s/g, ''));
+                        }
+                        return 0;
+                    };
+
+                    if (cfg.autoHeal && !g.battle && hero.hp < hero.maxhp) {
+                        const missing = hero.maxhp - hero.hp;
+                        const bagItems = document.querySelectorAll('#bag .item');
+                        
+                        for (let item of bagItems) {
+                            const tip = item.getAttribute('tip');
+                            // Sprawdzamy czy tip w ogóle ma słowa kluczowe
+                            if (tip && (tip.includes('Leczy') || tip.includes('Przywraca'))) {
+                                const amount = parseTipAmount(tip);
+                                if (amount > 0 && amount <= missing) {
+                                    healItem = { id: item.id, amount: amount };
+                                    break;
+                                }
+                            }
+                        }
+                    }
 
                     return {
                         battle: false,
                         target: bestTarget,
                         gateways: gateways,
+                        healTarget: healItem,
                         currentMapName: map.name, 
                         hero: { x: hero.x, y: hero.y },
                         obstacles: obstacles, 
@@ -193,12 +234,31 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
                     continue;
                 }
 
+                // Obsługa leczenia
+                if (gameState.healTarget) {
+                    console.log(`❤️ Leczenie: Używam ${gameState.healTarget.id} (Moc: ${gameState.healTarget.amount})`);
+                    await page.evaluate((tid) => {
+                        const el = document.getElementById(tid);
+                        if (el) {
+                            // Symulacja double click
+                            const event = new MouseEvent('dblclick', {
+                                'view': window,
+                                'bubbles': true,
+                                'cancelable': true
+                            });
+                            el.dispatchEvent(event);
+                        }
+                    }, gameState.healTarget.id);
+                    await sleep(500); // Czekaj po użyciu potki
+                    continue; // Pomiń resztę pętli w tym cyklu
+                }
+
                 // --- LOGIKA CELÓW (MOB vs MAPA) ---
                 let finalTarget = gameState.target;
                 
                 // Jeśli brak mobów -> sprawdzamy rotację map
                 if (!finalTarget && CURRENT_CONFIG.maps.length > 0) {
-                    // Normalizujemy nazwy map (usuwanie p.1 itp jeśli trzeba, ale user wpisuje dokładne)
+                    // Normalizujemy nazwy map
                     const currentMapIndex = CURRENT_CONFIG.maps.findIndex(m => m === gameState.currentMapName);
                     
                     if (currentMapIndex !== -1) {
@@ -207,16 +267,32 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
                              nextMapIndex = 0; // Zawsze loop
                         }
 
-                        if (nextMapIndex !== -1) {
-                            const nextMapName = CURRENT_CONFIG.maps[nextMapIndex];
-                            // Szukamy przejścia pasującego nazwą
-                            const gw = gameState.gateways.find(g => g.label && g.label.includes(nextMapName));
-                            
-                            if (gw) {
-                                console.log(`🗺️ Brak mobów. Idę do: ${nextMapName}`);
-                                finalTarget = { x: gw.x, y: gw.y, isGateway: true, nick: `>> ${nextMapName}` };
-                            }
+                        const nextMapName = CURRENT_CONFIG.maps[nextMapIndex];
+                        console.log(`🗺️ [ROTACJA] Obecna: '${gameState.currentMapName}' -> Następna: '${nextMapName}' | Dostępne przejścia: ${gameState.gateways.map(g => `'${g.name}'`).join(", ")}`);
+
+                        // Szukamy przejścia pasującego nazwą
+                        const gw = gameState.gateways.find(g => g.name && g.name.toLowerCase().includes(nextMapName.toLowerCase()));
+                        
+                        if (gw) {
+                            console.log(`✅ Znaleziono przejście do: ${nextMapName} (${gw.x},${gw.y})`);
+                            finalTarget = { x: gw.x, y: gw.y, isGateway: true, nick: `>> ${nextMapName}` };
+                        } else {
+                            console.log(`⚠️ Nie widzę przejścia do: ${nextMapName}. Szukam powrotu na trasę...`);
+                            // Fallback: szukamy jakiejkolwiek mapy z listy
+                            const gwBack = gameState.gateways.find(g => CURRENT_CONFIG.maps.some(m => g.name.includes(m)));
+                             if (gwBack) {
+                                 console.log(`🔄 Powrót na trasę przez: ${gwBack.name}`);
+                                 finalTarget = { x: gwBack.x, y: gwBack.y, isGateway: true, nick: `<< ${gwBack.name}` };
+                             }
                         }
+                    } else {
+                         // Nie jesteśmy na żadnej mapie z listy
+                         console.log(`⚠️ Mapa '${gameState.currentMapName}' spoza listy. Szukam wejścia na trasę...`);
+                         const gwEntry = gameState.gateways.find(g => CURRENT_CONFIG.maps.some(m => g.name.includes(m)));
+                         if (gwEntry) {
+                             console.log(`➡️ Wejście na trasę: ${gwEntry.name}`);
+                             finalTarget = { x: gwEntry.x, y: gwEntry.y, isGateway: true, nick: `>> ${gwEntry.name}` };
+                         }
                     }
                 }
 
