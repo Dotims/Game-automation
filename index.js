@@ -1,6 +1,7 @@
 const { chromium } = require('playwright-extra');
 const stealth = require('puppeteer-extra-plugin-stealth')();
 const PF = require('pathfinding');
+const captchaSolver = require('./captcha');
 
 // Konfiguracja
 chromium.use(stealth);
@@ -227,6 +228,19 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
                     await sleep(500);
                     continue; // Bot pauzuje
                 }
+
+                // 2. Obsługa CAPTCHA
+                try {
+                    const solved = await captchaSolver.solve(page);
+                    if (solved) {
+                        console.log('🤖 CAPTCHA obsłużona. Czekam chwilę na powrót do stabilności...');
+                        await sleep(3000);
+                        continue; // Restart pętli po rozwiązaniu
+                    }
+                } catch (err) {
+                    console.error('⚠️ Błąd podczas sprawdzania CAPTCHA:', err.message);
+                }
+
 
                 // Cleanup blacklisty - usuwamy stare wpisy
                 const now = Date.now();
@@ -569,11 +583,20 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
                              await sleep(2500); // Czekamy na przeładowanie mapy (dłużej dla pewności)
                         } else {
                              // Atak
-                             if (now - lastAttackTime > ATTACK_COOLDOWN + 200) {
+                             // Sprawdzamy czy nie ma captchy (defensywne, choć główna pętla powinna to wyłapać)
+                             const isCaptcha = await page.evaluate(() => {
+                                 const el = document.getElementById('captcha');
+                                 return el && el.style.display !== 'none';
+                             });
+
+                             if (isCaptcha) {
+                                 console.log('🛑 Wstrzymuję atak - wykryto CAPTCHA!');
+                                 await sleep(1000);
+                             } else if (now - lastAttackTime > ATTACK_COOLDOWN + 500) { // Zwiększamy buffor do 500ms
                                 console.log(`⚔️ Atak [${finalTarget.nick}] (Lvl: ${finalTarget.lvl || '?'}) -> E`);
                                 await page.keyboard.press('e');
                                 lastAttackTime = now;
-                                await sleep(500);
+                                await sleep(800); // Dłuższa pauza po ataku
                             }
                         }
                     } else {
