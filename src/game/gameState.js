@@ -48,14 +48,28 @@ async function getGameState(page, config) {
         let finalTarget = bestTarget;
         let gateways = [];
 
-        if (g.townname) {
-             for (let key in g.townname) {
-                const coords = key.split(',');
-                gateways.push({ 
-                    x: parseInt(coords[0]), 
-                    y: parseInt(coords[1]), 
-                    name: g.townname[key] 
-                });
+        // --- 2. Gateways (DOM Parsing) ---
+        // Parse gateways directly from DOM elements (Most reliable method)
+        const gwElements = document.querySelectorAll('.gw');
+        for (const el of gwElements) {
+             const tip = el.getAttribute('tip') || '';
+             // Strip HTML tags if any to get clean name
+             const name = tip.replace(/<[^>]*>/g, '').trim(); 
+             
+             // Calculate coordinates from CSS positioning (32px tiles)
+             const left = parseInt(el.style.left) || 0;
+             const top = parseInt(el.style.top) || 0;
+             const x = Math.round(left / 32);
+             const y = Math.round(top / 32);
+             
+             if (name) {
+                 gateways.push({ 
+                     x, 
+                     y, 
+                     name, 
+                     type: 'gateway',
+                     isGateway: true
+                 });
              }
         }
 
@@ -67,7 +81,8 @@ async function getGameState(page, config) {
             gateways: gateways,
             obstacles: obstacles,
             debugInfo: { allMobsCount, deniedCount },
-            currentMapName: map.name // Logic for map rotation needs this
+            currentMapName: map.name,
+            pvp: !!document.getElementById('pvpmode') // Detect PvP map
         };
     }, config);
 }
