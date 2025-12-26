@@ -3,11 +3,11 @@ const config = {
         minLvl: 24,
         maxLvl: 35,
         maps: [
-             "Siedlisko Nietoperzy p.3 - sala 1",
-             "Siedlisko Nietoperzy p.4",
-             "Siedlisko Nietoperzy p.5",
-             "Siedlisko Nietoperzy p.4",
-             "Siedlisko Nietoperzy p.3 - sala 1",
+             "Przeklęta Strażnica",
+             "Przeklęta Strażnica p.1",
+             "Przeklęta Strażnica p.2",
+             "Przeklęta Strażnica - podziemia p.1 s.1",
+             "Przeklęta Strażnica - podziemia p.1 s.2",
              "Siedlisko Nietoperzy p.2",
              "Siedlisko Nietoperzy p.1",
              "Siedlisko Nietoperzy p.2",
@@ -31,9 +31,9 @@ const config = {
         GAME_URL: "https://www.margonem.pl/",
         ATTACK_COOLDOWN: 800,
         MOVEMENT_SPEED: 100, // ms between steps in burst
-        BURST_STEPS: 7,
+        BURST_STEPS: 4,      // Reduced from 7 for better collision handling
         STUCK_LIMIT: 5,
-        PATHFIND_FAIL_LIMIT: 5,
+        PATHFIND_FAIL_LIMIT: 2, // Reduced from 5 to skip unreachable mobs faster
         SKIP_TIMEOUT: 30000 
     }
 };

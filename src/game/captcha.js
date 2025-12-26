@@ -2,7 +2,8 @@ const logger = require('../utils/logger');
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function solveCaptcha(page) {
-    logger.info('🧩 Checking for CAPTCHA...');
+    // logger.info('🧩 Checking for CAPTCHA...'); // Too spammy using .style.display check every loop
+
 
     const captchaVisible = await page.evaluate(() => {
         const el = document.getElementById('captcha');

@@ -30,6 +30,10 @@ async function main() {
     let lastMapName = ""; 
     let currentMapName = "";
     let skippedMobs = new Map(); // mobId -> timestamp
+    
+    // PvP & Anti-Stuck State
+    let ghostTarget = null;
+    let positionHistory = [];
 
     // --- Cached Map Data ---
     let cachedMapId = null;
@@ -88,7 +92,7 @@ async function main() {
                  continue;
             }
 
-            // 5. Map Rotation Logic
+            // 5. Map Rotation Logic & PvP Persistence
             // Handle Map Change
             if (!cachedMapId || cachedMapId !== state.map.id) {
                 logger.info(`🗺️ -- New Map: ${state.map.id} --`);
@@ -98,18 +102,74 @@ async function main() {
                 }
                 
                 if (state.currentMapName && state.currentMapName !== currentMapName) {
-                    if (currentMapName) {
-                        lastMapName = currentMapName;
-                        logger.log(`🗺️ [HISTORY] Last: '${lastMapName}' | Curr: '${state.currentMapName}'`);
-                    }
-                    currentMapName = state.currentMapName;
+                     if (currentMapName) {
+                         lastMapName = currentMapName;
+                         logger.log(`🗺️ [HISTORY] Last: '${lastMapName}' | Curr: '${state.currentMapName}'`);
+                     }
+                     currentMapName = state.currentMapName;
                 }
                 cachedMapId = state.map.id;
+                
+                // Clear Ghost Target on map change
+                ghostTarget = null;
+                positionHistory = [];
             }
 
             let finalTarget = state.target;
 
-            // If no mob/target, find gateway for rotation
+            // --- PvP Ghost Target Logic ---
+            if (state.pvp) {
+                 if (finalTarget && finalTarget.type === 'mob') {
+                     // We see a mob, update ghost target
+                     ghostTarget = { ...finalTarget, timestamp: Date.now() };
+                 } else if (!finalTarget && ghostTarget) {
+                     // No mob seen, but we have a ghost target!
+                     const timeSince = Date.now() - ghostTarget.timestamp;
+                     if (timeSince < 5000) { // Keep getting closer for 5s
+                          // Check if we reached it
+                          const dist = Math.hypot(ghostTarget.x - state.hero.x, ghostTarget.y - state.hero.y);
+                          if (dist < 1.5) {
+                              logger.log('👻 Reached Ghost Target location. It\'s gone.');
+                              ghostTarget = null; // We arrived, it's not here
+                          } else {
+                              logger.log(`👻 Pursuing Ghost Target [${ghostTarget.nick}] (${dist.toFixed(1)}m)...`);
+                              finalTarget = ghostTarget;
+                          }
+                     } else {
+                          ghostTarget = null; // Timeout
+                     }
+                 }
+            }
+
+            // --- Oscillation / Loop Detection ---
+            // Push current pos
+            positionHistory.push({ x: Math.round(state.hero.x), y: Math.round(state.hero.y) });
+            if (positionHistory.length > 20) positionHistory.shift();
+
+            // Detect Loops (Density / Unique positions check)
+            // Logic: If we spent last 20 moves visiting only a few unique spots (e.g. < 10), we are stuck in a loop.
+            if (positionHistory.length >= 20) {
+                const uniquePos = new Set(positionHistory.map(p => `${p.x},${p.y}`));
+                
+                if (uniquePos.size < 12) { // Threshold: If we visited fewer than 12 unique tiles in 20 moves -> STUCK
+                     logger.warn(`⚠️ Loop/Stuck detected! (Only ${uniquePos.size} unique tiles in last 20 moves). Forcing map rotation...`);
+                     
+                     // Force Gateway Logic
+                     // Override finalTarget to NEAREST gateway to break loop
+                     const nearestGw = state.gateways.sort((a,b) => {
+                         const da = Math.hypot(a.x - state.hero.x, a.y - state.hero.y);
+                         const db = Math.hypot(b.x - state.hero.x, b.y - state.hero.y);
+                         return da - db;
+                     })[0];
+                     
+                     if (nearestGw) {
+                         finalTarget = { ...nearestGw, type: 'gateway', isGateway: true, nick: 'ESCAPE LOOP' };
+                         positionHistory = []; // Reset history after triggering
+                     }
+                }
+            }
+
+            // If no mob/target AND not forcing escape, find gateway for rotation
             if (!finalTarget) {
                  logger.log(`💤 IDLE | Mobs: ${state.debugInfo.allMobsCount} | Skipped: ${state.debugInfo.deniedCount}`);
                  
@@ -127,42 +187,57 @@ async function main() {
                            }
                       }
                       
-                      // Find Gateway Logic (Forward Rotation)
+                      // Find Gateway Logic (Equal Treatment / Nearest Neighbor)
                       let gw = null;
                       
-                      // Priority 1: Forward
-                      if (currentIndex !== -1) {
-                           for (let offset = 1; offset < mapsList.length; offset++) {
-                               const nextIdx = (currentIndex + offset) % mapsList.length;
-                               const nextMap = mapsList[nextIdx];
-                               // Fix: Check strictly next map first
-                               if (offset === 1) { /* Ideal next */ }
-                               
-                               gw = state.gateways.find(g => g.name && g.name.toLowerCase().includes(nextMap.toLowerCase()));
-                               if (gw) {
-                                   logger.log(`   ✅ Rotation Target found: ${nextMap}`);
-                                   break;
-                               }
-                           }
+                      // DEBUG LOGS (Temporary)
+                      if (state.gateways.length > 0) {
+                          logger.log(`🔍 [DEBUG] Current: '${currentMapName}' | Last: '${lastMapName}'`);
+                          logger.log(`🔍 [DEBUG] Gateways found: ${state.gateways.map(g => g.name).join(', ')}`);
                       }
-                      
-                      // Priority 2: Any map in list except current/last
-                      if (!gw) {
+
+                      // 1. Identify valid gateways
+                      const validGateways = state.gateways.filter(g => {
+                           if (!g.name) return false;
+                           const gName = g.name.toLowerCase();
+
+                           // Is it in our list?
+                           // Fix logic: Check if map list item is contained in gateway name OR gateway name is in map list item
+                           const targetMap = mapsList.find(m => {
+                               const mClean = m.toLowerCase().trim();
+                               if (!mClean) return false;
+                               return gName.includes(mClean); 
+                           });
+                           
+                           if (!targetMap) {
+                               // logger.log(`   ❌ GW '${g.name}' ignored: Not in path list.`);
+                               return false;
+                           }
+
+                           // Is it the one we just came from?
+                           if (lastMapName && gName.trim() === lastMapName.toLowerCase().trim()) {
+                               logger.log(`   ⛔ GW '${g.name}' blocked: It is Last Map.`);
+                               return false;
+                           }
+                           
+                           return true;
+                      });
+                      if (validGateways.length > 0) {
+                           // 2. Pick the NEAREST one. 
+                           gw = validGateways.sort((a,b) => {
+                               const distA = Math.hypot(a.x - state.hero.x, a.y - state.hero.y);
+                               const distB = Math.hypot(b.x - state.hero.x, b.y - state.hero.y);
+                               return distA - distB;
+                           })[0];
+                           
+                           if (gw) logger.log(`   ✅ Best Gateway found: ${gw.name} (Nearest)`);
+                      } else {
+                           // Fallback: If no "new" map found, allow backtracking.
                            gw = state.gateways.find(g => {
                                if (!g.name) return false;
-                               const name = g.name.toLowerCase();
-                               return mapsList.some(m => {
-                                   const mLow = m.toLowerCase();
-                                   const isCurrent = currentMapName && currentMapName.toLowerCase().includes(mLow);
-                                   const isLast = lastMapName && lastMapName.toLowerCase().includes(mLow);
-                                   return name.includes(mLow) && !isCurrent && !isLast;
-                               });
+                               return mapsList.some(m => g.name.toLowerCase().includes(m.toLowerCase().trim()));
                            });
-                      }
-                      
-                      // Priority 3: Fallback
-                      if (!gw) {
-                          gw = state.gateways.find(g => mapsList.some(m => g.name && g.name.toLowerCase().includes(m.toLowerCase())));
+                           if (gw) logger.log(`   ⚠️ No new maps found. Backtracking to: ${gw.name}`);
                       }
                       
                       if (gw) {
