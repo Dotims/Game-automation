@@ -58,6 +58,11 @@ async function injectUI(page, defaultConfig) {
                      </label>
                 </div>
 
+                <div style="font-size: 12px; color: #aaa; margin-bottom: 5px;">Mapy (jedna na wiersz):</div>
+                <div class="mb-row">
+                    <textarea id="inp-maps" style="width: 100%; height: 80px; background: #333; color: white; border: 1px solid #555; border-radius: 3px; font-size: 11px; white-space: nowrap; overflow: auto;">${(window.BOT_CONFIG.maps || []).join('\n')}</textarea>
+                </div>
+
                 <div class="mb-row">
                     <button id="btn-save" class="mb-btn" style="background-color: #2196F3; font-size: 12px;">Zapisz Ustawienia</button>
                 </div>
@@ -78,11 +83,14 @@ async function injectUI(page, defaultConfig) {
                         const min = parseInt(document.getElementById('inp-min').value);
                         const max = parseInt(document.getElementById('inp-max').value);
                         const heal = document.getElementById('inp-heal').checked;
+                        const mapsStr = document.getElementById('inp-maps').value;
                         
                         if (!isNaN(min) && !isNaN(max)) {
                             window.BOT_CONFIG.minLvl = min;
                             window.BOT_CONFIG.maxLvl = max;
                             window.BOT_CONFIG.autoHeal = heal;
+                            window.BOT_CONFIG.maps = mapsStr.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+                            
                             localStorage.setItem('MARGO_BOT_CFG', JSON.stringify(window.BOT_CONFIG));
                             alert('Zapisano! Ustawienia aktywne.');
                         }

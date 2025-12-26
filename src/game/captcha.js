@@ -6,7 +6,16 @@ async function solveCaptcha(page) {
 
     const captchaVisible = await page.evaluate(() => {
         const el = document.getElementById('captcha');
-        return el && el.style.display !== 'none';
+        if (!el || el.style.display === 'none') return false;
+        
+        // Additional check: Ensure it has content (text or buttons)
+        const text = el.innerText.trim();
+        const hasButtons = el.querySelectorAll('.btn').length > 0;
+        
+        // If empty text and no buttons, it's likely a hidden overlay container
+        if (!text && !hasButtons) return false;
+        
+        return true;
     });
 
     if (!captchaVisible) {
