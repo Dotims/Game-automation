@@ -53,17 +53,17 @@ const movement = {
 
         const grid = baseGrid.clone(); // Clone base grid to add dynamic obstacles
         
-        // 3. Dynamic Obstacles (Mobs)
-        if (gameState.obstacles) {
-            for (const obs of gameState.obstacles) {
-                // If the obstacle IS our target, it must be walkable!
-                if (finalTarget.type === 'mob' && obs.id === finalTarget.id) continue;
-                
-                if (grid.isWalkableAt(obs.x, obs.y)) {
-                     grid.setWalkableAt(obs.x, obs.y, false);
-                }
-            }
-        }
+        // 3. Dynamic Obstacles (Mobs) - REMOVED
+        // In Margonem, you can typically walk through mobs.
+        // Treating them as walls causes the bot to get stuck in dense crowds.
+        // if (gameState.obstacles) {
+        //    for (const obs of gameState.obstacles) {
+        //        if (finalTarget.type === 'mob' && obs.id === finalTarget.id) continue;
+        //        if (grid.isWalkableAt(obs.x, obs.y)) {
+        //             grid.setWalkableAt(obs.x, obs.y, false);
+        //        }
+        //    }
+        // }
 
         // 4. A* Pathfinding
         const finder = new PF.AStarFinder({ allowDiagonal: false });
@@ -74,13 +74,13 @@ const movement = {
 
         let path = null;
         try {
-            // Special handling for Gateways: They are often on collision tiles (walls)
-            // If target is gateway and unwalkable, find nearest walkable neighbor
+            // Special handling for ANY blocked target (Gateways OR Mobs on walls)
+            // If target is unwalkable, find nearest walkable neighbor
             let targetX = endX;
             let targetY = endY;
 
-            if (finalTarget.isGateway && !grid.isWalkableAt(endX, endY)) {
-                 logger.log(`   🧱 Gateway [${endX},${endY}] is blocked/wall. Searching neighbors...`);
+            if (!grid.isWalkableAt(endX, endY)) {
+                 logger.log(`   🧱 Target [${endX},${endY}] is blocked/wall. Searching neighbors...`);
                  
                  // Check neighbors (Right, Left, Down, Up)
                  const neighbors = [
@@ -98,7 +98,6 @@ const movement = {
                  let found = false;
                  for (const n of neighbors) {
                      const isWalkable = grid.isWalkableAt(n[0], n[1]);
-                     // logger.log(`      • Neighbor [${n[0]},${n[1]}] Walkable: ${isWalkable}`);
                      
                      if (isWalkable) {
                          targetX = n[0];
@@ -108,7 +107,7 @@ const movement = {
                          break;
                      }
                  }
-                 if (!found) logger.warn(`   ⚠️ All neighbors of gateway [${endX},${endY}] are BLOCKED!`);
+                 if (!found) logger.warn(`   ⚠️ All neighbors of target [${endX},${endY}] are BLOCKED!`);
             }
 
             path = finder.findPath(startX, startY, targetX, targetY, grid);

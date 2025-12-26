@@ -4,7 +4,9 @@ const logger = require('./utils/logger');
 const ui = require('./game/ui');
 const gameState = require('./game/gameState');
 const actions = require('./game/actions');
+const movement = require('./game/movement');
 const captcha = require('./game/captcha');
+const HUNTING_SPOTS = require('./data/hunting_spots');
 const { CONSTANTS } = require('./config');
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -43,10 +45,11 @@ async function main() {
     // --- Main Loop ---
     while (true) {
         try {
-            // 1. UI Injection & Config Update
-            const botState = await ui.injectUI(page, config.DEFAULT_CONFIG);
-            
-            if (!botState.active) {
+        // Inject UI (returns current config state)
+        const uiState = await ui.injectUI(page, config.DEFAULT_CONFIG, HUNTING_SPOTS);
+        
+        // Update local config if UI changed it
+        if (!uiState.active) {
                 await sleep(500);
                 continue; // Paused
             }
@@ -73,7 +76,7 @@ async function main() {
 
             // 4. Get Game State
             const currentConfig = { 
-                ...botState.config, 
+                ...uiState.config, 
                 skippedMobIds: Array.from(skippedMobs.keys()) 
             };
             
@@ -152,19 +155,26 @@ async function main() {
                 const uniquePos = new Set(positionHistory.map(p => `${p.x},${p.y}`));
                 
                 if (uniquePos.size < 12) { // Threshold: If we visited fewer than 12 unique tiles in 20 moves -> STUCK
-                     logger.warn(`⚠️ Loop/Stuck detected! (Only ${uniquePos.size} unique tiles in last 20 moves). Forcing map rotation...`);
-                     
-                     // Force Gateway Logic
-                     // Override finalTarget to NEAREST gateway to break loop
-                     const nearestGw = state.gateways.sort((a,b) => {
-                         const da = Math.hypot(a.x - state.hero.x, a.y - state.hero.y);
-                         const db = Math.hypot(b.x - state.hero.x, b.y - state.hero.y);
-                         return da - db;
-                     })[0];
-                     
-                     if (nearestGw) {
-                         finalTarget = { ...nearestGw, type: 'gateway', isGateway: true, nick: 'ESCAPE LOOP' };
-                         positionHistory = []; // Reset history after triggering
+                     // FIX: Don't force rotate if there are mobs nearby!
+                     // If we are fighting a dense cluster, we naturally stay in one area.
+                     if (state.debugInfo.allMobsCount > 0) {
+                         logger.log(`⚠️ Loop detected (${uniquePos.size} unique tiles), but Mobs present (${state.debugInfo.allMobsCount}). Ignoring rotation.`);
+                         positionHistory = []; // Reset history to allow fighting to continue
+                     } else {
+                         logger.warn(`⚠️ Loop/Stuck detected! (Only ${uniquePos.size} unique tiles in last 20 moves). Forcing map rotation...`);
+                         
+                         // Force Gateway Logic
+                         // Override finalTarget to NEAREST gateway to break loop
+                         const nearestGw = state.gateways.sort((a,b) => {
+                             const da = Math.hypot(a.x - state.hero.x, a.y - state.hero.y);
+                             const db = Math.hypot(b.x - state.hero.x, b.y - state.hero.y);
+                             return da - db;
+                         })[0];
+                         
+                         if (nearestGw) {
+                             finalTarget = { ...nearestGw, type: 'gateway', isGateway: true, nick: 'ESCAPE LOOP' };
+                             positionHistory = []; // Reset history after triggering
+                         }
                      }
                 }
             }
@@ -194,7 +204,7 @@ async function main() {
                       if (state.gateways.length > 0) {
                           logger.log(`🔍 [DEBUG] Current: '${currentMapName}' | Last: '${lastMapName}'`);
                           logger.log(`🔍 [DEBUG] Gateways found: ${state.gateways.map(g => g.name).join(', ')}`);
-                      }
+                    }
 
                       // 1. Identify valid gateways
                       const validGateways = state.gateways.filter(g => {
