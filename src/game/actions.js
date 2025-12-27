@@ -37,21 +37,12 @@ const actions = {
     },
 
     async enterGateway(page, target) {
-         logger.log(`🚪 Activating gateway [${target.name || 'Door'}]...`);
+         logger.log(`🚪 Reached gateway [${target.name || 'Door'}] Coords. Waiting for map transition...`);
          try {
-             await page.evaluate((gName) => {
-                 const gws = document.querySelectorAll('.gw');
-                 for (const gw of gws) {
-                     const tip = gw.getAttribute('tip') || '';
-                     const name = tip.replace(/<[^>]*>/g, '').trim();
-                     if (name === gName) {
-                         gw.click();
-                         return true;
-                     }
-                 }
-                 return false;
-             }, target.name);
-             await sleep(3000); // Wait for map change
+             // User reported that clicking causes a dialog (Pass/Angry).
+             // Merely walking onto the tile (which we have done) is sufficient.
+             // We just wait for the server to process the map change.
+             await sleep(1000); 
          } catch (e) {
              logger.error('Gateway entry error:', e.message);
          }

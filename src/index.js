@@ -139,6 +139,13 @@ async function main() {
                 await sleep(500);
                 continue; // Wait for mobs to load
             }
+            
+            // --- GATEWAY STUCK RECOVERY ---
+             if (lastMapName === currentMapName && finalTarget && finalTarget.isGateway) {
+                  // Count attempts on the same map? 
+                  // Better: Detect if we are constantly trying gateway logic without success.
+                  // Implemented below in Action Execution.
+             }
 
             let finalTarget = state.target;
 
@@ -167,7 +174,15 @@ async function main() {
             if (!escapeTarget && !lockedTarget && (!finalTarget || finalTarget.dist > 1.5) && state.validMobs && state.validMobs.length > 0) {
                 const pathOptimalTarget = movement.findBestTarget(state);
                 if (pathOptimalTarget) {
-                    finalTarget = pathOptimalTarget;
+                    
+                    // --- EFFICIENCY CHECK (Skip slow maps) ---
+                    // If few mobs (<= 8) AND nearest is far (> 60 steps), SKIP MAP.
+                    if (state.validMobs.length <= 8 && pathOptimalTarget.pathLength > 60) {
+                        logger.log(`📉 Efficiency Check: Low mob count (${state.validMobs.length}) & Far target (${pathOptimalTarget.pathLength} steps). Skipping map.`);
+                        finalTarget = null; // Force gateway logic
+                    } else {
+                        finalTarget = pathOptimalTarget;
+                    }
                 }
             }
 
@@ -432,7 +447,21 @@ async function main() {
 
                  if (dist <= interactionDist) {
                       if (finalTarget.isGateway) {
-                           await actions.enterGateway(page, finalTarget);
+                           // Gateway Recovery Logic
+                           if (!global.gatewayAttempts) global.gatewayAttempts = 0;
+                           
+                           if (global.gatewayAttempts > 3) {
+                               logger.warn(`⚠️ Gateway stuck (${global.gatewayAttempts})! Performing random move...`);
+                               // Move away random
+                               const rx = state.hero.x + (Math.random() * 6 - 3);
+                               const ry = state.hero.y + (Math.random() * 6 - 3);
+                               await actions.move(page, state, { x: rx, y: ry, nick: 'Unstuck' });
+                               await sleep(1000);
+                               global.gatewayAttempts = 0; // Reset after move
+                           } else {
+                               global.gatewayAttempts++;
+                               await actions.enterGateway(page, finalTarget);
+                           }
                       } else {
                            // Attack
                            const result = await actions.attack(page, finalTarget, lastAttackTime);
