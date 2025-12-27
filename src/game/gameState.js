@@ -10,6 +10,19 @@ async function getGameState(page, config) {
         let allMobsCount = 0;
         let deniedCount = 0;
         
+        // --- Ping Reading ---
+        let ping = 50; // Default safe value
+        const lagMeter = document.getElementById('lagmeter');
+        if (lagMeter) {
+            const tip = lagMeter.getAttribute('tip'); // e.g. "198ms"
+            if (tip) {
+                 const match = tip.match(/(\d+)ms/);
+                 if (match && match[1]) {
+                     ping = parseInt(match[1], 10);
+                 }
+            }
+        }
+        
         // --- 1. Map Objects & Mobs ---
         for (let id in g.npc) {
             const n = g.npc[id];
@@ -80,7 +93,8 @@ async function getGameState(page, config) {
             obstacles: obstacles,
             debugInfo: { allMobsCount, deniedCount, validMobsCount: validMobs.length },
             currentMapName: map.name,
-            pvp: !!document.getElementById('pvpmode') // Detect PvP map
+            pvp: !!document.getElementById('pvpmode'), // Detect PvP map
+            ping: ping // Expose dynamic ping
         };
     }, config);
 }

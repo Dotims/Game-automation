@@ -183,6 +183,12 @@ async function main() {
                     } else {
                         finalTarget = pathOptimalTarget;
                     }
+                } else {
+                    // NEW: All candidate mobs are unreachable (e.g. blocked by river/walls)
+                    // Instead of falling back to state.target (which is unreachable), 
+                    // we FORCE map change.
+                    logger.warn(`🚫 All nearby mobs are unreachable! Initiating map change...`);
+                    finalTarget = null;
                 }
             }
 

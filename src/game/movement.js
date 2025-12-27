@@ -229,6 +229,12 @@ const movement = {
              let currentX = startX;
              let currentY = startY;
 
+             // Dynamic Key Press Duration based on Ping
+             // Minimum 100ms (to register as hold), max based on ping to prevent early release
+             // User requested: "Ping + safety buffer"
+             const currentPing = gameState.ping || 50;
+             const pressDuration = Math.max(100, currentPing + 20); 
+
              for (let i = 1; i <= stepsToTake; i++) {
                  const nextStep = path[i];
                  if (!nextStep) break;
@@ -240,7 +246,9 @@ const movement = {
                  else if (nextStep[1] < currentY) key = 'ArrowUp';
                  
                  if (key) {
-                     await page.keyboard.press(key, { delay: CONSTANTS.MOVEMENT_SPEED });
+                     await page.keyboard.press(key, { delay: pressDuration });
+                     
+                     await sleep(20); 
                      currentX = nextStep[0];
                      currentY = nextStep[1];
                  }

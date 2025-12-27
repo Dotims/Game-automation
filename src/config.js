@@ -30,8 +30,8 @@ const config = {
     CONSTANTS: {
         GAME_URL: "https://www.margonem.pl/",
         ATTACK_COOLDOWN: 800,
-        MOVEMENT_SPEED: 100, // ms between steps in burst
-        BURST_STEPS: 4,      // Reduced from 7 for better collision handling
+        MOVEMENT_SPEED: 200, // ms between steps in burst (Increased for high ping)
+        BURST_STEPS: 3,      // Reduced for better synchronization
         STUCK_LIMIT: 5,
         PATHFIND_FAIL_LIMIT: 2, // Reduced from 5 to skip unreachable mobs faster
         SKIP_TIMEOUT: 150000 // 2.5 minutes
