@@ -35,11 +35,16 @@ async function main() {
     
     // PvP & Anti-Stuck State
     let ghostTarget = null;
-    let escapeTarget = null; 
+    let escapeTarget = null;
+    let lockedTarget = null; // Target lock to prevent oscillation
+    let lastTargetId = null;
+    let targetSwitchCount = 0;
+    let noAttackCounter = 0;
     let positionHistory = [];
 
     // --- Cached Map Data ---
     let cachedMapId = null;
+    let mapChangedAt = 0; // Cooldown timer
 
     logger.success('✅ Bot ready! Starting main loop.');
 
@@ -117,33 +122,124 @@ async function main() {
                 // Clear Ghost Target on map change
                 ghostTarget = null;
                 escapeTarget = null;
+                lockedTarget = null;
+                lastTargetId = null;
+                targetSwitchCount = 0;
+                noAttackCounter = 0;
                 positionHistory = [];
+                
+                // Set cooldown - wait 4s before making gateway decisions
+                mapChangedAt = Date.now();
+                logger.log('⏳ Waiting 4s for map data to load...');
+            }
+            
+            // Skip gateway logic if within 4 second cooldown after map change
+            const mapCooldownActive = mapChangedAt && (Date.now() - mapChangedAt < 4000);
+            if (mapCooldownActive && !state.target) {
+                await sleep(500);
+                continue; // Wait for mobs to load
             }
 
             let finalTarget = state.target;
 
+            // --- OPPORTUNISTIC ATTACK (Priority: HIGH) ---
+            // If ANY valid mob is right next to us (<= 1.5m), ATTACK IT immediately!
+            // This overrides pathfinding, target locks, and distant targets.
+            // Solves the "standing next to mob but trying to walk away" problem.
+            if (state.validMobs && state.validMobs.length > 0) {
+                 // validMobs is already sorted by distance in gameState
+                 const closestMob = state.validMobs[0];
+                 if (closestMob.dist <= 1.5) {
+                      if (!finalTarget || finalTarget.id !== closestMob.id) {
+                           logger.log(`⚔️ OPTN: Ignoring planned target. Engaging neighbour [${closestMob.nick}] (${closestMob.dist.toFixed(1)}m)!`);
+                           finalTarget = closestMob;
+                           // Clear locks to avoid conflict
+                           lockedTarget = null;
+                           escapeTarget = null;
+                      }
+                 }
+            }
+            
+            // --- PATH-BASED TARGET SELECTION ---
+            // Use A* pathfinding to select the mob with the shortest reachable path
+            // instead of just the geometrically nearest one
+            // Only run this if we didn't already find an opportunistic close target
+            if (!escapeTarget && !lockedTarget && (!finalTarget || finalTarget.dist > 1.5) && state.validMobs && state.validMobs.length > 0) {
+                const pathOptimalTarget = movement.findBestTarget(state);
+                if (pathOptimalTarget) {
+                    finalTarget = pathOptimalTarget;
+                }
+            }
+
             // --- 0. Persistence Checks ---
              if (escapeTarget) {
-                 // CANCEL escape if we now have a valid target (mob appeared!)
-                 if (state.target && state.target.type === 'mob') {
-                     logger.log('✅ Cancelling Escape - Found valid mob targets!');
+                 const dist = Math.hypot(escapeTarget.x - state.hero.x, escapeTarget.y - state.hero.y);
+                 const now = Date.now();
+                 
+                 // Check if escape timer expired OR we reached the gateway
+                 if ((escapeTarget.escapeUntil && now > escapeTarget.escapeUntil) || dist < 1.5) {
+                     logger.log('✅ Escape complete. Resuming normal hunting.');
                      escapeTarget = null;
-                     finalTarget = state.target;
                  } else {
-                     // Check if we reached the escape gateway
-                     const dist = Math.hypot(escapeTarget.x - state.hero.x, escapeTarget.y - state.hero.y);
-                     if (dist < 1.5) {
-                         logger.log('✅ Escaped loop (reached gateway). Resuming normal logic.');
-                         escapeTarget = null;
-                     } else {
-                         logger.log(`🏃 ESCAPING LOOP: Moving to ${escapeTarget.nick} (${dist.toFixed(1)}m)`);
-                         finalTarget = escapeTarget;
-                     }
+                     // Keep escaping - IGNORE all mobs!
+                     logger.log(`🏃 ESCAPING (${((escapeTarget.escapeUntil - now)/1000).toFixed(1)}s left): Moving to gateway (${dist.toFixed(1)}m)`);
+                     finalTarget = escapeTarget;
                  }
             }
 
+            // --- Target Lock Detection (Prevent Oscillation) ---
+            if (!escapeTarget && finalTarget && finalTarget.type === 'mob') {
+                const currentTargetId = finalTarget.id;
+                
+                // Detect target switching
+                if (lastTargetId && lastTargetId !== currentTargetId) {
+                    targetSwitchCount++;
+                    positionHistory = []; // CRITICAL FIX: Reset loop history when target changes!
+                    // Otherwise, standing still while fighting Mob A will be interpreted 
+                    // as "stuck" when we try to move to distant Mob B.
+                } else {
+                    targetSwitchCount = Math.max(0, targetSwitchCount - 1); // Decay if sticking to same target
+                }
+                lastTargetId = currentTargetId;
+                
+                // Count frames without attack
+                noAttackCounter++;
+                
+                // If switching targets frequently without attacking → LOCK to current target
+                // User asked for "at least 8 seconds" persistence.
+                if (targetSwitchCount > 3) {
+                    logger.warn(`🔒 TARGET LOCK: Oscillation detected! Locking to [${finalTarget.nick}] (${finalTarget.dist?.toFixed(1)}m)`);
+                    lockedTarget = { ...finalTarget, lockedAt: Date.now() };
+                    targetSwitchCount = 0;
+                    noAttackCounter = 0;
+                }
+            }
+            
+            // Apply locked target override
+            if (lockedTarget && !escapeTarget) {
+                const lockAge = Date.now() - lockedTarget.lockedAt;
+                const dist = Math.hypot(lockedTarget.x - state.hero.x, lockedTarget.y - state.hero.y);
+                
+                // Check if target is still visible and update it
+                if (state.target && state.target.id === lockedTarget.id) {
+                     lockedTarget.x = state.target.x;
+                     lockedTarget.y = state.target.y;
+                }
+
+                // Release lock if: reached (< 1.5m), timeout (> 8s), or map changed
+                if (dist < 1.5 || lockAge > 8000) {
+                    logger.log('🔓 Target lock released.');
+                    lockedTarget = null;
+                    noAttackCounter = 0;
+                } else {
+                    logger.log(`🎯 LOCKED TARGET: [${lockedTarget.nick}] (${dist.toFixed(1)}m)`);
+                    finalTarget = lockedTarget;
+                }
+            }
+
+
             // --- PvP Ghost Target Logic ---
-            if (state.pvp && !escapeTarget) {
+            if (state.pvp && !escapeTarget && !lockedTarget) {
                  if (finalTarget && finalTarget.type === 'mob') {
                      // We see a mob, update ghost target
                      ghostTarget = { ...finalTarget, timestamp: Date.now() };
@@ -173,38 +269,62 @@ async function main() {
 
             // Detect Loops (Density / Unique positions check)
             // Logic: If we spent last 20 moves visiting only a few unique spots (e.g. < 10), we are stuck in a loop.
-            if (positionHistory.length >= 20) {
+            // FIX: Don't trigger loop detection if we are successfully positioned to fight, OR if we are IDLE (no target)!
+            const isFighting = finalTarget && finalTarget.type === 'mob' && finalTarget.dist <= 1.5;
+            // Only detect loops if we actually HAVE a target we are trying to reach. Standing idle is not a loop.
+            
+            if (finalTarget && positionHistory.length >= 20 && !escapeTarget && !isFighting) {
                 const uniquePos = new Set(positionHistory.map(p => `${p.x},${p.y}`));
                 
                 if (uniquePos.size < 12) { // Threshold: If we visited fewer than 12 unique tiles in 20 moves -> STUCK
-                     // FIX: Don't force rotate if there are mobs nearby AND we are targeting them!
-                     // If we are fighting a dense cluster, we naturally stay in one area.
-                     if (state.debugInfo.allMobsCount > 0 && finalTarget) {
-                         logger.log(`⚠️ Loop detected (${uniquePos.size} unique tiles), but actively targeting Mobs. Ignoring rotation.`);
-                         positionHistory = []; // Reset history to allow fighting to continue
+                     // BLACKLIST the mob(s) we were chasing - they are unreachable!
+                     if (finalTarget && finalTarget.type === 'mob' && finalTarget.id) {
+                         logger.warn(`🚫 BLACKLISTING mob [${finalTarget.nick}] (ID: ${finalTarget.id}) for 2.5 min - unreachable!`);
+                         skippedMobs.set(finalTarget.id, Date.now());
+                     }
+                     
+                     // ALWAYS force escape - even if mobs are present!
+                     // This breaks oscillation by physically moving to gateway.
+                     const escapeDuration = 10000 + Math.floor(Math.random() * 5000); // 10-15 seconds
+                     logger.warn(`⚠️ LOOP DETECTED (${uniquePos.size} tiles)! Forcing ESCAPE for ${(escapeDuration/1000).toFixed(1)}s...`);
+                     
+                     // Force Gateway Logic - pick FARTHEST gateway (>25m preferred)
+                     const gwWithDist = state.gateways.map(gw => ({
+                         ...gw,
+                         dist: Math.hypot(gw.x - state.hero.x, gw.y - state.hero.y)
+                     }));
+                     
+                     // Prefer gateways >25m away, sort by distance descending
+                     const farGateways = gwWithDist.filter(g => g.dist > 25);
+                     let chosenGw = null;
+                     
+                     if (farGateways.length > 0) {
+                         // Pick the farthest one
+                         chosenGw = farGateways.sort((a,b) => b.dist - a.dist)[0];
+                         logger.log(`   🚀 Escaping to FAR gateway: ${chosenGw.name} (${chosenGw.dist.toFixed(1)}m)`);
                      } else {
-                         logger.warn(`⚠️ Loop/Stuck detected! (Only ${uniquePos.size} unique tiles in last 20 moves). Forcing map rotation...`);
-                         
-                         // Force Gateway Logic
-                         // Override finalTarget to NEAREST gateway to break loop
-                         const nearestGw = state.gateways.sort((a,b) => {
-                             const da = Math.hypot(a.x - state.hero.x, a.y - state.hero.y);
-                             const db = Math.hypot(b.x - state.hero.x, b.y - state.hero.y);
-                             return da - db;
-                         })[0];
-                         
-                         if (nearestGw) {
-                             escapeTarget = { ...nearestGw, type: 'gateway', isGateway: true, nick: 'ESCAPE LOOP' };
-                             finalTarget = escapeTarget; // Set immediately for this frame too
-                             positionHistory = []; // Reset history after triggering
-                         }
+                         // No far gateways, pick nearest as fallback
+                         chosenGw = gwWithDist.sort((a,b) => a.dist - b.dist)[0];
+                         if (chosenGw) logger.log(`   ⚠️ No far gateways, using nearest: ${chosenGw.name} (${chosenGw.dist.toFixed(1)}m)`);
+                     }
+                     
+                     if (chosenGw) {
+                         escapeTarget = { 
+                             ...chosenGw, 
+                             type: 'gateway', 
+                             isGateway: true, 
+                             nick: 'ESCAPE LOOP',
+                             escapeUntil: Date.now() + escapeDuration // Timed escape
+                         };
+                         finalTarget = escapeTarget;
+                         positionHistory = [];
                      }
                 }
             }
 
             // If no mob/target AND not forcing escape, find gateway for rotation
             if (!finalTarget) {
-                 logger.log(`💤 IDLE | Mobs: ${state.debugInfo.allMobsCount} | Skipped: ${state.debugInfo.deniedCount}`);
+                 logger.log(`💤 IDLE | Mobs: ${state.debugInfo.allMobsCount} | Valid: ${state.debugInfo.validMobsCount || 0} | Skipped: ${state.debugInfo.deniedCount}`);
                  
                  // config.maps logic
                  const mapsList = currentConfig.maps || [];
@@ -229,48 +349,72 @@ async function main() {
                           logger.log(`🔍 [DEBUG] Gateways found: ${state.gateways.map(g => g.name).join(', ')}`);
                     }
 
-                      // 1. Identify valid gateways
+                  // 1. Identify valid gateways (Preferred: In Config AND Not Last Map)
                       const validGateways = state.gateways.filter(g => {
                            if (!g.name) return false;
                            const gName = g.name.toLowerCase();
 
                            // Is it in our list?
-                           // Fix logic: Check if map list item is contained in gateway name OR gateway name is in map list item
                            const targetMap = mapsList.find(m => {
                                const mClean = m.toLowerCase().trim();
                                if (!mClean) return false;
                                return gName.includes(mClean); 
                            });
                            
-                           if (!targetMap) {
-                               // logger.log(`   ❌ GW '${g.name}' ignored: Not in path list.`);
-                               return false;
-                           }
+                           if (!targetMap) return false;
 
                            // Is it the one we just came from?
                            if (lastMapName && gName.trim() === lastMapName.toLowerCase().trim()) {
-                               logger.log(`   ⛔ GW '${g.name}' blocked: It is Last Map.`);
                                return false;
                            }
-                           
                            return true;
                       });
+
                       if (validGateways.length > 0) {
-                           // 2. Pick the NEAREST one. 
+                           // 2. Pick the NEAREST valid one
                            gw = validGateways.sort((a,b) => {
                                const distA = Math.hypot(a.x - state.hero.x, a.y - state.hero.y);
                                const distB = Math.hypot(b.x - state.hero.x, b.y - state.hero.y);
                                return distA - distB;
                            })[0];
-                           
                            if (gw) logger.log(`   ✅ Best Gateway found: ${gw.name} (Nearest)`);
-                      } else {
-                           // Fallback: If no "new" map found, allow backtracking.
+                      } 
+                      
+                      // Fallback 1: Allow backtracking to a configured map
+                      if (!gw) {
                            gw = state.gateways.find(g => {
                                if (!g.name) return false;
                                return mapsList.some(m => g.name.toLowerCase().includes(m.toLowerCase().trim()));
                            });
-                           if (gw) logger.log(`   ⚠️ No new maps found. Backtracking to: ${gw.name}`);
+                           if (gw) logger.log(`   🔙 Backtracking to Configured Map: ${gw.name}`);
+                      }
+
+                      // Fallback 2: Return to Last Map (even if not in config) - Escape Dead End
+                      if (!gw && lastMapName) {
+                           gw = state.gateways.find(g => g.name.toLowerCase().trim() === lastMapName.toLowerCase().trim());
+                           if (gw) logger.log(`   🔙 Escaping Dead End -> Last Map: ${gw.name}`);
+                      }
+
+                      // Fallback 3: PANIC MODE - Any nearest gateway (Avoid stuck)
+                      if (!gw && state.gateways.length > 0) {
+                           // Try to pick one that is NOT the last map if possible
+                           const notLast = state.gateways.filter(g => !lastMapName || g.name.toLowerCase().trim() !== lastMapName.toLowerCase().trim());
+                           if (notLast.length > 0) {
+                                gw = notLast.sort((a,b) => {
+                                    const distA = Math.hypot(a.x - state.hero.x, a.y - state.hero.y);
+                                    const distB = Math.hypot(b.x - state.hero.x, b.y - state.hero.y);
+                                    return distA - distB;
+                                })[0];
+                                logger.log(`   🆘 PANIC: Taking random gateway (Not Last): ${gw.name}`);
+                           } else {
+                                // Just take the nearest one
+                                gw = state.gateways.sort((a,b) => {
+                                    const distA = Math.hypot(a.x - state.hero.x, a.y - state.hero.y);
+                                    const distB = Math.hypot(b.x - state.hero.x, b.y - state.hero.y);
+                                    return distA - distB;
+                                })[0];
+                                logger.log(`   🆘 PANIC: Taking nearest gateway: ${gw.name}`);
+                           }
                       }
                       
                       if (gw) {

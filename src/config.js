@@ -34,7 +34,7 @@ const config = {
         BURST_STEPS: 4,      // Reduced from 7 for better collision handling
         STUCK_LIMIT: 5,
         PATHFIND_FAIL_LIMIT: 2, // Reduced from 5 to skip unreachable mobs faster
-        SKIP_TIMEOUT: 30000 
+        SKIP_TIMEOUT: 150000 // 2.5 minutes
     }
 };
 

@@ -12,7 +12,122 @@ let lastFailedTargetId = null;
 let cachedMapId = null;
 let baseGrid = null;
 
+/**
+ * Build/update the pathfinding grid for the current map
+ */
+function ensureGrid(gameState) {
+    if (!baseGrid || cachedMapId !== gameState.map.id) {
+        logger.info(`🗺️ Building collision grid for map ${gameState.map.id}...`);
+        baseGrid = new PF.Grid(gameState.map.w, gameState.map.h);
+        const colStr = gameState.map.col;
+        if (colStr) {
+            let c = 0;
+            for (let y = 0; y < gameState.map.h; y++) {
+                for (let x = 0; x < gameState.map.w; x++) {
+                    if (colStr[c] === '1') baseGrid.setWalkableAt(x, y, false);
+                    c++;
+                }
+            }
+        }
+        cachedMapId = gameState.map.id;
+    }
+    return baseGrid;
+}
+
+/**
+ * Get path length to a target using A* pathfinding
+ * Returns path length or Infinity if unreachable
+ */
+function getPathLength(grid, heroX, heroY, targetX, targetY) {
+    const gridClone = grid.clone();
+    const finder = new PF.AStarFinder({ allowDiagonal: false });
+    
+    const startX = Math.round(heroX);
+    const startY = Math.round(heroY);
+    let endX = Math.round(targetX);
+    let endY = Math.round(targetY);
+    
+    // If target is on a wall, find nearest walkable neighbor
+    if (!gridClone.isWalkableAt(endX, endY)) {
+        const neighbors = [
+            [endX + 1, endY], [endX - 1, endY],
+            [endX, endY + 1], [endX, endY - 1]
+        ];
+        
+        // Sort by distance to hero
+        neighbors.sort((a, b) => {
+            const da = Math.hypot(a[0] - startX, a[1] - startY);
+            const db = Math.hypot(b[0] - startX, b[1] - startY);
+            return da - db;
+        });
+        
+        let found = false;
+        for (const n of neighbors) {
+            if (n[0] >= 0 && n[0] < gridClone.width && 
+                n[1] >= 0 && n[1] < gridClone.height &&
+                gridClone.isWalkableAt(n[0], n[1])) {
+                endX = n[0];
+                endY = n[1];
+                found = true;
+                break;
+            }
+        }
+        if (!found) return Infinity;
+    }
+    
+    try {
+        const path = finder.findPath(startX, startY, endX, endY, gridClone);
+        return path && path.length > 0 ? path.length : Infinity;
+    } catch (e) {
+        return Infinity;
+    }
+}
+
+/**
+ * Find the best target from validMobs based on actual A* path length
+ * This ensures the bot always picks the mob with the shortest REACHABLE path
+ */
+function findBestTarget(gameState, maxCandidates = 8) {
+    if (!gameState.validMobs || gameState.validMobs.length === 0) {
+        return null;
+    }
+    
+    const grid = ensureGrid(gameState);
+    const heroX = gameState.hero.x;
+    const heroY = gameState.hero.y;
+    
+    // Limit candidates to avoid performance issues on maps with many mobs
+    // validMobs is already sorted by geometric distance
+    const candidates = gameState.validMobs.slice(0, maxCandidates);
+    
+    let bestMob = null;
+    let bestPathLength = Infinity;
+    
+    for (const mob of candidates) {
+        const pathLength = getPathLength(grid, heroX, heroY, mob.x, mob.y);
+        
+        // Prefer shorter paths; skip unreachable mobs
+        if (pathLength < bestPathLength && pathLength !== Infinity) {
+            bestPathLength = pathLength;
+            bestMob = { ...mob, pathLength: pathLength };
+        }
+    }
+    
+    if (bestMob) {
+        // Log only if we picked a different mob than the geometrically nearest one
+        const nearest = gameState.validMobs[0];
+        if (nearest && nearest.id !== bestMob.id) {
+            logger.log(`🧭 Path optimization: Picking [${bestMob.nick}] (${bestMob.pathLength} steps) over [${nearest.nick}] (geometrically closer)`);
+        }
+    }
+    
+    return bestMob;
+}
+
 const movement = {
+    // Export the path-based target selection
+    findBestTarget,
+    
     async move(page, gameState, finalTarget) {
         if (!finalTarget) return 'no_target';
 
@@ -43,38 +158,10 @@ const movement = {
              return 'stuck_recovery';
         }
         
-        // 2. Grid Management (Optimized)
-        if (!baseGrid || cachedMapId !== gameState.map.id) {
-            logger.info(`🗺️ Building collision grid for map ${gameState.map.id}...`);
-            baseGrid = new PF.Grid(gameState.map.w, gameState.map.h);
-            const colStr = gameState.map.col;
-            if (colStr) {
-                 let c = 0;
-                 for (let y = 0; y < gameState.map.h; y++) {
-                     for (let x = 0; x < gameState.map.w; x++) {
-                         if (colStr[c] === '1') baseGrid.setWalkableAt(x, y, false);
-                         c++;
-                     }
-                 }
-            }
-            cachedMapId = gameState.map.id;
-        }
+        // 2. Grid Management (use shared function)
+        const grid = ensureGrid(gameState).clone();
 
-        const grid = baseGrid.clone(); // Clone base grid to add dynamic obstacles
-        
-        // 3. Dynamic Obstacles (Mobs) - REMOVED
-        // In Margonem, you can typically walk through mobs.
-        // Treating them as walls causes the bot to get stuck in dense crowds.
-        // if (gameState.obstacles) {
-        //    for (const obs of gameState.obstacles) {
-        //        if (finalTarget.type === 'mob' && obs.id === finalTarget.id) continue;
-        //        if (grid.isWalkableAt(obs.x, obs.y)) {
-        //             grid.setWalkableAt(obs.x, obs.y, false);
-        //        }
-        //    }
-        // }
-
-        // 4. A* Pathfinding
+        // 3. A* Pathfinding
         const finder = new PF.AStarFinder({ allowDiagonal: false });
         const startX = Math.round(gameState.hero.x);
         const startY = Math.round(gameState.hero.y);
@@ -132,7 +219,7 @@ const movement = {
 
         if (path && path.length > 1) {
              const distTotal = Math.hypot(endX - startX, endY - startY);
-             logger.log(`👣 Moving to [${finalTarget.nick || finalTarget.name}] (${distTotal.toFixed(1)}m)`);
+             logger.log(`👣 Moving to [${finalTarget.nick || finalTarget.name}] (${distTotal.toFixed(1)}m, ${path.length} steps)`);
              
              pathfindFailCounter = 0;
              lastFailedTargetId = null;

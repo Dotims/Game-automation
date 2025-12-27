@@ -5,9 +5,8 @@ async function getGameState(page, config) {
         if (typeof g === 'undefined' || !g.npc || !hero || !map) return null;
         if (g.battle) return { battle: true };
 
-        let bestTarget = null;
-        let minDistance = 9999;
         const obstacles = []; 
+        const validMobs = []; // ALL valid mobs for path-based selection
         let allMobsCount = 0;
         let deniedCount = 0;
         
@@ -34,22 +33,20 @@ async function getGameState(page, config) {
 
             if (isPriority) {
                 const dist = Math.hypot(n.x - hero.x, n.y - hero.y);
-                if (dist < minDistance) {
-                    minDistance = dist;
-                    bestTarget = { 
-                        x: n.x, y: n.y, id: n.id, nick: n.nick, lvl: n.lvl, 
-                        type: 'mob', isGateway: false, dist: dist 
-                    };
-                }
+                // Collect ALL valid mobs instead of just the nearest
+                validMobs.push({ 
+                    x: n.x, y: n.y, id: n.id, nick: n.nick, lvl: n.lvl, 
+                    type: 'mob', isGateway: false, dist: dist 
+                });
             }
         }
-
-        // --- 2. Gateways ---
-        let finalTarget = bestTarget;
-        let gateways = [];
+        
+        // Sort by geometric distance as baseline (will be re-evaluated with pathfinding)
+        validMobs.sort((a, b) => a.dist - b.dist);
 
         // --- 2. Gateways (DOM Parsing) ---
         // Parse gateways directly from DOM elements (Most reliable method)
+        let gateways = [];
         const gwElements = document.querySelectorAll('.gw');
         for (const el of gwElements) {
              const tip = el.getAttribute('tip') || '';
@@ -77,10 +74,11 @@ async function getGameState(page, config) {
             hero: { x: hero.x, y: hero.y },
             map: { id: map.id, w: map.x, h: map.y, col: map.col }, 
             battle: false,
-            target: finalTarget,
+            target: validMobs.length > 0 ? validMobs[0] : null, // Fallback: nearest by geometry
+            validMobs: validMobs, // NEW: All mobs for path-based selection
             gateways: gateways,
             obstacles: obstacles,
-            debugInfo: { allMobsCount, deniedCount },
+            debugInfo: { allMobsCount, deniedCount, validMobsCount: validMobs.length },
             currentMapName: map.name,
             pvp: !!document.getElementById('pvpmode') // Detect PvP map
         };
