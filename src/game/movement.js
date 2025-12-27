@@ -16,20 +16,29 @@ const movement = {
     async move(page, gameState, finalTarget) {
         if (!finalTarget) return 'no_target';
 
-        // 1. Stuck Check
-        if (Math.abs(gameState.hero.x - lastHeroPos.x) < 0.1 && Math.abs(gameState.hero.y - lastHeroPos.y) < 0.1) {
+        // 1. Stuck Check (Enhanced)
+        const moved = Math.abs(gameState.hero.x - lastHeroPos.x) + Math.abs(gameState.hero.y - lastHeroPos.y);
+        
+        if (moved < 0.3) { // Very small movement threshold
             stuckCounter++;
         } else {
-            stuckCounter = 0;
+            stuckCounter = Math.max(0, stuckCounter - 1); // Decay slowly instead of instant reset
         }
         lastHeroPos = { ...gameState.hero };
 
         if (stuckCounter > CONSTANTS.STUCK_LIMIT) {
-             logger.warn('⚠️ Bot stuck! Performing random move...');
+             logger.warn(`⚠️ Bot stuck (${stuckCounter} iterations)! Performing unstuck maneuver...`);
+             
+             // Aggressive multi-directional unstuck
              const directions = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
-             const randDir = directions[Math.floor(Math.random() * directions.length)];
-             await page.keyboard.press(randDir);
-             await sleep(500);
+             const randDir1 = directions[Math.floor(Math.random() * directions.length)];
+             const randDir2 = directions[Math.floor(Math.random() * directions.length)];
+             
+             await page.keyboard.press(randDir1, { delay: 100 });
+             await sleep(100);
+             await page.keyboard.press(randDir2, { delay: 100 });
+             await sleep(300);
+             
              stuckCounter = 0;
              return 'stuck_recovery';
         }

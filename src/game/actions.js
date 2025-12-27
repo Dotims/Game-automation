@@ -38,11 +38,23 @@ const actions = {
 
     async enterGateway(page, target) {
          logger.log(`🚪 Activating gateway [${target.name || 'Door'}]...`);
-         logger.log(`   ↩️ Step-off trigger...`);
-         await page.keyboard.press('ArrowDown', { delay: 240 });
-         await sleep(300);
-         await page.keyboard.press('ArrowUp', { delay: 240 });
-         await sleep(2500);
+         try {
+             await page.evaluate((gName) => {
+                 const gws = document.querySelectorAll('.gw');
+                 for (const gw of gws) {
+                     const tip = gw.getAttribute('tip') || '';
+                     const name = tip.replace(/<[^>]*>/g, '').trim();
+                     if (name === gName) {
+                         gw.click();
+                         return true;
+                     }
+                 }
+                 return false;
+             }, target.name);
+             await sleep(3000); // Wait for map change
+         } catch (e) {
+             logger.error('Gateway entry error:', e.message);
+         }
     },
 
     async autoHeal(page) {

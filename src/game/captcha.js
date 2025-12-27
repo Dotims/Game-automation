@@ -32,7 +32,8 @@ async function solveCaptcha(page) {
             const fontEl = btn.querySelector('.gfont');
             return {
                 index: index,
-                text: fontEl ? fontEl.getAttribute('name') : ''
+                text: fontEl ? fontEl.getAttribute('name') : '',
+                isActive: btn.classList.contains('active') // Check if already selected
             };
         });
         return { question, buttons };
@@ -51,6 +52,11 @@ async function solveCaptcha(page) {
     logger.success(`✅ Found ${correctButtons.length} correct answers.`);
 
     for (const btn of correctButtons) {
+        if (btn.isActive) {
+            logger.log(`⏭️ Skipping "${btn.text}" (Already Selected)`);
+            continue;
+        }
+
         const thinkTime = Math.floor(Math.random() * 1700) + 800;
         logger.log(`👆 Clicking: "${btn.text}" (in ${thinkTime}ms)`);
         await sleep(thinkTime);

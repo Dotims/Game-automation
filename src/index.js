@@ -35,6 +35,7 @@ async function main() {
     
     // PvP & Anti-Stuck State
     let ghostTarget = null;
+    let escapeTarget = null; 
     let positionHistory = [];
 
     // --- Cached Map Data ---
@@ -115,13 +116,34 @@ async function main() {
                 
                 // Clear Ghost Target on map change
                 ghostTarget = null;
+                escapeTarget = null;
                 positionHistory = [];
             }
 
             let finalTarget = state.target;
 
+            // --- 0. Persistence Checks ---
+             if (escapeTarget) {
+                 // CANCEL escape if we now have a valid target (mob appeared!)
+                 if (state.target && state.target.type === 'mob') {
+                     logger.log('✅ Cancelling Escape - Found valid mob targets!');
+                     escapeTarget = null;
+                     finalTarget = state.target;
+                 } else {
+                     // Check if we reached the escape gateway
+                     const dist = Math.hypot(escapeTarget.x - state.hero.x, escapeTarget.y - state.hero.y);
+                     if (dist < 1.5) {
+                         logger.log('✅ Escaped loop (reached gateway). Resuming normal logic.');
+                         escapeTarget = null;
+                     } else {
+                         logger.log(`🏃 ESCAPING LOOP: Moving to ${escapeTarget.nick} (${dist.toFixed(1)}m)`);
+                         finalTarget = escapeTarget;
+                     }
+                 }
+            }
+
             // --- PvP Ghost Target Logic ---
-            if (state.pvp) {
+            if (state.pvp && !escapeTarget) {
                  if (finalTarget && finalTarget.type === 'mob') {
                      // We see a mob, update ghost target
                      ghostTarget = { ...finalTarget, timestamp: Date.now() };
@@ -155,10 +177,10 @@ async function main() {
                 const uniquePos = new Set(positionHistory.map(p => `${p.x},${p.y}`));
                 
                 if (uniquePos.size < 12) { // Threshold: If we visited fewer than 12 unique tiles in 20 moves -> STUCK
-                     // FIX: Don't force rotate if there are mobs nearby!
+                     // FIX: Don't force rotate if there are mobs nearby AND we are targeting them!
                      // If we are fighting a dense cluster, we naturally stay in one area.
-                     if (state.debugInfo.allMobsCount > 0) {
-                         logger.log(`⚠️ Loop detected (${uniquePos.size} unique tiles), but Mobs present (${state.debugInfo.allMobsCount}). Ignoring rotation.`);
+                     if (state.debugInfo.allMobsCount > 0 && finalTarget) {
+                         logger.log(`⚠️ Loop detected (${uniquePos.size} unique tiles), but actively targeting Mobs. Ignoring rotation.`);
                          positionHistory = []; // Reset history to allow fighting to continue
                      } else {
                          logger.warn(`⚠️ Loop/Stuck detected! (Only ${uniquePos.size} unique tiles in last 20 moves). Forcing map rotation...`);
@@ -172,7 +194,8 @@ async function main() {
                          })[0];
                          
                          if (nearestGw) {
-                             finalTarget = { ...nearestGw, type: 'gateway', isGateway: true, nick: 'ESCAPE LOOP' };
+                             escapeTarget = { ...nearestGw, type: 'gateway', isGateway: true, nick: 'ESCAPE LOOP' };
+                             finalTarget = escapeTarget; // Set immediately for this frame too
                              positionHistory = []; // Reset history after triggering
                          }
                      }

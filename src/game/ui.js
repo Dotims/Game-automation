@@ -17,7 +17,7 @@ async function injectUI(page, defaultConfig, huntingSpots) {
              style.id = 'margo-bot-css';
              style.innerHTML = `
                 #margo-bot-panel {
-                    position: fixed; top: 20px; right: 20px; z-index: 99999;
+                    position: fixed; top: 20px; left: 20px; z-index: 99999;
                     background: rgba(28, 28, 33, 0.95); 
                     color: #ececec;
                     padding: 0; 
@@ -27,7 +27,8 @@ async function injectUI(page, defaultConfig, huntingSpots) {
                     border: 1px solid #444;
                     box-shadow: 0 10px 25px rgba(0,0,0,0.5);
                     backdrop-filter: blur(10px);
-                    transition: all 0.3s ease;
+                    backdrop-filter: blur(10px);
+                    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
                     overflow: hidden;
                     font-size: 13px;
                 }
@@ -38,6 +39,8 @@ async function injectUI(page, defaultConfig, huntingSpots) {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
+                    cursor: move;
+                    user-select: none;
                 }
                 .mb-title { font-weight: 700; font-size: 14px; letter-spacing: 0.5px; }
                 .mb-status { font-weight: 800; font-size: 12px; padding: 2px 6px; border-radius: 4px; background: #333; }
@@ -197,10 +200,53 @@ async function injectUI(page, defaultConfig, huntingSpots) {
              };
         }
 
+        // --- DRAGGABLE LOGIC ---
+        const panel = document.getElementById('margo-bot-panel');
+        const header = panel.querySelector('.mb-header');
+        
+        let isDragging = false;
+        let startX, startY, initialLeft, initialTop;
+
+        const onMouseDown = (e) => {
+            if (e.target.closest('.mb-btn') || e.target.closest('.mb-input')) return; // Don't drag if clicking controls
+            
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            
+            const rect = panel.getBoundingClientRect();
+            initialLeft = rect.left;
+            initialTop = rect.top;
+            
+            header.style.cursor = 'grabbing';
+            e.preventDefault();
+        };
+
+        const onMouseMove = (e) => {
+            if (!isDragging) return;
+            
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            
+            panel.style.left = `${initialLeft + dx}px`;
+            panel.style.top = `${initialTop + dy}px`;
+            panel.style.right = 'auto';
+        };
+
+        const onMouseUp = () => {
+            if (isDragging) {
+                isDragging = false;
+                header.style.cursor = 'move';
+            }
+        };
+
+        header.addEventListener('mousedown', onMouseDown);
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+
         // --- UPDATE UI STATE ---
         const st = document.getElementById('bot-status');
         const btn = document.getElementById('btn-toggle');
-        const panel = document.getElementById('margo-bot-panel');
         
         if (st && btn && panel) {
                 if (window.BOT_ACTIVE) {
