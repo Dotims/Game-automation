@@ -32,6 +32,7 @@ async function main() {
     let lastMapName = ""; 
     let currentMapName = "";
     let skippedMobs = new Map(); // mobId -> timestamp
+    const mapHistory = new Map(); // mapName -> lastVisitTimestamp
     
     // PvP & Anti-Stuck State
     let ghostTarget = null;
@@ -116,6 +117,8 @@ async function main() {
                          logger.log(`🗺️ [HISTORY] Last: '${lastMapName}' | Curr: '${state.currentMapName}'`);
                      }
                      currentMapName = state.currentMapName;
+                     // Track visit time
+                     mapHistory.set(currentMapName, Date.now());
                 }
                 cachedMapId = state.map.id;
                 
@@ -391,15 +394,52 @@ async function main() {
                            return true;
                       });
 
-                      if (validGateways.length > 0) {
-                           // 2. Pick the NEAREST valid one
-                           gw = validGateways.sort((a,b) => {
-                               const distA = Math.hypot(a.x - state.hero.x, a.y - state.hero.y);
-                               const distB = Math.hypot(b.x - state.hero.x, b.y - state.hero.y);
-                               return distA - distB;
-                           })[0];
-                           if (gw) logger.log(`   ✅ Best Gateway found: ${gw.name} (Nearest)`);
-                      } 
+                       if (validGateways.length > 0) {
+                           // 2. Prioritize: Unvisited > Oldest Visit > Nearest
+                           // AND MUST BE REACHABLE
+                           
+                           const scoredGateways = validGateways.map(g => {
+                               const gName = g.name;
+                               let lastVisit = 0;
+                               
+                               // Try to find if we visited this map
+                               for (const [vMap, time] of mapHistory.entries()) {
+                                   if (gName.toLowerCase().includes(vMap.toLowerCase().trim()) || 
+                                       vMap.toLowerCase().includes(gName.toLowerCase().trim())) {
+                                       lastVisit = time;
+                                       break;
+                                   }
+                               }
+                               
+                               return {
+                                   ...g,
+                                   lastVisit: lastVisit, // 0 = never visited (Priority 1)
+                                   dist: Math.hypot(g.x - state.hero.x, g.y - state.hero.y)
+                               };
+                           });
+                           
+                           // Sort:
+                           // 1. Has it been visited? (0 is best)
+                           // 2. If both visited, Oldest timestamp is best (Ascending)
+                           // 3. Distance (Ascending)
+                           const sorted = scoredGateways.sort((a,b) => {
+                               if (a.lastVisit !== b.lastVisit) {
+                                   return a.lastVisit - b.lastVisit; // 0 comes first, then older timestamps (smaller numbers)
+                               }
+                               return a.dist - b.dist; // Nearest fallback
+                           });
+
+                           for (const candidate of sorted) {
+                               if (movement.isReachable(state, candidate.x, candidate.y)) {
+                                   gw = candidate;
+                                   const status = candidate.lastVisit === 0 ? "🆕 Unvisited" : `🕒 ${(Date.now() - candidate.lastVisit)/1000}s ago`;
+                                   logger.log(`   ✅ Best Gateway found: ${gw.name} (${status}, ${candidate.dist.toFixed(1)}m)`);
+                                   break;
+                               } else {
+                                   logger.warn(`   ⚠️ Skipping Gateway: ${candidate.name} (Unreachable/Blocked)`);
+                               }
+                           }
+                       } 
                       
                       // Fallback 1: Allow backtracking to a configured map
                       if (!gw) {
@@ -425,7 +465,8 @@ async function main() {
                                     const distA = Math.hypot(a.x - state.hero.x, a.y - state.hero.y);
                                     const distB = Math.hypot(b.x - state.hero.x, b.y - state.hero.y);
                                     return distA - distB;
-                                })[0];
+                                }).find(g => movement.isReachable(state, g.x, g.y)) || notLast[0]; // Fallback to [0] if all unreachable
+                                
                                 logger.log(`   🆘 PANIC: Taking random gateway (Not Last): ${gw.name}`);
                            } else {
                                 // Just take the nearest one
@@ -433,7 +474,8 @@ async function main() {
                                     const distA = Math.hypot(a.x - state.hero.x, a.y - state.hero.y);
                                     const distB = Math.hypot(b.x - state.hero.x, b.y - state.hero.y);
                                     return distA - distB;
-                                })[0];
+                                }).find(g => movement.isReachable(state, g.x, g.y)) || state.gateways[0]; // Fallback 
+                                
                                 logger.log(`   🆘 PANIC: Taking nearest gateway: ${gw.name}`);
                            }
                       }

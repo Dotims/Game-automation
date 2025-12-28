@@ -29,6 +29,16 @@ function ensureGrid(gameState) {
                 }
             }
         }
+        
+        // Mark Gateways as obstacles (Safety for Auto-Teleport Addons)
+        if (gameState.gateways && gameState.gateways.length > 0) {
+            for (const gw of gameState.gateways) {
+                if (baseGrid.isWalkableAt(gw.x, gw.y)) {
+                    baseGrid.setWalkableAt(gw.x, gw.y, false);
+                }
+            }
+        }
+        
         cachedMapId = gameState.map.id;
     }
     return baseGrid;
@@ -128,6 +138,14 @@ const movement = {
     // Export the path-based target selection
     findBestTarget,
     
+    // Check if a target is reachable (True/False)
+    isReachable(gameState, targetX, targetY) {
+        if (!gameState) return false;
+        const grid = ensureGrid(gameState);
+        const len = getPathLength(grid, gameState.hero.x, gameState.hero.y, targetX, targetY);
+        return len !== Infinity;
+    },
+    
     async move(page, gameState, finalTarget) {
         if (!finalTarget) return 'no_target';
 
@@ -167,6 +185,12 @@ const movement = {
         const startY = Math.round(gameState.hero.y);
         const endX = Math.round(finalTarget.x);
         const endY = Math.round(finalTarget.y);
+        
+        // Safety Override: If target IS a gateway, we MUST be able to step on it!
+        // (ensureGrid marks them as walls by default now)
+        if (finalTarget.isGateway) {
+            grid.setWalkableAt(endX, endY, true);
+        }
 
         let path = null;
         try {
