@@ -128,7 +128,7 @@ async function injectUI(page, defaultConfig, huntingSpots) {
 
              div.innerHTML = `
                 <div class="mb-header">
-                    <div class="mb-title">🤖 MargoBot v2.2</div>
+                    <div class="mb-title">😼 MargoSzpont</div>
                     <div id="bot-status" class="mb-status" style="color: #f44336">OFF</div>
                 </div>
                 
@@ -182,6 +182,28 @@ async function injectUI(page, defaultConfig, huntingSpots) {
                  mainPanel.style.display = 'block';
                  mainPanel.style.visibility = 'visible';
                  mainPanel.style.zIndex = '9999999';
+             }
+
+             // 0.5. Restore Dropdown State based on Map Config
+             if (window.BOT_CONFIG.maps && window.HUNTING_SPOTS) {
+                 const currentMaps = window.BOT_CONFIG.maps.map(m => m.toLowerCase().replace(/\s/g, ''));
+                 const currentMapsSet = new Set(currentMaps);
+                 
+                 for (let i = 0; i < window.HUNTING_SPOTS.length; i++) {
+                     const spot = window.HUNTING_SPOTS[i];
+                     if (!spot.maps) continue;
+                     
+                     // Check for exact match of map set (ignoring order)
+                     const spotMaps = spot.maps.map(m => m.toLowerCase().replace(/\s/g, ''));
+                     if (spotMaps.length === currentMaps.length) {
+                         const allMatch = spotMaps.every(m => currentMapsSet.has(m));
+                         if (allMatch) {
+                             const sel = document.getElementById('inp-spot');
+                             if (sel) sel.value = i;
+                             break;
+                         }
+                     }
+                 }
              }
 
              // 1. Selector Change Logic

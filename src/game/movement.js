@@ -52,10 +52,10 @@ function getPathLength(grid, heroX, heroY, targetX, targetY) {
     const gridClone = grid.clone();
     const finder = new PF.AStarFinder({ allowDiagonal: false });
     
-    const startX = Math.round(heroX);
-    const startY = Math.round(heroY);
-    let endX = Math.round(targetX);
-    let endY = Math.round(targetY);
+    const startX = Math.max(0, Math.min(Math.round(heroX), gridClone.width - 1));
+    const startY = Math.max(0, Math.min(Math.round(heroY), gridClone.height - 1));
+    let endX = Math.max(0, Math.min(Math.round(targetX), gridClone.width - 1));
+    let endY = Math.max(0, Math.min(Math.round(targetY), gridClone.height - 1));
     
     // If target is on a wall, find nearest walkable neighbor
     if (!gridClone.isWalkableAt(endX, endY)) {
@@ -165,17 +165,22 @@ const movement = {
         // Clone grid because ensureGrid marks gateways as obstacles!
         const grid = ensureGrid(gameState).clone();
         
+        // Clamp target to grid bounds
+        const safeX = Math.max(0, Math.min(Math.round(targetX), grid.width - 1));
+        const safeY = Math.max(0, Math.min(Math.round(targetY), grid.height - 1));
+        
         // 1. Apply Dynamic Obstacles (NPCs, Mobs)
         applyDynamicObstacles(grid, gameState);
         
-        // 2. UNLOCK our specific target (in case it's a gateway or we want to stand on it?)
-        // If it's a mob/NPC, applyDynamicObstacles locked it.
-        // But getPathLength handles "end node blocked" by searching neighbors.
-        // Gateways are special because they are "hard walls" in base grid.
-        // So unlocking targetX, targetY is primarily for GATEWAYS.
-        grid.setWalkableAt(targetX, targetY, true);
+        // 2. UNLOCK our specific target
+        grid.setWalkableAt(safeX, safeY, true);
+
+        // 3. UNLOCK our CURRENT position (Hero)
+        const heroX = Math.max(0, Math.min(Math.round(gameState.hero.x), grid.width - 1));
+        const heroY = Math.max(0, Math.min(Math.round(gameState.hero.y), grid.height - 1));
+        grid.setWalkableAt(heroX, heroY, true);
         
-        const len = getPathLength(grid, gameState.hero.x, gameState.hero.y, targetX, targetY);
+        const len = getPathLength(grid, gameState.hero.x, gameState.hero.y, safeX, safeY);
         return len !== Infinity;
     },
     
@@ -215,15 +220,17 @@ const movement = {
 
         // 3. A* Pathfinder
         const finder = new PF.AStarFinder({ allowDiagonal: false });
-        const startX = Math.round(gameState.hero.x);
-        const startY = Math.round(gameState.hero.y);
-        const endX = Math.round(finalTarget.x);
-        const endY = Math.round(finalTarget.y);
+        // Clamp Start/End to Grid Bounds
+        const startX = Math.max(0, Math.min(Math.round(gameState.hero.x), grid.width - 1));
+        const startY = Math.max(0, Math.min(Math.round(gameState.hero.y), grid.height - 1));
+        const endX = Math.max(0, Math.min(Math.round(finalTarget.x), grid.width - 1));
+        const endY = Math.max(0, Math.min(Math.round(finalTarget.y), grid.height - 1));
         
-        // Safety Override: If target IS a gateway, we MUST be able to step on it!
+        // Safety: Unlock Start & End
         if (finalTarget.isGateway) {
             grid.setWalkableAt(endX, endY, true);
         }
+        grid.setWalkableAt(startX, startY, true);
 
         let path = null;
         try {
@@ -233,34 +240,56 @@ const movement = {
             let targetY = endY;
 
             if (!grid.isWalkableAt(endX, endY)) {
-                 logger.log(`   🧱 Target [${endX},${endY}] is blocked/wall. Searching neighbors...`);
+                 logger.log(`   🧱 Target [${endX},${endY}] is blocked/wall. Searching nearest walkable tile (Radius 5)...`);
                  
-                 // Check neighbors (Right, Left, Down, Up)
-                 const neighbors = [
-                     [endX + 1, endY], [endX - 1, endY],
-                     [endX, endY + 1], [endX, endY - 1]
-                 ];
-                 
-                 // Sort neighbors by distance to hero to pick the closest accessible side
-                 neighbors.sort((a,b) => {
-                     const da = Math.hypot(a[0] - startX, a[1] - startY);
-                     const db = Math.hypot(b[0] - startX, b[1] - startY);
-                     return da - db;
-                 });
-
+                 // BFS search for nearest walkable tile spiraling out
+                 const queue = [[endX, endY]];
+                 const visited = new Set([`${endX},${endY}`]);
                  let found = false;
-                 for (const n of neighbors) {
-                     const isWalkable = grid.isWalkableAt(n[0], n[1]);
+                 
+                 // Radius limitation
+                 const MAX_RADIUS = 5;
+                 
+                 while (queue.length > 0) {
+                     const [cx, cy] = queue.shift();
                      
-                     if (isWalkable) {
-                         targetX = n[0];
-                         targetY = n[1];
-                         logger.log(`   📍 Found walkable neighbor: [${targetX}, ${targetY}]`);
+                     // Check if this tile is walkable
+                     if (grid.isWalkableAt(cx, cy)) {
+                         targetX = cx;
+                         targetY = cy;
+                         logger.log(`   📍 Found walkable spot: [${targetX}, ${targetY}] (Dist from GW: ${Math.max(Math.abs(targetX-endX), Math.abs(targetY-endY))})`);
                          found = true;
                          break;
                      }
+                     
+                     // Stop if too far
+                     if (Math.abs(cx - endX) > MAX_RADIUS || Math.abs(cy - endY) > MAX_RADIUS) continue;
+                     
+                     // Add neighbors, sorted by distance to Hero to prioritize reachable side
+                     const neighbors = [
+                         [cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]
+                     ];
+                     
+                     // Sort neighbors by distance to Start (Hero)
+                     neighbors.sort((a, b) => {
+                         const da = Math.hypot(a[0] - startX, a[1] - startY);
+                         const db = Math.hypot(b[0] - startX, b[1] - startY);
+                         return da - db;
+                     });
+                     
+                     for (const n of neighbors) {
+                         const key = `${n[0]},${n[1]}`;
+                         if (!visited.has(key)) {
+                             visited.add(key);
+                             // Verify bounds
+                             if (n[0] >= 0 && n[0] < grid.width && n[1] >= 0 && n[1] < grid.height) {
+                                 queue.push(n);
+                             }
+                         }
+                     }
                  }
-                 if (!found) logger.warn(`   ⚠️ All neighbors of target [${endX},${endY}] are BLOCKED!`);
+
+                 if (!found) logger.warn(`   ⚠️ Could not find ANY walkable tile near gateway [${endX},${endY}]!`);
             }
 
             path = finder.findPath(startX, startY, targetX, targetY, grid);
@@ -287,10 +316,10 @@ const movement = {
              let currentY = startY;
 
              // Dynamic Key Press Duration based on Ping
-             // Minimum 100ms (to register as hold), max based on ping to prevent early release
-             // User requested: "Ping + safety buffer"
+             // Minimum 170ms (to ensure turn + move), max based on ping
+             // Added variance for natural behavior
              const currentPing = gameState.ping || 50;
-             const pressDuration = Math.max(100, currentPing + 20); 
+             const pressDuration = Math.max(170, currentPing + 40) + Math.floor(Math.random() * 30); 
 
              for (let i = 1; i <= stepsToTake; i++) {
                  const nextStep = path[i];
@@ -314,7 +343,7 @@ const movement = {
                  if (key) {
                      await page.keyboard.press(key, { delay: pressDuration });
                      
-                     await sleep(20); 
+                     await sleep(50); 
                      currentX = nextStep[0];
                      currentY = nextStep[1];
                  }

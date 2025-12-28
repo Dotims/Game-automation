@@ -1,4 +1,3 @@
-
 const HUNTING_SPOTS = [
     { name: "Grobowce (18lvl)", min: 15, max: 25, maps: ["Krypta Rodu Heregata", "Krypta Rodu Heregata p.1", "Krypta Rodu Heregata p.2 - lewe skrzydło", "Krypta Rodu Heregata p.2 - prawe skrzydło", "Grobowiec Rodziny Tywelta", "Grobowiec Rodziny Tywelta p.1", "Grobowiec Rodziny Tywelta p.2"] },
     { name: "Mrówki (20lvl)", min: 17, max: 27, maps: ["Kopiec Mrówek p.2", "Mrowisko", "Kopiec Mrówek", "Mrowisko p.1", "Kopiec Mrówek p.1", "Mrowisko p.2"] },
