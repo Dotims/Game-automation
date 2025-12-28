@@ -2,6 +2,8 @@ const logger = require('../utils/logger');
 
 async function injectUI(page, defaultConfig, huntingSpots) {
     return await page.evaluate(({ cfg, spots }) => {
+        if (!document.body) return { active: false, config: cfg }; // Safety check
+
         if (!window.BOT_CONFIG) {
             const saved = localStorage.getItem('MARGO_BOT_CFG');
             window.BOT_CONFIG = saved ? JSON.parse(saved) : cfg;
@@ -10,6 +12,28 @@ async function injectUI(page, defaultConfig, huntingSpots) {
         
         // Cache spots for easy access
         window.HUNTING_SPOTS = spots || [];
+        
+        // --- SECURITY MONITOR ---
+        // Verify that inputs are accepted as "Trusted" (Human-like) by the browser
+        if (!window.SECURITY_MONITORED) {
+            window.SECURITY_MONITORED = true;
+            window.BOT_SECURITY_FLAG = false;
+            
+            const monitoredKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'e', 'r', ' '];
+            
+            const verifyInput = (e) => {
+                // We only care about inputs that MIGHT be ours
+                if (e.type === 'keydown' && !monitoredKeys.includes(e.key)) return;
+                
+                if (e.isTrusted === false) {
+                    console.error('🛑 SECURITY ALERT: Untrusted (Script) Input Detected!', e);
+                    window.BOT_SECURITY_FLAG = true;
+                }
+            };
+            
+            document.addEventListener('keydown', verifyInput, true);
+            document.addEventListener('mousedown', verifyInput, true);
+        }
 
         // --- CSS ---
         if (!document.getElementById('margo-bot-css')) {
@@ -17,7 +41,7 @@ async function injectUI(page, defaultConfig, huntingSpots) {
              style.id = 'margo-bot-css';
              style.innerHTML = `
                 #margo-bot-panel {
-                    position: fixed; top: 20px; right: 20px; z-index: 99999;
+                    position: fixed; top: 20px; left: 20px; z-index: 99999;
                     background: rgba(28, 28, 33, 0.95); 
                     color: #ececec;
                     padding: 0; 
@@ -27,7 +51,8 @@ async function injectUI(page, defaultConfig, huntingSpots) {
                     border: 1px solid #444;
                     box-shadow: 0 10px 25px rgba(0,0,0,0.5);
                     backdrop-filter: blur(10px);
-                    transition: all 0.3s ease;
+                    backdrop-filter: blur(10px);
+                    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
                     overflow: hidden;
                     font-size: 13px;
                 }
@@ -38,6 +63,8 @@ async function injectUI(page, defaultConfig, huntingSpots) {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
+                    cursor: move;
+                    user-select: none;
                 }
                 .mb-title { font-weight: 700; font-size: 14px; letter-spacing: 0.5px; }
                 .mb-status { font-weight: 800; font-size: 12px; padding: 2px 6px; border-radius: 4px; background: #333; }
@@ -101,7 +128,7 @@ async function injectUI(page, defaultConfig, huntingSpots) {
 
              div.innerHTML = `
                 <div class="mb-header">
-                    <div class="mb-title">🤖 MargoBot v2.2</div>
+                    <div class="mb-title">😼 MargoSzpont</div>
                     <div id="bot-status" class="mb-status" style="color: #f44336">OFF</div>
                 </div>
                 
@@ -149,6 +176,36 @@ async function injectUI(page, defaultConfig, huntingSpots) {
 
              // --- Logic ---
              
+             // 0. Force Visibility (Fix for "invisible" UI)
+             const mainPanel = document.getElementById('margo-bot-panel');
+             if (mainPanel) {
+                 mainPanel.style.display = 'block';
+                 mainPanel.style.visibility = 'visible';
+                 mainPanel.style.zIndex = '9999999';
+             }
+
+             // 0.5. Restore Dropdown State based on Map Config
+             if (window.BOT_CONFIG.maps && window.HUNTING_SPOTS) {
+                 const currentMaps = window.BOT_CONFIG.maps.map(m => m.toLowerCase().replace(/\s/g, ''));
+                 const currentMapsSet = new Set(currentMaps);
+                 
+                 for (let i = 0; i < window.HUNTING_SPOTS.length; i++) {
+                     const spot = window.HUNTING_SPOTS[i];
+                     if (!spot.maps) continue;
+                     
+                     // Check for exact match of map set (ignoring order)
+                     const spotMaps = spot.maps.map(m => m.toLowerCase().replace(/\s/g, ''));
+                     if (spotMaps.length === currentMaps.length) {
+                         const allMatch = spotMaps.every(m => currentMapsSet.has(m));
+                         if (allMatch) {
+                             const sel = document.getElementById('inp-spot');
+                             if (sel) sel.value = i;
+                             break;
+                         }
+                     }
+                 }
+             }
+
              // 1. Selector Change Logic
              const spotSelect = document.getElementById('inp-spot');
              spotSelect.onchange = () => {
@@ -197,10 +254,53 @@ async function injectUI(page, defaultConfig, huntingSpots) {
              };
         }
 
+        // --- DRAGGABLE LOGIC ---
+        const panel = document.getElementById('margo-bot-panel');
+        const header = panel.querySelector('.mb-header');
+        
+        let isDragging = false;
+        let startX, startY, initialLeft, initialTop;
+
+        const onMouseDown = (e) => {
+            if (e.target.closest('.mb-btn') || e.target.closest('.mb-input')) return; // Don't drag if clicking controls
+            
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            
+            const rect = panel.getBoundingClientRect();
+            initialLeft = rect.left;
+            initialTop = rect.top;
+            
+            header.style.cursor = 'grabbing';
+            e.preventDefault();
+        };
+
+        const onMouseMove = (e) => {
+            if (!isDragging) return;
+            
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            
+            panel.style.left = `${initialLeft + dx}px`;
+            panel.style.top = `${initialTop + dy}px`;
+            panel.style.right = 'auto';
+        };
+
+        const onMouseUp = () => {
+            if (isDragging) {
+                isDragging = false;
+                header.style.cursor = 'move';
+            }
+        };
+
+        header.addEventListener('mousedown', onMouseDown);
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+
         // --- UPDATE UI STATE ---
         const st = document.getElementById('bot-status');
         const btn = document.getElementById('btn-toggle');
-        const panel = document.getElementById('margo-bot-panel');
         
         if (st && btn && panel) {
                 if (window.BOT_ACTIVE) {
@@ -224,7 +324,11 @@ async function injectUI(page, defaultConfig, huntingSpots) {
             }
         }
 
-        return { active: window.BOT_ACTIVE, config: window.BOT_CONFIG };
+        return { 
+            active: window.BOT_ACTIVE, 
+            config: window.BOT_CONFIG,
+            securityAlert: window.BOT_SECURITY_FLAG 
+        };
     }, { cfg: defaultConfig, spots: huntingSpots });
 }
 

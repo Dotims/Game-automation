@@ -37,12 +37,15 @@ const actions = {
     },
 
     async enterGateway(page, target) {
-         logger.log(`🚪 Activating gateway [${target.name || 'Door'}]...`);
-         logger.log(`   ↩️ Step-off trigger...`);
-         await page.keyboard.press('ArrowDown', { delay: 240 });
-         await sleep(300);
-         await page.keyboard.press('ArrowUp', { delay: 240 });
-         await sleep(2500);
+         logger.log(`🚪 Reached gateway [${target.name || 'Door'}] Coords. Waiting for map transition...`);
+         try {
+             // User reported that clicking causes a dialog (Pass/Angry).
+             // Merely walking onto the tile (which we have done) is sufficient.
+             // We just wait for the server to process the map change.
+             await sleep(1000); 
+         } catch (e) {
+             logger.error('Gateway entry error:', e.message);
+         }
     },
 
     async autoHeal(page) {
