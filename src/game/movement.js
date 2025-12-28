@@ -94,6 +94,22 @@ function getPathLength(grid, heroX, heroY, targetX, targetY) {
 }
 
 /**
+ * Applies dynamic obstacles (mobs, NPCs) to the grid
+ */
+function applyDynamicObstacles(grid, gameState) {
+    if (gameState.obstacles) {
+        for (const obs of gameState.obstacles) {
+            // Don't block the tile the hero is currently engaging if it's the target?
+            // Actually, for pathfinding, we want everything blocked. 
+            // Neighbors search handles interaction range.
+            if (grid.isWalkableAt(obs.x, obs.y)) {
+                grid.setWalkableAt(obs.x, obs.y, false);
+            }
+        }
+    }
+}
+
+/**
  * Find the best target from validMobs based on actual A* path length
  * This ensures the bot always picks the mob with the shortest REACHABLE path
  */
@@ -102,7 +118,10 @@ function findBestTarget(gameState, maxCandidates = 8) {
         return null;
     }
     
-    const grid = ensureGrid(gameState);
+    // Create a grid WITH OBSTACLES for accurate pathfinding
+    const baseGrid = ensureGrid(gameState).clone();
+    applyDynamicObstacles(baseGrid, gameState);
+    
     const heroX = gameState.hero.x;
     const heroY = gameState.hero.y;
     
@@ -114,7 +133,9 @@ function findBestTarget(gameState, maxCandidates = 8) {
     let bestPathLength = Infinity;
     
     for (const mob of candidates) {
-        const pathLength = getPathLength(grid, heroX, heroY, mob.x, mob.y);
+        // We pass the obstacle-laden grid. getPathLength clones it again (safe but slow).
+        // Optimization: Could rewrite getPathLength to accept non-cloning flag, but for now safety first.
+        const pathLength = getPathLength(baseGrid, heroX, heroY, mob.x, mob.y);
         
         // Prefer shorter paths; skip unreachable mobs
         if (pathLength < bestPathLength && pathLength !== Infinity) {
@@ -141,7 +162,19 @@ const movement = {
     // Check if a target is reachable (True/False)
     isReachable(gameState, targetX, targetY) {
         if (!gameState) return false;
-        const grid = ensureGrid(gameState);
+        // Clone grid because ensureGrid marks gateways as obstacles!
+        const grid = ensureGrid(gameState).clone();
+        
+        // 1. Apply Dynamic Obstacles (NPCs, Mobs)
+        applyDynamicObstacles(grid, gameState);
+        
+        // 2. UNLOCK our specific target (in case it's a gateway or we want to stand on it?)
+        // If it's a mob/NPC, applyDynamicObstacles locked it.
+        // But getPathLength handles "end node blocked" by searching neighbors.
+        // Gateways are special because they are "hard walls" in base grid.
+        // So unlocking targetX, targetY is primarily for GATEWAYS.
+        grid.setWalkableAt(targetX, targetY, true);
+        
         const len = getPathLength(grid, gameState.hero.x, gameState.hero.y, targetX, targetY);
         return len !== Infinity;
     },
@@ -176,10 +209,11 @@ const movement = {
              return 'stuck_recovery';
         }
         
-        // 2. Grid Management (use shared function)
+        // 2. Grid Management
         const grid = ensureGrid(gameState).clone();
+        applyDynamicObstacles(grid, gameState); // Apply NPCs/Mobs
 
-        // 3. A* Pathfinding
+        // 3. A* Pathfinder
         const finder = new PF.AStarFinder({ allowDiagonal: false });
         const startX = Math.round(gameState.hero.x);
         const startY = Math.round(gameState.hero.y);
@@ -187,7 +221,6 @@ const movement = {
         const endY = Math.round(finalTarget.y);
         
         // Safety Override: If target IS a gateway, we MUST be able to step on it!
-        // (ensureGrid marks them as walls by default now)
         if (finalTarget.isGateway) {
             grid.setWalkableAt(endX, endY, true);
         }
@@ -262,6 +295,15 @@ const movement = {
              for (let i = 1; i <= stepsToTake; i++) {
                  const nextStep = path[i];
                  if (!nextStep) break;
+                 
+                 // HARD SAFETY CHECK: Is this step a gateway?
+                 if (!finalTarget.isGateway && gameState.gateways) {
+                     const isGw = gameState.gateways.some(g => g.x === nextStep[0] && g.y === nextStep[1]);
+                     if (isGw) {
+                         logger.warn(`🛑 MOVEMENT ABORTED: Step [${nextStep[0]},${nextStep[1]}] is a Gateway! Avoiding accidental map change.`);
+                         return 'fail';
+                     }
+                 }
                  
                  let key = '';
                  if (nextStep[0] > currentX) key = 'ArrowRight';

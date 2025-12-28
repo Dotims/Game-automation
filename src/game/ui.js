@@ -2,6 +2,8 @@ const logger = require('../utils/logger');
 
 async function injectUI(page, defaultConfig, huntingSpots) {
     return await page.evaluate(({ cfg, spots }) => {
+        if (!document.body) return { active: false, config: cfg }; // Safety check
+
         if (!window.BOT_CONFIG) {
             const saved = localStorage.getItem('MARGO_BOT_CFG');
             window.BOT_CONFIG = saved ? JSON.parse(saved) : cfg;
@@ -10,6 +12,28 @@ async function injectUI(page, defaultConfig, huntingSpots) {
         
         // Cache spots for easy access
         window.HUNTING_SPOTS = spots || [];
+        
+        // --- SECURITY MONITOR ---
+        // Verify that inputs are accepted as "Trusted" (Human-like) by the browser
+        if (!window.SECURITY_MONITORED) {
+            window.SECURITY_MONITORED = true;
+            window.BOT_SECURITY_FLAG = false;
+            
+            const monitoredKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'e', 'r', ' '];
+            
+            const verifyInput = (e) => {
+                // We only care about inputs that MIGHT be ours
+                if (e.type === 'keydown' && !monitoredKeys.includes(e.key)) return;
+                
+                if (e.isTrusted === false) {
+                    console.error('🛑 SECURITY ALERT: Untrusted (Script) Input Detected!', e);
+                    window.BOT_SECURITY_FLAG = true;
+                }
+            };
+            
+            document.addEventListener('keydown', verifyInput, true);
+            document.addEventListener('mousedown', verifyInput, true);
+        }
 
         // --- CSS ---
         if (!document.getElementById('margo-bot-css')) {
@@ -152,6 +176,14 @@ async function injectUI(page, defaultConfig, huntingSpots) {
 
              // --- Logic ---
              
+             // 0. Force Visibility (Fix for "invisible" UI)
+             const mainPanel = document.getElementById('margo-bot-panel');
+             if (mainPanel) {
+                 mainPanel.style.display = 'block';
+                 mainPanel.style.visibility = 'visible';
+                 mainPanel.style.zIndex = '9999999';
+             }
+
              // 1. Selector Change Logic
              const spotSelect = document.getElementById('inp-spot');
              spotSelect.onchange = () => {
@@ -270,7 +302,11 @@ async function injectUI(page, defaultConfig, huntingSpots) {
             }
         }
 
-        return { active: window.BOT_ACTIVE, config: window.BOT_CONFIG };
+        return { 
+            active: window.BOT_ACTIVE, 
+            config: window.BOT_CONFIG,
+            securityAlert: window.BOT_SECURITY_FLAG 
+        };
     }, { cfg: defaultConfig, spots: huntingSpots });
 }
 

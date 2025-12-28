@@ -53,10 +53,18 @@ async function main() {
     while (true) {
         try {
         // Inject UI (returns current config state)
-        const uiState = await ui.injectUI(page, config.DEFAULT_CONFIG, HUNTING_SPOTS);
+        const uiState = await ui.injectUI(page, config.DEFAULT_CONFIG, HUNTING_SPOTS); // Cleaned
         
+        if (uiState.securityAlert) {
+            logger.error('🛑 FATAL SECURITY WARNING: Bot inputs detected as UNTRUSTED/FAKE!');
+            logger.error('   The game or browser is flagging our inputs. Stopping for safety.');
+            await sleep(5000);
+            continue;
+        }
+
         // Update local config if UI changed it
         if (!uiState.active) {
+                if (Date.now() % 5000 < 500) logger.info('💤 Bot paused. Click START in game UI.');
                 await sleep(500);
                 continue; // Paused
             }
@@ -441,20 +449,25 @@ async function main() {
                            }
                        } 
                       
-                      // Fallback 1: Allow backtracking to a configured map
-                      if (!gw) {
-                           gw = state.gateways.find(g => {
-                               if (!g.name) return false;
-                               return mapsList.some(m => g.name.toLowerCase().includes(m.toLowerCase().trim()));
-                           });
-                           if (gw) logger.log(`   🔙 Backtracking to Configured Map: ${gw.name}`);
-                      }
+                       // Fallback 1: Allow backtracking to a configured map (MUST BE REACHABLE)
+                       if (!gw) {
+                            gw = state.gateways.find(g => {
+                                if (!g.name) return false;
+                                // Must be in config AND reachable
+                                const inConfig = mapsList.some(m => g.name.toLowerCase().includes(m.toLowerCase().trim()));
+                                return inConfig && movement.isReachable(state, g.x, g.y);
+                            });
+                            if (gw) logger.log(`   🔙 Backtracking to Configured Map: ${gw.name}`);
+                       }
 
-                      // Fallback 2: Return to Last Map (even if not in config) - Escape Dead End
-                      if (!gw && lastMapName) {
-                           gw = state.gateways.find(g => g.name.toLowerCase().trim() === lastMapName.toLowerCase().trim());
-                           if (gw) logger.log(`   🔙 Escaping Dead End -> Last Map: ${gw.name}`);
-                      }
+                       // Fallback 2: Return to Last Map (Escape Dead End) - MUST BE REACHABLE
+                       if (!gw && lastMapName) {
+                            gw = state.gateways.find(g => {
+                                const isLast = g.name.toLowerCase().trim() === lastMapName.toLowerCase().trim();
+                                return isLast && movement.isReachable(state, g.x, g.y);
+                            });
+                            if (gw) logger.log(`   🔙 Escaping Dead End -> Last Map: ${gw.name}`);
+                       }
 
                       // Fallback 3: PANIC MODE - Any nearest gateway (Avoid stuck)
                       if (!gw && state.gateways.length > 0) {
