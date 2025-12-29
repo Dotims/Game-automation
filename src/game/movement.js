@@ -311,43 +311,71 @@ const movement = {
              lastFailedTargetId = null;
 
              // Optimized Burst Mode
-             const stepsToTake = Math.min(path.length - 1, CONSTANTS.BURST_STEPS || 4);
+             // Reduced to 7 to ensure we check for combat/mobs more frequently
+             const stepsToTake = Math.min(path.length - 1, 7); 
              let currentX = startX;
              let currentY = startY;
 
-             // Dynamic Key Press Duration based on Ping
-             // Minimum 170ms (to ensure turn + move), max based on ping
-             // Added variance for natural behavior
+             // Dynamic Key Press Duration
+             // Fix for "Turning instead of moving":
+             // The FIRST step in a direction needs a longer hold (~250ms) to register as a move.
+             // Subsequent steps (holding) can be faster (~170ms).
              const currentPing = gameState.ping || 50;
-             const pressDuration = Math.max(170, currentPing + 40) + Math.floor(Math.random() * 30); 
+             const initialStepDelay = Math.max(200, currentPing + 60); 
+             const continuousStepDelay = Math.max(170, currentPing + 30);
+             
+             let activeKey = null;
 
              for (let i = 1; i <= stepsToTake; i++) {
                  const nextStep = path[i];
                  if (!nextStep) break;
                  
-                 // HARD SAFETY CHECK: Is this step a gateway?
+                 // HARD SAFETY CHECK: Gateway
                  if (!finalTarget.isGateway && gameState.gateways) {
                      const isGw = gameState.gateways.some(g => g.x === nextStep[0] && g.y === nextStep[1]);
                      if (isGw) {
-                         logger.warn(`🛑 MOVEMENT ABORTED: Step [${nextStep[0]},${nextStep[1]}] is a Gateway! Avoiding accidental map change.`);
+                         if (activeKey) await page.keyboard.up(activeKey);
+                         logger.warn(`🛑 MOVEMENT ABORTED: Gateway ahead!`);
                          return 'fail';
                      }
                  }
                  
-                 let key = '';
-                 if (nextStep[0] > currentX) key = 'ArrowRight';
-                 else if (nextStep[0] < currentX) key = 'ArrowLeft';
-                 else if (nextStep[1] > currentY) key = 'ArrowDown';
-                 else if (nextStep[1] < currentY) key = 'ArrowUp';
+                 let requiredKey = '';
+                 if (nextStep[0] > currentX) requiredKey = 'ArrowRight';
+                 else if (nextStep[0] < currentX) requiredKey = 'ArrowLeft';
+                 else if (nextStep[1] > currentY) requiredKey = 'ArrowDown';
+                 else if (nextStep[1] < currentY) requiredKey = 'ArrowUp';
                  
-                 if (key) {
-                     await page.keyboard.press(key, { delay: pressDuration });
+                 if (requiredKey) {
+                     let isNewStep = false;
                      
-                     await sleep(50); 
+                     // Direction change or First key
+                     if (activeKey && activeKey !== requiredKey) {
+                         await page.keyboard.up(activeKey);
+                         activeKey = null;
+                         await sleep(50); // Break execution
+                     }
+                     
+                     if (!activeKey) {
+                         await page.keyboard.down(requiredKey);
+                         activeKey = requiredKey;
+                         isNewStep = true;
+                     }
+                     
+                     // Wait appropriate time
+                     // Usage of "isNewStep" ensures we hold the start longer to force movement
+                     await sleep(isNewStep ? initialStepDelay : continuousStepDelay);
+                     
                      currentX = nextStep[0];
                      currentY = nextStep[1];
                  }
              }
+             
+             // Release at end of burst
+             if (activeKey) {
+                 await page.keyboard.up(activeKey);
+             }
+             
              return 'moved';
         } else {
              // Pathfinding Failed

@@ -83,8 +83,51 @@ async function getGameState(page, config) {
              }
         }
 
+        // --- Extract Dazed State ---
+            const dazedState = (() => {
+                const el = document.getElementById('dazed');
+                if (el && el.offsetParent !== null && el.innerText.trim().length > 0) {
+                    const txt = el.innerText || "";
+                    let seconds = 0;
+                    const minMatch = txt.match(/(\d+)\s*min/);
+                    const secMatch = txt.match(/(\d+)\s*s/);
+                    if (minMatch) seconds += parseInt(minMatch[1]) * 60;
+                    if (secMatch) seconds += parseInt(secMatch[1]);
+                    return { active: true, seconds: seconds > 0 ? seconds : 5 }; 
+                }
+                return null;
+            })();
+
+            // --- Extract Potions Data ---
+            const potionsData = (() => {
+                 let count = 0;
+                 let stackSize = 30; // Default
+                 const bag = document.querySelector('#bag');
+                 if (bag) {
+                     const items = bag.querySelectorAll('.item');
+                     for (const item of items) {
+                         const tip = item.getAttribute('tip');
+                         if (tip && tip.includes('Leczy') && !tip.includes('Pełne leczenie')) {
+                             // Quantity
+                             const qtyMatch = tip.match(/Ilość:.*?class="amount-text">(\d+)/) || tip.match(/Ilość:\s*(\d+)/);
+                             const qty = qtyMatch ? parseInt(qtyMatch[1]) : 1;
+                             count += qty;
+                             
+                             // Stack Size
+                             const stackMatch = tip.match(/Maksimum.*?class="damage">(\d+)/) || 
+                                                tip.match(/W jednej paczce:?\s*(\d+)/i) || 
+                                                tip.match(/Stack:?\s*(\d+)/i);
+                             if (stackMatch) {
+                                 stackSize = parseInt(stackMatch[1]);
+                             }
+                         }
+                     }
+                 }
+                 return { count, stackSize };
+            })();
+
         return {
-            hero: { x: hero.x, y: hero.y },
+            hero: { x: hero.x, y: hero.y, hp: hero.hp, maxhp: hero.maxhp },
             map: { id: map.id, w: map.x, h: map.y, col: map.col }, 
             battle: false,
             target: validMobs.length > 0 ? validMobs[0] : null, // Fallback: nearest by geometry
@@ -95,45 +138,9 @@ async function getGameState(page, config) {
             currentMapName: map.name,
             pvp: !!document.getElementById('pvpmode'), // Detect PvP map
             ping: ping, // Expose dynamic ping
-            dazed: (() => {
-                const el = document.getElementById('dazed');
-                // Check visibility using offsetParent (null if hidden) and text content
-                if (el && el.offsetParent !== null && el.innerText.trim().length > 0) {
-                    const txt = el.innerText || "";
-                    let seconds = 0;
-                    const minMatch = txt.match(/(\d+)\s*min/);
-                    const secMatch = txt.match(/(\d+)\s*s/);
-                    
-                    if (minMatch) seconds += parseInt(minMatch[1]) * 60;
-                    if (secMatch) seconds += parseInt(secMatch[1]);
-                    
-                    return { active: true, seconds: seconds > 0 ? seconds : 5 }; 
-                }
-                return null;
-            })(),
-            hero: { 
-                x: hero.x, 
-                y: hero.y,
-                hp: hero.hp,
-                maxhp: hero.maxhp
-            },
-            potionsCount: (() => {
-                 let count = 0;
-                 const bag = document.querySelector('#bag');
-                 if (bag) {
-                     const items = bag.querySelectorAll('.item');
-                     for (const item of items) {
-                         const tip = item.getAttribute('tip');
-                         if (tip && tip.includes('Leczy') && !tip.includes('Pełne leczenie')) {
-                             // "Pełne leczenie" usually implies NPC heal option or special item, 
-                             // identifying standard pots via "Leczy" is safe enough for now.
-                             // Ideally check item ID or name, but tip parsing is generic.
-                             count++;
-                         }
-                     }
-                 }
-                 return count;
-            })()
+            dazed: dazedState,
+            potionsCount: potionsData.count,
+            potionStackSize: potionsData.stackSize
         };
     }, config);
 }

@@ -126,13 +126,33 @@ async function main() {
             // 4.1. UNCONSCIOUS CHECK (Death)
             if (state.dazed && state.dazed.active) {
                  const waitSeconds = state.dazed.seconds || 5;
-                 logger.warn(`💀 Unconscious (DAZED). Respawn in ~${waitSeconds}s. Waiting...`);
                  
-                 // Wait for the duration + 2s buffer, but check at least every 20s to show life
-                 const sleepTime = Math.min(waitSeconds * 1000 + 2000, 20000); 
+                 // User Req: Reload page when 10-15s left to respawn.
+                 const reloadThreshold = Math.floor(Math.random() * 6) + 10; // 10-15s
                  
-                 await sleep(sleepTime); 
-                 continue; // Skip everything, just wait
+                 if (waitSeconds > reloadThreshold + 2) {
+                     // Wait until we hit the threshold
+                     const timeToWait = waitSeconds - reloadThreshold;
+                     logger.warn(`💀 Unconscious. Respawn in ${waitSeconds}s. Waiting ${timeToWait}s to Auto-Reload...`);
+                     
+                     await sleep(timeToWait * 1000);
+                     
+                     logger.log(`🔄 Auto-Reloading page (Respawn in ~${reloadThreshold}s)...`);
+                     try {
+                         await page.reload({ waitUntil: 'domcontentloaded' });
+                     } catch (e) {
+                         logger.error("Reload failed, continuing...", e);
+                     }
+                     await sleep(5000); // Allow initialization
+                     continue; 
+                 } else {
+                     // Close to respawn, just wait
+                     logger.warn(`💀 Unconscious. Respawn in ${waitSeconds}s. Waiting...`);
+                     // Check more frequently near end
+                     const sleepTime = Math.min(waitSeconds * 1000 + 1000, 5000); 
+                     await sleep(sleepTime); 
+                     continue;
+                 }
             }
 
             // Determine Target Map Index & Travel Mode
@@ -163,39 +183,49 @@ async function main() {
 
                 // Allow resupply if we are in a city, even if traversing.
                 if (state.hero.maxhp > 0 && isCityMap) { 
+                    
+                    // --- 1. ALWAYS SELL TRASH FIRST (Unconditional in City) ---
+                    if (!soldItems) {
+                        const shopkeeper = SHOPKEEPERS.find(s => s.map === state.currentMapName);
+                        if (shopkeeper) {
+                            const dist = Math.hypot(shopkeeper.x - state.hero.x, shopkeeper.y - state.hero.y);
+                             
+                            // If close to shopkeeper, SELL!
+                            if (dist < 2.0) {
+                                logger.log(`💰 Reach Shopkeeper: ${shopkeeper.name}. Selling junk...`);
+                                await shopping.performSell(page);
+                                soldItems = true; // Mark as done for this cycle
+                                await sleep(500);
+                                continue; // Restart loop to proceed to healer next OR continue traversing
+                            } else {
+                                // Go to Shopkeeper
+                                logger.log(`💰 City Visit -> Going to Shopkeeper: ${shopkeeper.name} (Sell)...`);
+                                resupplyTarget = { 
+                                    x: shopkeeper.x, 
+                                    y: shopkeeper.y, 
+                                    type: 'npc', 
+                                    nick: `💰 ${shopkeeper.name}`, 
+                                    id: `npc_${shopkeeper.id}` 
+                                };
+                            }
+                        }
+                    }
+
+                    // --- 2. CHECK IF WE ALSO NEED HEALING/POTIONS ---
                     const hpPercent = state.hero.hp / state.hero.maxhp;
                     
-                    // Condition: HP < 35% OR Potions < 3
-                    if (hpPercent < 0.35 || state.potionsCount < 3) {
-                     // PRIORITIZE TRASH SELLING BEFORE HEALING
-                     // Check if there is a shopkeeper to sell trash to
-                     let shopkeeper = null;
-                     if (!soldItems) {
-                         shopkeeper = SHOPKEEPERS.find(s => s.map === state.currentMapName);
-                     }
+                    // Dynamic Threshold: Fill 2 rows (14 slots)
+                    const stackSize = state.potionStackSize || 30;
+                    const maxCapacity = stackSize * 14; 
+                    
+                    // Trigger if below capacity (User wants "Always filled 2 rows")
+                    // We check if we are significantly below or just need top-up
+                    // If we have 209/210, maybe skip? But user said "always". 
+                    // Let's stick to < maxCapacity.
+                    
+                    // Only set healer target if we are NOT already going to sell
+                    if ((hpPercent < 0.35 || state.potionsCount < maxCapacity) && !resupplyTarget) {
 
-                     if (shopkeeper) {
-                         const dist = Math.hypot(shopkeeper.x - state.hero.x, shopkeeper.y - state.hero.y);
-                         
-                         // If close to shopkeeper, SELL!
-                         if (dist < 2.0) {
-                             logger.log(`💰 Reach Shopkeeper: ${shopkeeper.name}. Selling junk...`);
-                             await shopping.performSell(page);
-                             soldItems = true; // Mark as done for this cycle
-                             await sleep(500);
-                             continue; // Restart loop to proceed to healer next
-                         } else {
-                             // Go to Shopkeeper
-                             logger.log(`💰 Need Resupply -> Going to Shopkeeper first: ${shopkeeper.name}...`);
-                             resupplyTarget = { 
-                                 x: shopkeeper.x, 
-                                 y: shopkeeper.y, 
-                                 type: 'npc', 
-                                 nick: `💰 ${shopkeeper.name}`, 
-                                 id: `npc_${shopkeeper.id}` 
-                             };
-                         }
-                     } else {
                          // NO SHOPKEEPER (or already sold) -> GO TO HEALER
                          const seller = POTION_SELLERS.find(s => s.map === state.currentMapName);
                          if (seller) {
@@ -220,7 +250,7 @@ async function main() {
                              }
                              // Else, walk to them
                              else {
-                                 logger.warn(`🏥 Critical Needs (HP: ${(hpPercent*100).toFixed(0)}%, Pots: ${state.potionsCount})! Going to ${seller.name}...`);
+                                 logger.warn(`🏥 Needed (HP: ${(hpPercent*100).toFixed(0)}%, Pots: ${state.potionsCount}/${maxCapacity})! Going to ${seller.name}...`);
                                  resupplyTarget = { 
                                      x: seller.x, 
                                      y: seller.y, 
@@ -232,10 +262,6 @@ async function main() {
                          }
                      }
                 }
-            }
-
-            // 5. Map Rotation Logic & PvP Persistence
-            // Handle Map Change
 
             // 5. Map Rotation Logic & PvP Persistence
             // Handle Map Change
@@ -246,7 +272,11 @@ async function main() {
                     skippedMobs.clear();
                 }
                 
+                // Reset Selling Flag on map change so we sell again next time we visit a city
+                soldItems = false;
+                
                 if (state.currentMapName && state.currentMapName !== currentMapName) {
+
                      if (currentMapName) {
                          lastMapName = currentMapName;
                          logger.log(`🗺️ [HISTORY] Last: '${lastMapName}' | Curr: '${state.currentMapName}'`);
