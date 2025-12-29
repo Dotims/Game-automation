@@ -51,42 +51,51 @@ const actions = {
     async autoHeal(page) {
          return await page.evaluate(() => {
              if (typeof hero === 'undefined') return false;
-             const maxHp = hero.maxhp;
-             const hp = hero.hp;
-             if (hp > maxHp * 0.85) return false;
+             // Heal if HP < 85%
+             if (hero.hp > hero.maxhp * 0.85) return false;
 
              const bag = document.querySelector('#bag');
              if (!bag) return false;
 
-             const items = bag.querySelectorAll('.item');
-             let bestItem = null;
-             let bestDiff = 99999;
-             const missingHp = maxHp - hp;
+             // Get all items and filter for Potions (Leczy)
+             const items = Array.from(bag.querySelectorAll('.item'));
+             const potions = [];
 
              for (let item of items) {
                   const tip = item.getAttribute('tip');
                   if (tip && tip.includes('Leczy')) {
-                      const match = tip.match(/Leczy <span class="damage">([\d\s]+)<\/span>/);
-                      if (match && match[1]) {
-                          const healVal = parseInt(match[1].replace(/\s/g, ''));
-                          if (healVal <= missingHp + 200) { 
-                              const diff = missingHp - healVal;
-                              if (Math.abs(diff) < bestDiff) {
-                                  bestDiff = Math.abs(diff);
-                                  bestItem = item;
-                              }
-                          }
-                      }
+                      // Parse coordinates for sorting
+                      // Element style usually has "top: 32px; left: 0px;"
+                      const top = parseInt(item.style.top || '0', 10);
+                      const left = parseInt(item.style.left || '0', 10);
+                      
+                      // Check if it's usable (optional sanity check?)
+                      // User wants STRICT order, so we trust "Leczy" means it's a potion we want to use.
+                      // Maybe exclude "Full Heal" if HP > 50%? 
+                      // For now, strict compliance with "Reading Order".
+                      
+                      potions.push({ el: item, top, left, id: item.id });
                   }
              }
 
-             if (bestItem) {
-                  const id = bestItem.id;
-                  const event = new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window });
-                  bestItem.dispatchEvent(event);
-                  return { id: id, power: '?' };
-             }
-             return null;
+             if (potions.length === 0) return null;
+
+             // SORT: Top-to-Bottom, Left-to-Right (Reading Book Order)
+             potions.sort((a, b) => {
+                 if (Math.abs(a.top - b.top) > 5) { // Row tolerance
+                     return a.top - b.top;
+                 }
+                 return a.left - b.left;
+             });
+
+             // Pick the first one
+             const best = potions[0];
+             
+             // Double click to use
+             const event = new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window });
+             best.el.dispatchEvent(event);
+             
+             return { id: best.id, info: 'Used top-left potion' };
          });
     }
 };
