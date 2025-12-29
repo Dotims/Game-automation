@@ -10,8 +10,15 @@ const HUNTING_SPOTS = require('./data/hunting_spots');
 const { CONSTANTS } = require('./config');
 const mapNav = require('./game/map_navigation');
 const path = require('path');
+const POTION_SELLERS = require('./data/potion_sellers');
+const SHOPKEEPERS = require('./data/shopkeepers');
+const shopping = require('./game/shopping');
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Global Flags
+let escapeTarget = null;
+let soldItems = false; // Flag to track if we have visited the shopkeeper during this resupply cycle
 
 async function main() {
     logger.log('🚀 Starting MargoBot v2.1 (Modular Rewrite)');
@@ -116,6 +123,117 @@ async function main() {
                  continue;
             }
 
+            // 4.1. UNCONSCIOUS CHECK (Death)
+            if (state.dazed && state.dazed.active) {
+                 const waitSeconds = state.dazed.seconds || 5;
+                 logger.warn(`💀 Unconscious (DAZED). Respawn in ~${waitSeconds}s. Waiting...`);
+                 
+                 // Wait for the duration + 2s buffer, but check at least every 20s to show life
+                 const sleepTime = Math.min(waitSeconds * 1000 + 2000, 20000); 
+                 
+                 await sleep(sleepTime); 
+                 continue; // Skip everything, just wait
+            }
+
+            // Determine Target Map Index & Travel Mode
+            // MOVED UP due to dependency in Resupply Check
+            const mapsList = currentConfig.maps || [];
+            const currentMapNorm = state.currentMapName ? state.currentMapName.toLowerCase().trim() : "";
+            let currentIndex = -1;
+            
+            if (mapsList.length > 0 && currentMapNorm) {
+                for (let i = 0; i < mapsList.length; i++) {
+                    if (currentMapNorm.includes(mapsList[i].toLowerCase().trim())) {
+                        currentIndex = i; 
+                        break;
+                    }
+                }
+            }
+            
+            // --- TRAVERSING MODE CHECK ---
+            // If traversing (currentIndex === -1), ignore ALL mobs!
+            const isTraversing = (currentIndex === -1) && (mapsList.length > 0);
+
+                // 4.2. RESUPPLY CHECK (Healer / Potions)
+                // USER REQUIREMENT: Only resupply if we are in a CITY (e.g. after Respawn).
+                // It SHOULD interrupt traversal if we are in a city and need supplies.
+                
+                let resupplyTarget = null;
+                const isCityMap = SHOPKEEPERS.some(s => s.map === state.currentMapName);
+
+                // Allow resupply if we are in a city, even if traversing.
+                if (state.hero.maxhp > 0 && isCityMap) { 
+                    const hpPercent = state.hero.hp / state.hero.maxhp;
+                    
+                    // Condition: HP < 35% OR Potions < 3
+                    if (hpPercent < 0.35 || state.potionsCount < 3) {
+                     // PRIORITIZE TRASH SELLING BEFORE HEALING
+                     // Check if there is a shopkeeper to sell trash to
+                     let shopkeeper = null;
+                     if (!soldItems) {
+                         shopkeeper = SHOPKEEPERS.find(s => s.map === state.currentMapName);
+                     }
+
+                     if (shopkeeper) {
+                         const dist = Math.hypot(shopkeeper.x - state.hero.x, shopkeeper.y - state.hero.y);
+                         
+                         // If close to shopkeeper, SELL!
+                         if (dist < 2.0) {
+                             logger.log(`💰 Reach Shopkeeper: ${shopkeeper.name}. Selling junk...`);
+                             await shopping.performSell(page);
+                             soldItems = true; // Mark as done for this cycle
+                             await sleep(500);
+                             continue; // Restart loop to proceed to healer next
+                         } else {
+                             // Go to Shopkeeper
+                             logger.log(`💰 Need Resupply -> Going to Shopkeeper first: ${shopkeeper.name}...`);
+                             resupplyTarget = { 
+                                 x: shopkeeper.x, 
+                                 y: shopkeeper.y, 
+                                 type: 'npc', 
+                                 nick: `💰 ${shopkeeper.name}`, 
+                                 id: `npc_${shopkeeper.id}` 
+                             };
+                         }
+                     } else {
+                         // NO SHOPKEEPER (or already sold) -> GO TO HEALER
+                         const seller = POTION_SELLERS.find(s => s.map === state.currentMapName);
+                         if (seller) {
+                             const dist = Math.hypot(seller.x - state.hero.x, seller.y - state.hero.y);
+                             
+                             // If we are close (Range 2), INTERACT!
+                             if (dist < 2.0) {
+                                 logger.log(`🏥 Reach Healer: ${seller.name}. Starting interaction...`);
+                                 
+                                 // 1. Heal
+                                 await shopping.performHeal(page);
+                                 await sleep(1000);
+                                 
+                                 // 2. Buy Potions
+                                 await shopping.buyPotions(page, state);
+                                 
+                                 logger.log("✅ Resupply cycle finished. Resuming hunt...");
+                                 resupplyTarget = null;
+                                 soldItems = false; // Reset for next time we need resupply
+                                 await sleep(1000);
+                                 continue; // Restart loop to refresh state and go hunt
+                             }
+                             // Else, walk to them
+                             else {
+                                 logger.warn(`🏥 Critical Needs (HP: ${(hpPercent*100).toFixed(0)}%, Pots: ${state.potionsCount})! Going to ${seller.name}...`);
+                                 resupplyTarget = { 
+                                     x: seller.x, 
+                                     y: seller.y, 
+                                     type: 'npc', 
+                                     nick: `🏥 ${seller.name}`, 
+                                     id: `npc_${seller.id}` 
+                                 };
+                             }
+                         }
+                     }
+                }
+            }
+
             // 5. Map Rotation Logic & PvP Persistence
             // Handle Map Change
 
@@ -153,23 +271,8 @@ async function main() {
                 logger.log('⏳ Waiting 4s for map data to load...');
             }
 
-            // Determine Target Map Index & Travel Mode
-            const mapsList = currentConfig.maps || [];
-            const currentMapNorm = currentMapName ? currentMapName.toLowerCase().trim() : "";
-            let currentIndex = -1;
-            
-            if (mapsList.length > 0 && currentMapNorm) {
-                for (let i = 0; i < mapsList.length; i++) {
-                    if (currentMapNorm.includes(mapsList[i].toLowerCase().trim())) {
-                        currentIndex = i; 
-                        break;
-                    }
-                }
-            }
-            
-            // --- TRAVERSING MODE CHECK ---
-            // If traversing (currentIndex === -1), ignore ALL mobs!
-            const isTraversing = (currentIndex === -1) && (mapsList.length > 0);
+            // Traversal logic moved up to 4.2
+
             
             // Skip gateway logic if within 4 second cooldown after map change
             // BUT: If traversing, we might want to move immediately? 
@@ -180,7 +283,7 @@ async function main() {
                 continue; // Wait for mobs to load
             }
             
-            let finalTarget = state.target;
+            let finalTarget = resupplyTarget || state.target;
 
             // --- 0. Persistence Checks (Escape / Locked) ---
              if (escapeTarget) {
@@ -201,7 +304,7 @@ async function main() {
             // =========================================================================
             // HUNTING MODE LOGIC (Only if NOT traversing)
             // =========================================================================
-            if (!isTraversing && !escapeTarget) {
+            if (!isTraversing && !escapeTarget && !resupplyTarget) {
 
                 // --- OPPORTUNISTIC ATTACK (Priority: HIGH) ---
                 if (state.validMobs && state.validMobs.length > 0) {
