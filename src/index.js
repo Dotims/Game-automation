@@ -10,6 +10,7 @@ const HUNTING_SPOTS = require('./data/hunting_spots');
 const { CONSTANTS } = require('./config');
 const mapNav = require('./game/map_navigation');
 const path = require('path');
+const POTION_SELLERS = require('./data/potion_sellers');
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -116,6 +117,44 @@ async function main() {
                  continue;
             }
 
+            // 4.1. UNCONSCIOUS CHECK (Death)
+            if (state.dazed && state.dazed.active) {
+                 const waitSeconds = state.dazed.seconds || 5;
+                 logger.warn(`💀 Unconscious (DAZED). Respawn in ~${waitSeconds}s. Waiting...`);
+                 
+                 // Wait for the duration + 2s buffer, but check at least every 20s to show life
+                 const sleepTime = Math.min(waitSeconds * 1000 + 2000, 20000); 
+                 
+                 await sleep(sleepTime); 
+                 continue; // Skip everything, just wait
+            }
+
+            // 4.2. RESUPPLY CHECK (Healer / Potions)
+            let resupplyTarget = null;
+            if (state.hero.maxhp > 0) { // Safety
+                const hpPercent = state.hero.hp / state.hero.maxhp;
+                
+                // Condition: HP < 35% OR Potions < 3
+                if (hpPercent < 0.35 || state.potionsCount < 3) {
+                     // Check if a healer is on CURRENT map
+                     const seller = POTION_SELLERS.find(s => s.map === state.currentMapName);
+                     if (seller) {
+                         // Only override if we are not already there
+                         const dist = Math.hypot(seller.x - state.hero.x, seller.y - state.hero.y);
+                         if (dist > 1.5) {
+                             logger.warn(`🏥 Critical Needs (HP: ${(hpPercent*100).toFixed(0)}%, Pots: ${state.potionsCount})! Going to ${seller.name}...`);
+                             resupplyTarget = { 
+                                 x: seller.x, 
+                                 y: seller.y, 
+                                 type: 'npc', 
+                                 nick: `🏥 ${seller.name}`, 
+                                 id: `npc_${seller.id}` 
+                             };
+                         }
+                     }
+                }
+            }
+
             // 5. Map Rotation Logic & PvP Persistence
             // Handle Map Change
 
@@ -180,7 +219,7 @@ async function main() {
                 continue; // Wait for mobs to load
             }
             
-            let finalTarget = state.target;
+            let finalTarget = resupplyTarget || state.target;
 
             // --- 0. Persistence Checks (Escape / Locked) ---
              if (escapeTarget) {
@@ -201,7 +240,7 @@ async function main() {
             // =========================================================================
             // HUNTING MODE LOGIC (Only if NOT traversing)
             // =========================================================================
-            if (!isTraversing && !escapeTarget) {
+            if (!isTraversing && !escapeTarget && !resupplyTarget) {
 
                 // --- OPPORTUNISTIC ATTACK (Priority: HIGH) ---
                 if (state.validMobs && state.validMobs.length > 0) {

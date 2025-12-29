@@ -94,7 +94,45 @@ async function getGameState(page, config) {
             debugInfo: { allMobsCount, deniedCount, validMobsCount: validMobs.length },
             currentMapName: map.name,
             pvp: !!document.getElementById('pvpmode'), // Detect PvP map
-            ping: ping // Expose dynamic ping
+            ping: ping, // Expose dynamic ping
+            dazed: (() => {
+                const el = document.getElementById('dazed');
+                if (el && el.style.display !== 'none') {
+                    const txt = el.innerText || "";
+                    let seconds = 0;
+                    const minMatch = txt.match(/(\d+)\s*min/);
+                    const secMatch = txt.match(/(\d+)\s*s/);
+                    
+                    if (minMatch) seconds += parseInt(minMatch[1]) * 60;
+                    if (secMatch) seconds += parseInt(secMatch[1]);
+                    
+                    return { active: true, seconds: seconds > 0 ? seconds : 5 }; // Default 5s if parse fail
+                }
+                return null;
+            })(),
+            hero: { 
+                x: hero.x, 
+                y: hero.y,
+                hp: hero.hp,
+                maxhp: hero.maxhp
+            },
+            potionsCount: (() => {
+                 let count = 0;
+                 const bag = document.querySelector('#bag');
+                 if (bag) {
+                     const items = bag.querySelectorAll('.item');
+                     for (const item of items) {
+                         const tip = item.getAttribute('tip');
+                         if (tip && tip.includes('Leczy') && !tip.includes('Pełne leczenie')) {
+                             // "Pełne leczenie" usually implies NPC heal option or special item, 
+                             // identifying standard pots via "Leczy" is safe enough for now.
+                             // Ideally check item ID or name, but tip parsing is generic.
+                             count++;
+                         }
+                     }
+                 }
+                 return count;
+            })()
         };
     }, config);
 }
