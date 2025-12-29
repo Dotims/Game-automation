@@ -7,7 +7,10 @@ async function injectUI(page, defaultConfig, huntingSpots) {
         if (!window.BOT_CONFIG) {
             const saved = localStorage.getItem('MARGO_BOT_CFG');
             window.BOT_CONFIG = saved ? JSON.parse(saved) : cfg;
-            window.BOT_ACTIVE = false;
+            
+            // Restore Active State
+            const savedActive = localStorage.getItem('MARGO_BOT_ACTIVE');
+            window.BOT_ACTIVE = savedActive === 'true'; 
         }
         
         // Cache spots for easy access
@@ -224,6 +227,7 @@ async function injectUI(page, defaultConfig, huntingSpots) {
              const toggleBtn = document.getElementById('btn-toggle');
              toggleBtn.onclick = () => {
                  window.BOT_ACTIVE = !window.BOT_ACTIVE;
+                 localStorage.setItem('MARGO_BOT_ACTIVE', window.BOT_ACTIVE);
              };
 
              // 3. Save Logic

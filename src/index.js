@@ -126,13 +126,33 @@ async function main() {
             // 4.1. UNCONSCIOUS CHECK (Death)
             if (state.dazed && state.dazed.active) {
                  const waitSeconds = state.dazed.seconds || 5;
-                 logger.warn(`💀 Unconscious (DAZED). Respawn in ~${waitSeconds}s. Waiting...`);
                  
-                 // Wait for the duration + 2s buffer, but check at least every 20s to show life
-                 const sleepTime = Math.min(waitSeconds * 1000 + 2000, 20000); 
+                 // User Req: Reload page when 10-15s left to respawn.
+                 const reloadThreshold = Math.floor(Math.random() * 6) + 10; // 10-15s
                  
-                 await sleep(sleepTime); 
-                 continue; // Skip everything, just wait
+                 if (waitSeconds > reloadThreshold + 2) {
+                     // Wait until we hit the threshold
+                     const timeToWait = waitSeconds - reloadThreshold;
+                     logger.warn(`💀 Unconscious. Respawn in ${waitSeconds}s. Waiting ${timeToWait}s to Auto-Reload...`);
+                     
+                     await sleep(timeToWait * 1000);
+                     
+                     logger.log(`🔄 Auto-Reloading page (Respawn in ~${reloadThreshold}s)...`);
+                     try {
+                         await page.reload({ waitUntil: 'domcontentloaded' });
+                     } catch (e) {
+                         logger.error("Reload failed, continuing...", e);
+                     }
+                     await sleep(5000); // Allow initialization
+                     continue; 
+                 } else {
+                     // Close to respawn, just wait
+                     logger.warn(`💀 Unconscious. Respawn in ${waitSeconds}s. Waiting...`);
+                     // Check more frequently near end
+                     const sleepTime = Math.min(waitSeconds * 1000 + 1000, 5000); 
+                     await sleep(sleepTime); 
+                     continue;
+                 }
             }
 
             // Determine Target Map Index & Travel Mode
