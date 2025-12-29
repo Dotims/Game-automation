@@ -97,7 +97,8 @@ async function getGameState(page, config) {
             ping: ping, // Expose dynamic ping
             dazed: (() => {
                 const el = document.getElementById('dazed');
-                if (el && el.style.display !== 'none') {
+                // Check visibility using offsetParent (null if hidden) and text content
+                if (el && el.offsetParent !== null && el.innerText.trim().length > 0) {
                     const txt = el.innerText || "";
                     let seconds = 0;
                     const minMatch = txt.match(/(\d+)\s*min/);
@@ -106,7 +107,7 @@ async function getGameState(page, config) {
                     if (minMatch) seconds += parseInt(minMatch[1]) * 60;
                     if (secMatch) seconds += parseInt(secMatch[1]);
                     
-                    return { active: true, seconds: seconds > 0 ? seconds : 5 }; // Default 5s if parse fail
+                    return { active: true, seconds: seconds > 0 ? seconds : 5 }; 
                 }
                 return null;
             })(),
