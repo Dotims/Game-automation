@@ -163,39 +163,49 @@ async function main() {
 
                 // Allow resupply if we are in a city, even if traversing.
                 if (state.hero.maxhp > 0 && isCityMap) { 
+                    
+                    // --- 1. ALWAYS SELL TRASH FIRST (Unconditional in City) ---
+                    if (!soldItems) {
+                        const shopkeeper = SHOPKEEPERS.find(s => s.map === state.currentMapName);
+                        if (shopkeeper) {
+                            const dist = Math.hypot(shopkeeper.x - state.hero.x, shopkeeper.y - state.hero.y);
+                             
+                            // If close to shopkeeper, SELL!
+                            if (dist < 2.0) {
+                                logger.log(`💰 Reach Shopkeeper: ${shopkeeper.name}. Selling junk...`);
+                                await shopping.performSell(page);
+                                soldItems = true; // Mark as done for this cycle
+                                await sleep(500);
+                                continue; // Restart loop to proceed to healer next OR continue traversing
+                            } else {
+                                // Go to Shopkeeper
+                                logger.log(`💰 City Visit -> Going to Shopkeeper: ${shopkeeper.name} (Sell)...`);
+                                resupplyTarget = { 
+                                    x: shopkeeper.x, 
+                                    y: shopkeeper.y, 
+                                    type: 'npc', 
+                                    nick: `💰 ${shopkeeper.name}`, 
+                                    id: `npc_${shopkeeper.id}` 
+                                };
+                            }
+                        }
+                    }
+
+                    // --- 2. CHECK IF WE ALSO NEED HEALING/POTIONS ---
                     const hpPercent = state.hero.hp / state.hero.maxhp;
                     
-                    // Condition: HP < 35% OR Potions < 3
-                    if (hpPercent < 0.35 || state.potionsCount < 3) {
-                     // PRIORITIZE TRASH SELLING BEFORE HEALING
-                     // Check if there is a shopkeeper to sell trash to
-                     let shopkeeper = null;
-                     if (!soldItems) {
-                         shopkeeper = SHOPKEEPERS.find(s => s.map === state.currentMapName);
-                     }
+                    // Dynamic Threshold: Fill 2 rows (14 slots)
+                    const stackSize = state.potionStackSize || 30;
+                    const maxCapacity = stackSize * 14; 
+                    
+                    // Trigger if below capacity (User wants "Always filled 2 rows")
+                    // We check if we are significantly below or just need top-up
+                    // If we have 209/210, maybe skip? But user said "always". 
+                    // Let's stick to < maxCapacity.
+                    
+                    // Only set healer target if we are NOT already going to sell
+                    if ((hpPercent < 0.35 || state.potionsCount < maxCapacity) && !resupplyTarget) {
 
-                     if (shopkeeper) {
-                         const dist = Math.hypot(shopkeeper.x - state.hero.x, shopkeeper.y - state.hero.y);
-                         
-                         // If close to shopkeeper, SELL!
-                         if (dist < 2.0) {
-                             logger.log(`💰 Reach Shopkeeper: ${shopkeeper.name}. Selling junk...`);
-                             await shopping.performSell(page);
-                             soldItems = true; // Mark as done for this cycle
-                             await sleep(500);
-                             continue; // Restart loop to proceed to healer next
-                         } else {
-                             // Go to Shopkeeper
-                             logger.log(`💰 Need Resupply -> Going to Shopkeeper first: ${shopkeeper.name}...`);
-                             resupplyTarget = { 
-                                 x: shopkeeper.x, 
-                                 y: shopkeeper.y, 
-                                 type: 'npc', 
-                                 nick: `💰 ${shopkeeper.name}`, 
-                                 id: `npc_${shopkeeper.id}` 
-                             };
-                         }
-                     } else {
                          // NO SHOPKEEPER (or already sold) -> GO TO HEALER
                          const seller = POTION_SELLERS.find(s => s.map === state.currentMapName);
                          if (seller) {
@@ -220,7 +230,7 @@ async function main() {
                              }
                              // Else, walk to them
                              else {
-                                 logger.warn(`🏥 Critical Needs (HP: ${(hpPercent*100).toFixed(0)}%, Pots: ${state.potionsCount})! Going to ${seller.name}...`);
+                                 logger.warn(`🏥 Needed (HP: ${(hpPercent*100).toFixed(0)}%, Pots: ${state.potionsCount}/${maxCapacity})! Going to ${seller.name}...`);
                                  resupplyTarget = { 
                                      x: seller.x, 
                                      y: seller.y, 
@@ -232,10 +242,6 @@ async function main() {
                          }
                      }
                 }
-            }
-
-            // 5. Map Rotation Logic & PvP Persistence
-            // Handle Map Change
 
             // 5. Map Rotation Logic & PvP Persistence
             // Handle Map Change
@@ -246,7 +252,11 @@ async function main() {
                     skippedMobs.clear();
                 }
                 
+                // Reset Selling Flag on map change so we sell again next time we visit a city
+                soldItems = false;
+                
                 if (state.currentMapName && state.currentMapName !== currentMapName) {
+
                      if (currentMapName) {
                          lastMapName = currentMapName;
                          logger.log(`🗺️ [HISTORY] Last: '${lastMapName}' | Curr: '${state.currentMapName}'`);

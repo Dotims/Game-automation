@@ -63,13 +63,30 @@ async function buyPotions(page, currentState) {
             // "Leczy <span class="damage">100</span>"
             const match = tip.match(/Leczy\s*(?:<[^>]+>)?\s*(\d+[\s\d]*)/);
             
+            // Extract Stack Size
+            // 1. "Maksimum <span class="damage">15</span> sztuk razem" (Seen in logs)
+            // 2. "W jednej paczce: 50" (Standard)
+            const stackMatch = tip.match(/Maksimum.*?class="damage">(\d+)/) || 
+                               tip.match(/W jednej paczce:?\s*(\d+)/i) || 
+                               tip.match(/Stack:?\s*(\d+)/i);
+            
+            const stackSize = stackMatch ? parseInt(stackMatch[1]) : 30; // Default 30
+
+            // Extract Shop Unit Size (Amount sold per click)
+            // Matches "Ilość: 5", "Ilość: <span...>5</span>", etc.
+            // Using a greedy skip of non-digits after "Ilość:"
+            const amountMatch = tip.match(/Ilość:[^0-9]*(\d+)/i);
+            const shopUnitSize = amountMatch ? parseInt(amountMatch[1]) : 1;
+            
             if (match) {
                 // Remove spaces from number "1 000" -> "1000"
                 const healAmount = parseInt(match[1].replace(/\s/g, ''));
                 potions.push({
                     id: item.id,
                     heal: healAmount,
-                    // Element reference is tricky to pass back, we return ID
+                    stackSize: stackSize,
+                    shopUnitSize: shopUnitSize,
+                    rawTip: tip // For Debugging regex failures
                 });
             }
         }
@@ -106,38 +123,50 @@ async function buyPotions(page, currentState) {
     
     // 3. Buying Logic
     const bestItem = shopResult.item;
-    logger.log(`   🧪 Selected Potion: ${bestItem.id} (Heals: ${bestItem.heal}) for MaxHP: ${currentState.hero.maxhp}`);
+    const stackSize = bestItem.stackSize || 30; 
+    const shopUnitSize = bestItem.shopUnitSize || 1;
+
+    // User Request: Fill first two rows.
+    // Standard Bag: 7 columns.
+    // 2 Rows = 14 Slots.
+    const TARGET_SLOTS = 14;
+    const targetPotions = TARGET_SLOTS * stackSize;
     
-    // Calculate quantity
-    // Target: 35
-    // Current: currentState.potionsCount
-    const targetQty = 35;
     const currentQty = currentState.potionsCount || 0;
-    let toBuy = targetQty - currentQty;
+    const potionsNeeded = targetPotions - currentQty;
     
-    if (toBuy <= 0) {
-        logger.log("   ✅ Potions already sufficient.");
+    // Convert to "Shop Clicks" (Units)
+    // If shop sells 5 at a time, and we need 10, we buy 2 units.
+    let unitsToBuy = Math.ceil(potionsNeeded / shopUnitSize);
+
+    logger.log(`   🧪 Selected Potion: ${bestItem.id} (Heals: ${bestItem.heal})`);
+    logger.log(`   📊 Stack: ${stackSize} | Unit: ${shopUnitSize} | Have: ${currentQty}`);
+    logger.log(`   🛒 Need: ${potionsNeeded} pots -> Buying: ${unitsToBuy} units`);
+
+    if (unitsToBuy <= 0) {
+        logger.log("   ✅ Potions already sufficient (Buffer Full).");
     } else {
-        logger.log(`   🛒 Buying ${toBuy} potions...`);
-        
-        // Shift+Click = 15
-        while (toBuy >= 15) {
+        // Shift+Click = 15 UNITS (not potions)
+        while (unitsToBuy >= 15) {
             await page.keyboard.down('Shift');
             await page.click(`#${bestItem.id}`);
             await page.keyboard.up('Shift');
-            await sleep(300); // reduced sleep for bulk
-            toBuy -= 15;
-            logger.log("      +15 (Shift+Click)");
+            
+            // Adaptive sleep: reduce wait if buying bulk
+            await sleep(250); 
+            unitsToBuy -= 15;
+            if (unitsToBuy % 150 === 0) logger.log(`      ...remaining units: ${unitsToBuy}`);
         }
         
         // Singles
-        while (toBuy > 0) {
+        while (unitsToBuy > 0) {
              await page.click(`#${bestItem.id}`);
              await sleep(150);
-             toBuy--;
+             unitsToBuy--;
         }
     }
     
+    // Safety wait
     await sleep(500);
     
     // 3.5 Accept Transaction
