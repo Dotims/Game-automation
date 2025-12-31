@@ -97,6 +97,50 @@ const actions = {
              
              return { id: best.id, info: 'Used top-left potion' };
          });
+
+    },
+
+    async closeBattle(page) {
+         try {
+             logger.log('💀 Hero Dead (0%). Closing battle window...');
+             await page.evaluate(() => {
+                 const btn = document.getElementById('battleclose');
+                 if (btn) btn.click();
+             });
+             await sleep(500);
+             return true;
+         } catch (e) {
+             logger.error('Failed to close battle:', e);
+             return false;
+         }
+    },
+
+    async closeBlockingWindow(page) {
+        try {
+            logger.log('🛑 Blocking Window (centerbox2) detected. Attempting to close...');
+            await page.evaluate(() => {
+                // 1. Try global function
+                if (typeof shop_close === 'function') {
+                    try { shop_close(); } catch(e) {}
+                }
+                
+                // 2. Try hiding the element directly
+                const el = document.getElementById('centerbox2');
+                if (el) {
+                    el.style.display = 'none';
+                    el.style.visibility = 'hidden';
+                    // Move it offscreen just in case it blocks clicks
+                    el.style.top = '-9999px';
+                    el.style.left = '-9999px';
+                }
+                // REMOVED: Clicking internal buttons as they might be triggers for other shops
+            });
+            await sleep(500);
+            return true;
+        } catch (e) {
+            logger.error('Failed to close blocking window:', e);
+            return false;
+        }
     }
 };
 

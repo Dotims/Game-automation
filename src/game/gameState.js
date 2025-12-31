@@ -140,7 +140,34 @@ async function getGameState(page, config) {
             ping: ping, // Expose dynamic ping
             dazed: dazedState,
             potionsCount: potionsData.count,
-            potionStackSize: potionsData.stackSize
+            potionStackSize: potionsData.stackSize,
+            isDead: (() => {
+                // Strict check: Only 0 HP is Dead.
+                if (hero.hp === 0) return true;
+
+                // Battle Log Check for "Poległ [MyNick]"
+                if (g.battle) {
+                    const log = document.getElementById('battlelog');
+                    if (log && hero.nick && log.innerText.includes('Poległ ' + hero.nick)) {
+                        return true;
+                    }
+                }
+                return false;
+            })(),
+            battleFinished: (() => {
+                 const timer = document.getElementById('battletimer');
+                 // Check for "Walka zakończona" or similar end states
+                 return timer && (timer.innerText.includes('zakończona') || timer.innerText.includes('przerwana'));
+            })(),
+            battleCloseVisible: (() => {
+                const el = document.getElementById('battleclose');
+                // Check if button exists and has some visibility (offsetParent)
+                return el && el.offsetParent !== null; 
+            })(),
+            blockingWindow: (() => {
+                const el = document.getElementById('centerbox2');
+                return el && el.style.display !== 'none' && el.offsetParent !== null;
+            })()
         };
     }, config);
 }

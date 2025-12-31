@@ -256,51 +256,46 @@ async function injectUI(page, defaultConfig, huntingSpots) {
                      }, 1500);
                  }
              };
+
+             // --- DRAGGABLE LOGIC (Moved inside Init Block) ---
+             const panel = div; 
+             const header = panel.querySelector('.mb-header');
+             
+             let isDragging = false;
+             let startX, startY, initialLeft, initialTop;
+ 
+             const onMouseDown = (e) => {
+                 if (e.target.closest('.mb-btn') || e.target.closest('.mb-input')) return;
+                 isDragging = true;
+                 startX = e.clientX;
+                 startY = e.clientY;
+                 const rect = panel.getBoundingClientRect();
+                 initialLeft = rect.left;
+                 initialTop = rect.top;
+                 header.style.cursor = 'grabbing';
+                 e.preventDefault();
+             };
+ 
+             const onMouseMove = (e) => {
+                 if (!isDragging) return;
+                 const dx = e.clientX - startX;
+                 const dy = e.clientY - startY;
+                 panel.style.left = `${initialLeft + dx}px`;
+                 panel.style.top = `${initialTop + dy}px`;
+                 panel.style.right = 'auto';
+             };
+ 
+             const onMouseUp = () => {
+                 if (isDragging) {
+                     isDragging = false;
+                     header.style.cursor = 'move';
+                 }
+             };
+ 
+             header.addEventListener('mousedown', onMouseDown);
+             document.addEventListener('mousemove', onMouseMove);
+             document.addEventListener('mouseup', onMouseUp);
         }
-
-        // --- DRAGGABLE LOGIC ---
-        const panel = document.getElementById('margo-bot-panel');
-        const header = panel.querySelector('.mb-header');
-        
-        let isDragging = false;
-        let startX, startY, initialLeft, initialTop;
-
-        const onMouseDown = (e) => {
-            if (e.target.closest('.mb-btn') || e.target.closest('.mb-input')) return; // Don't drag if clicking controls
-            
-            isDragging = true;
-            startX = e.clientX;
-            startY = e.clientY;
-            
-            const rect = panel.getBoundingClientRect();
-            initialLeft = rect.left;
-            initialTop = rect.top;
-            
-            header.style.cursor = 'grabbing';
-            e.preventDefault();
-        };
-
-        const onMouseMove = (e) => {
-            if (!isDragging) return;
-            
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            
-            panel.style.left = `${initialLeft + dx}px`;
-            panel.style.top = `${initialTop + dy}px`;
-            panel.style.right = 'auto';
-        };
-
-        const onMouseUp = () => {
-            if (isDragging) {
-                isDragging = false;
-                header.style.cursor = 'move';
-            }
-        };
-
-        header.addEventListener('mousedown', onMouseDown);
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
 
         // --- UPDATE UI STATE ---
         const st = document.getElementById('bot-status');

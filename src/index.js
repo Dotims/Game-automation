@@ -13,6 +13,7 @@ const path = require('path');
 const POTION_SELLERS = require('./data/potion_sellers');
 const SHOPKEEPERS = require('./data/shopkeepers');
 const shopping = require('./game/shopping');
+const TRAVEL_OVERRIDES = require('./data/travel_overrides');
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -43,6 +44,10 @@ async function main() {
     // --- State Variables ---
     let lastAttackTime = 0;
     let lastMapName = ""; 
+    let soldItems = false;
+    let lastShopVisit = 0; 
+    let deadCloseAttempts = 0;
+    let blockingWindowAttempts = 0;
     let currentMapName = "";
     let skippedMobs = new Map(); // mobId -> timestamp
     const mapHistory = new Map(); // mapName -> lastVisitTimestamp
@@ -114,11 +119,67 @@ async function main() {
                  continue; // Loading...
             }
 
+            // 3.9. BLOCKING WINDOW CHECK (Centerbox/Shop)
+            if (state.blockingWindow) {
+                 blockingWindowAttempts++;
+                 logger.log(`🛑 Blocking window detected (${blockingWindowAttempts}/10). Closing...`);
+                 
+                 if (blockingWindowAttempts >= 10) {
+                      logger.warn('🛑 Failed to close blocking window. Force Reloading...');
+                      try {
+                          await page.reload({ waitUntil: 'domcontentloaded' });
+                      } catch (e) { logger.error("Reload failed", e); }
+                      blockingWindowAttempts = 0;
+                      await sleep(5000);
+                      continue;
+                 }
+
+                 await actions.closeBlockingWindow(page);
+                 await sleep(500); 
+                 continue;
+            } else {
+                 blockingWindowAttempts = 0;
+            }
+
+            // 4.0. DEAD CHECK (Close Battle Window logic improved)
+            // Checks strictly state.isDead (HP=0 or "Poległ" in log).
+            if (state.isDead) { 
+                 deadCloseAttempts++;
+                 logger.log(`💀 Hero Dead. Attempting to close battle window (${deadCloseAttempts}/5)...`);
+                 
+                 if (deadCloseAttempts >= 5) {
+                      logger.warn('💀 Failed to close battle window after multiple attempts. Force Reloading...');
+                      try { await page.reload({ waitUntil: 'domcontentloaded' }); } 
+                      catch (e) {}
+                      deadCloseAttempts = 0;
+                      await sleep(5000);
+                      continue; 
+                 }
+                 
+                 await actions.closeBattle(page);
+                 await sleep(1000); 
+                 continue;
+            } else {
+                 if (state.hero && state.hero.hp > 0) deadCloseAttempts = 0; 
+            }
+
             if (state.battle) {
+                 // Check if battle is properly finished (Victory/End)
+                 if (state.battleFinished) {
+                      logger.log('⚔️ Battle finished. Closing...');
+                      await actions.closeBattle(page);
+                      await sleep(500);
+                      continue;
+                 }
+
+                 // Failsafe: If we are in battle but HP is 0 (and isDead didn't catch it for some reason), force loop back
+                 if (state.hero && state.hero.hp === 0) {
+                     continue; 
+                 }
+
                  const result = await actions.attack(page, { nick: 'Battle' }, lastAttackTime);
                  lastAttackTime = result;
-                 // If waiting for turn?
-                 // Original logic just waited. actions.attack handles key press.
+                 // On attack, wait for turn
                  await sleep(200); 
                  continue;
             }
@@ -175,16 +236,33 @@ async function main() {
             const isTraversing = (currentIndex === -1) && (mapsList.length > 0);
 
                 // 4.2. RESUPPLY CHECK (Healer / Potions)
-                // USER REQUIREMENT: Only resupply if we are in a CITY (e.g. after Respawn).
-                // It SHOULD interrupt traversal if we are in a city and need supplies.
+                // USER REQUIREMENT: Only resupply if we are in a CITY.
+                // Added Cooldown to prevent loops (Ithan -> Shop -> Traverse -> Ithan -> Shop...)
                 
                 let resupplyTarget = null;
                 const isCityMap = SHOPKEEPERS.some(s => s.map === state.currentMapName);
 
-                // Allow resupply if we are in a city, even if traversing.
-                if (state.hero.maxhp > 0 && isCityMap) { 
+                // Conditions:
+                // 1. In City
+                // 2. Cooldown expired OR Critical Need
+                const RESUPPLY_COOLDOWN = 8 * 60 * 1000; // 8 minutes
+                const timeSinceShop = Date.now() - lastShopVisit;
+                const hpPercent = state.hero.hp / state.hero.maxhp;
+                
+                // Critical needs (ignore cooldown)
+                const isCriticalHp = hpPercent < 0.35;
+                const isCriticalPots = state.potionsCount < 5; // Almost empty
+                
+                // Should we resupply?
+                const shouldResupply = isCityMap && (
+                    (timeSinceShop > RESUPPLY_COOLDOWN) || 
+                    isCriticalHp || 
+                    isCriticalPots
+                );
+
+                if (state.hero.maxhp > 0 && shouldResupply) { 
                     
-                    // --- 1. ALWAYS SELL TRASH FIRST (Unconditional in City) ---
+                    // --- 1. ALWAYS SELL TRASH FIRST (if needed) ---
                     if (!soldItems) {
                         const shopkeeper = SHOPKEEPERS.find(s => s.map === state.currentMapName);
                         if (shopkeeper) {
@@ -194,9 +272,10 @@ async function main() {
                             if (dist < 2.0) {
                                 logger.log(`💰 Reach Shopkeeper: ${shopkeeper.name}. Selling junk...`);
                                 await shopping.performSell(page);
-                                soldItems = true; // Mark as done for this cycle
+                                soldItems = true; 
+                                lastShopVisit = Date.now(); // Update timer
                                 await sleep(500);
-                                continue; // Restart loop to proceed to healer next OR continue traversing
+                                continue; 
                             } else {
                                 // Go to Shopkeeper
                                 logger.log(`💰 City Visit -> Going to Shopkeeper: ${shopkeeper.name} (Sell)...`);
@@ -212,26 +291,22 @@ async function main() {
                     }
 
                     // --- 2. CHECK IF WE ALSO NEED HEALING/POTIONS ---
-                    const hpPercent = state.hero.hp / state.hero.maxhp;
-                    
-                    // Dynamic Threshold: Fill 2 rows (14 slots)
+                    // Definition of "Need":
                     const stackSize = state.potionStackSize || 30;
                     const maxCapacity = stackSize * 14; 
+                    const needsPotions = state.potionsCount < maxCapacity; // User wants full
                     
-                    // Trigger if below capacity (User wants "Always filled 2 rows")
-                    // We check if we are significantly below or just need top-up
-                    // If we have 209/210, maybe skip? But user said "always". 
-                    // Let's stick to < maxCapacity.
+                    // Only go to healer if:
+                    // A) We are critical HP/Pots
+                    // B) We are NOT successfully selling right now (resupplyTarget null) AND we have sold items (or don't need to)
+                    // C) We actually need something
                     
-                    // Only set healer target if we are NOT already going to sell
-                    if ((hpPercent < 0.35 || state.potionsCount < maxCapacity) && !resupplyTarget) {
-
-                         // NO SHOPKEEPER (or already sold) -> GO TO HEALER
+                    if ((isCriticalHp || needsPotions) && !resupplyTarget) {
+                         
                          const seller = POTION_SELLERS.find(s => s.map === state.currentMapName);
                          if (seller) {
                              const dist = Math.hypot(seller.x - state.hero.x, seller.y - state.hero.y);
                              
-                             // If we are close (Range 2), INTERACT!
                              if (dist < 2.0) {
                                  logger.log(`🏥 Reach Healer: ${seller.name}. Starting interaction...`);
                                  
@@ -244,11 +319,12 @@ async function main() {
                                  
                                  logger.log("✅ Resupply cycle finished. Resuming hunt...");
                                  resupplyTarget = null;
-                                 soldItems = false; // Reset for next time we need resupply
+                                 soldItems = true; // Assume we are 'good' for now
+                                 lastShopVisit = Date.now(); // Update timer
+                                 
                                  await sleep(1000);
-                                 continue; // Restart loop to refresh state and go hunt
+                                 continue; 
                              }
-                             // Else, walk to them
                              else {
                                  logger.warn(`🏥 Needed (HP: ${(hpPercent*100).toFixed(0)}%, Pots: ${state.potionsCount}/${maxCapacity})! Going to ${seller.name}...`);
                                  resupplyTarget = { 
@@ -261,6 +337,9 @@ async function main() {
                              }
                          }
                      }
+                } else if (isCityMap && !shouldResupply && isTraversing) {
+                     // We are in city, navigating, and Cooldown is active -> IGNORE SHOP
+                     // logger.log(`⏳ Shop Cooldown Active (${((RESUPPLY_COOLDOWN - timeSinceShop)/1000).toFixed(0)}s). Ignoring shop.`);
                 }
 
             // 5. Map Rotation Logic & PvP Persistence
@@ -272,7 +351,12 @@ async function main() {
                     skippedMobs.clear();
                 }
                 
-                // Reset Selling Flag on map change so we sell again next time we visit a city
+                // Reset Selling Flag only if we are moving TO a hunting spot (dest is not a city?)
+                // Or just simple cooldown? 
+                // Let's keep it simple: If we visited a shop recently, don't reset immediately?
+                // Actually, the issue is strictly the navigation loop causing re-entry.
+                // If nav is fixed, we enter Ithan -> Go to Wioska -> Hunt. 
+                // We won't re-enter Ithan unless we start new loop.
                 soldItems = false;
                 
                 if (state.currentMapName && state.currentMapName !== currentMapName) {
@@ -485,6 +569,37 @@ async function main() {
                  // --- GLOBAL NAVIGATION (If Traversing) ---
                  if (isTraversing) {
                        const route = mapNav.findPath(currentMapName, mapsList);
+                       
+                       // --- OVERRIDE LOGIC START ---
+                       if (route) {
+                           for (const override of TRAVEL_OVERRIDES) {
+                               // 1. Are we in the matching Start Map?
+                               if (currentMapName === override.fromMap) {
+                                   
+                                   // 2. Is our DESTINATION the target? (Check if any map in config matches override target)
+                                   // Fuzzy match: e.g. "Wioska Gnolli" in ["Wioska Gnolli", "Jaskinia..."]
+                                   const isDestination = mapsList.some(m => m.includes(override.targetMap));
+                                   
+                                   if (isDestination) {
+                                        // 3. Condition Check (Last Map)
+                                        if (override.requiredLastMap) {
+                                            if (lastMapName !== override.requiredLastMap) {
+                                                logger.warn(`🔀 OVERRIDE: [${currentMapName}] -> Redirecting to '${override.redirect}' (Avoid blocked path)`);
+                                                route.nextMap = override.redirect;
+                                                break; 
+                                            }
+                                        } else {
+                                            // Unconditional Override
+                                           logger.log(`🔀 OVERRIDE: [${currentMapName}] -> Forcing detour to '${override.redirect}'`);
+                                           route.nextMap = override.redirect;
+                                           break;
+                                        }
+                                   }
+                               }
+                           }
+                       }
+                       // --- OVERRIDE LOGIC END ---
+
                        if (route && route.nextMap) {
                            // Find ALL gateways matching the target name
                            // Prioritize exact matches, but allow fuzzy fallback

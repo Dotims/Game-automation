@@ -8,7 +8,8 @@ chromium.use(stealth);
 async function initBrowser() {
     logger.log('🔗 Connecting to browser...');
     try {
-        const browser = await chromium.connectOverCDP('http://localhost:9222');
+        // const browser = await chromium.connectOverCDP('http://localhost:9222');
+        const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
         const contexts = browser.contexts();
         const context = contexts.length > 0 ? contexts[0] : await browser.newContext();
         const pages = context.pages();
