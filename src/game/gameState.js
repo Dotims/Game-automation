@@ -28,7 +28,10 @@ async function getGameState(page, config) {
             const n = g.npc[id];
             
             // Obstacles for pathfinding (dynamic)
-            obstacles.push({ x: n.x, y: n.y, id: n.id });
+            // Fix: Exclude Type 4 (Gateways/Info) as they are handled via DOM gateways or shouldn't block
+            if (n.type !== 4) {
+                obstacles.push({ x: n.x, y: n.y, id: n.id });
+            }
 
             const isMob = (n.type === 2 || n.type === 3);
             if (isMob) allMobsCount++;
