@@ -3,7 +3,7 @@ const logger = require('../utils/logger');
 async function getGameState(page, config) {
     return await page.evaluate((cfg) => {
         if (typeof g === 'undefined' || !g.npc || !hero || !map) return null;
-        if (g.battle) return { battle: true };
+        // if (g.battle) return { battle: true }; // REMOVED: We need full state to check for Death/Logs
 
         const obstacles = []; 
         const validMobs = []; // ALL valid mobs for path-based selection
@@ -129,7 +129,7 @@ async function getGameState(page, config) {
         return {
             hero: { x: hero.x, y: hero.y, hp: hero.hp, maxhp: hero.maxhp },
             map: { id: map.id, w: map.x, h: map.y, col: map.col }, 
-            battle: false,
+            battle: !!g.battle,
             target: validMobs.length > 0 ? validMobs[0] : null, // Fallback: nearest by geometry
             validMobs: validMobs, // NEW: All mobs for path-based selection
             gateways: gateways,
