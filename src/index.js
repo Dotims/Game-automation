@@ -268,26 +268,33 @@ async function main() {
                     if (!soldItems) {
                         const shopkeeper = SHOPKEEPERS.find(s => s.map === state.currentMapName);
                         if (shopkeeper) {
-                            const dist = Math.hypot(shopkeeper.x - state.hero.x, shopkeeper.y - state.hero.y);
-                             
-                            // If close to shopkeeper, SELL!
-                            if (dist < 2.0) {
-                                logger.log(`💰 Reach Shopkeeper: ${shopkeeper.name}. Selling junk...`);
-                                await shopping.performSell(page);
-                                soldItems = true; 
-                                lastShopVisit = Date.now(); // Update timer
-                                await sleep(500);
-                                continue; 
+                            const shopId = `npc_${shopkeeper.map}_${shopkeeper.name.replace(/\s+/g, '_')}`; // Unique ID
+
+                            // Check Blacklist
+                            if (!skippedMobs.has(shopId)) {
+                                const dist = Math.hypot(shopkeeper.x - state.hero.x, shopkeeper.y - state.hero.y);
+                                
+                                // If close to shopkeeper, SELL!
+                                if (dist < 2.0) {
+                                    logger.log(`💰 Reach Shopkeeper: ${shopkeeper.name}. Selling junk...`);
+                                    await shopping.performSell(page);
+                                    soldItems = true; 
+                                    lastShopVisit = Date.now(); // Update timer
+                                    await sleep(500);
+                                    continue; 
+                                } else {
+                                    // Go to Shopkeeper
+                                    logger.log(`💰 City Visit -> Going to Shopkeeper: ${shopkeeper.name} (Sell)...`);
+                                    resupplyTarget = { 
+                                        x: shopkeeper.x, 
+                                        y: shopkeeper.y, 
+                                        type: 'npc', 
+                                        nick: `💰 ${shopkeeper.name}`, 
+                                        id: shopId 
+                                    };
+                                }
                             } else {
-                                // Go to Shopkeeper
-                                logger.log(`💰 City Visit -> Going to Shopkeeper: ${shopkeeper.name} (Sell)...`);
-                                resupplyTarget = { 
-                                    x: shopkeeper.x, 
-                                    y: shopkeeper.y, 
-                                    type: 'npc', 
-                                    nick: `💰 ${shopkeeper.name}`, 
-                                    id: `npc_${shopkeeper.id}` 
-                                };
+                                // logger.warn(`⚠️ Shopkeeper ${shopkeeper.name} is unreachable (Blacklisted). Skipping...`);
                             }
                         }
                     }
@@ -307,35 +314,39 @@ async function main() {
                          
                          const seller = POTION_SELLERS.find(s => s.map === state.currentMapName);
                          if (seller) {
-                             const dist = Math.hypot(seller.x - state.hero.x, seller.y - state.hero.y);
-                             
-                             if (dist < 2.0) {
-                                 logger.log(`🏥 Reach Healer: ${seller.name}. Starting interaction...`);
+                             const sellerId = `npc_${seller.map}_${seller.name.replace(/\s+/g, '_')}`; // Unique ID
+
+                             if (!skippedMobs.has(sellerId)) {
+                                 const dist = Math.hypot(seller.x - state.hero.x, seller.y - state.hero.y);
                                  
-                                 // 1. Heal
-                                 await shopping.performHeal(page);
-                                 await sleep(1000);
-                                 
-                                 // 2. Buy Potions
-                                 await shopping.buyPotions(page, state);
-                                 
-                                 logger.log("✅ Resupply cycle finished. Resuming hunt...");
-                                 resupplyTarget = null;
-                                 soldItems = true; // Assume we are 'good' for now
-                                 lastShopVisit = Date.now(); // Update timer
-                                 
-                                 await sleep(1000);
-                                 continue; 
-                             }
-                             else {
-                                 logger.warn(`🏥 Needed (HP: ${(hpPercent*100).toFixed(0)}%, Pots: ${state.potionsCount}/${maxCapacity})! Going to ${seller.name}...`);
-                                 resupplyTarget = { 
-                                     x: seller.x, 
-                                     y: seller.y, 
-                                     type: 'npc', 
-                                     nick: `🏥 ${seller.name}`, 
-                                     id: `npc_${seller.id}` 
-                                 };
+                                 if (dist < 2.0) {
+                                     logger.log(`🏥 Reach Healer: ${seller.name}. Starting interaction...`);
+                                     
+                                     // 1. Heal
+                                     await shopping.performHeal(page);
+                                     await sleep(1000);
+                                     
+                                     // 2. Buy Potions
+                                     await shopping.buyPotions(page, state);
+                                     
+                                     logger.log("✅ Resupply cycle finished. Resuming hunt...");
+                                     resupplyTarget = null;
+                                     soldItems = true; // Assume we are 'good' for now
+                                     lastShopVisit = Date.now(); // Update timer
+                                     
+                                     await sleep(1000);
+                                     continue; 
+                                 }
+                                 else {
+                                     logger.warn(`🏥 Needed (HP: ${(hpPercent*100).toFixed(0)}%, Pots: ${state.potionsCount}/${maxCapacity})! Going to ${seller.name}...`);
+                                     resupplyTarget = { 
+                                         x: seller.x, 
+                                         y: seller.y, 
+                                         type: 'npc', 
+                                         nick: `🏥 ${seller.name}`, 
+                                         id: sellerId 
+                                     };
+                                 }
                              }
                          }
                      }
