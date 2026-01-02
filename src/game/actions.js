@@ -49,13 +49,14 @@ const actions = {
     },
 
     async autoHeal(page) {
-         return await page.evaluate(() => {
-             if (typeof hero === 'undefined') return false;
+         // 1. Find Potion Coordinates (in browser context)
+         const potionCoords = await page.evaluate(() => {
+             if (typeof hero === 'undefined') return null;
              // Heal if HP < 85%
-             if (hero.hp > hero.maxhp * 0.85) return false;
+             if (hero.hp > hero.maxhp * 0.85) return null;
 
              const bag = document.querySelector('#bag');
-             if (!bag) return false;
+             if (!bag) return null;
 
              // Get all items and filter for Potions (Leczy)
              const items = Array.from(bag.querySelectorAll('.item'));
@@ -65,39 +66,56 @@ const actions = {
                   const tip = item.getAttribute('tip');
                   if (tip && tip.includes('Leczy')) {
                       // Parse coordinates for sorting
-                      // Element style usually has "top: 32px; left: 0px;"
                       const top = parseInt(item.style.top || '0', 10);
                       const left = parseInt(item.style.left || '0', 10);
                       
-                      // Check if it's usable (optional sanity check?)
-                      // User wants STRICT order, so we trust "Leczy" means it's a potion we want to use.
-                      // Maybe exclude "Full Heal" if HP > 50%? 
-                      // For now, strict compliance with "Reading Order".
-                      
-                      potions.push({ el: item, top, left, id: item.id });
+                      // Calculate absolute center of the element for clicking
+                      const rect = item.getBoundingClientRect();
+                      const centerX = rect.x + rect.width / 2;
+                      const centerY = rect.y + rect.height / 2;
+
+                      potions.push({ 
+                          top, 
+                          left, 
+                          id: item.id, 
+                          x: centerX, 
+                          y: centerY 
+                      });
                   }
              }
 
              if (potions.length === 0) return null;
 
-             // SORT: Top-to-Bottom, Left-to-Right (Reading Book Order)
+             // SORT: Top-to-Bottom, Left-to-Right
              potions.sort((a, b) => {
-                 if (Math.abs(a.top - b.top) > 5) { // Row tolerance
+                 if (Math.abs(a.top - b.top) > 5) {
                      return a.top - b.top;
                  }
                  return a.left - b.left;
              });
 
-             // Pick the first one
-             const best = potions[0];
-             
-             // Double click to use
-             const event = new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window });
-             best.el.dispatchEvent(event);
-             
-             return { id: best.id, info: 'Used top-left potion' };
+             // Return the best potion's data
+             return potions[0];
          });
 
+         // 2. Perform Trusted Action (Node.js context)
+         if (potionCoords) {
+             try {
+                // Human-like movement to the potion
+                // steps: 10 makes the move take ~10 frames (smoother)
+                await page.mouse.move(potionCoords.x, potionCoords.y, { steps: 5 });
+                
+                // Trusted Double Click
+                await page.mouse.click(potionCoords.x, potionCoords.y, { clickCount: 2, delay: 100 });
+                
+                return { id: potionCoords.id, info: 'Used potion (Trusted Input)' };
+             } catch (e) {
+                 logger.error('Failed to click potion:', e);
+                 return null;
+             }
+         }
+         
+         return null;
     },
 
     async closeBattle(page) {
