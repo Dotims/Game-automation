@@ -60,6 +60,8 @@ async function main() {
     let targetSwitchCount = 0;
     let noAttackCounter = 0;
     let positionHistory = [];
+    let sameTargetAttackCount = 0; // NEW: Counter for consecutive attacks on same target
+    let lastAttackTargetId = null;
 
     // --- Cached Map Data ---
     let cachedMapId = null;
@@ -531,6 +533,16 @@ async function main() {
                      }
                      
                      const escapeDuration = 10000 + Math.floor(Math.random() * 5000); 
+                     
+                     // NEW: Strict Loop Detection (Auto-Reload for tight loops)
+                     if (uniquePos.size <= 4) {
+                         logger.warn(`⚠️ EXTREME LOOP DETECTED (${uniquePos.size} unique tiles). Force Reloading to break glitch...`);
+                         try { await page.reload({ waitUntil: 'domcontentloaded' }); } catch (e) {}
+                         positionHistory = [];
+                         await sleep(5000);
+                         continue;
+                     }
+
                      logger.warn(`⚠️ LOOP DETECTED (${uniquePos.size} tiles)! Forcing ESCAPE...`);
                      
                      const gwWithDist = state.gateways.map(gw => ({
@@ -807,15 +819,31 @@ async function main() {
                                await actions.enterGateway(page, finalTarget);
                            }
                       } else {
-                           // Attack
-                           const result = await actions.attack(page, finalTarget, lastAttackTime);
+                            // Attack
+                            // NEW: Ghost Mob Detection
+                            if (finalTarget.id === lastAttackTargetId) {
+                                sameTargetAttackCount++;
+                            } else {
+                                sameTargetAttackCount = 1;
+                                lastAttackTargetId = finalTarget.id;
+                            }
+
+                            if (sameTargetAttackCount > 8) {
+                                logger.warn(`⚠️ Stuck attacking [${finalTarget.nick}] (${sameTargetAttackCount} times). Ghost mob/Bug detected. Force Reloading...`);
+                                try { await page.reload({ waitUntil: 'domcontentloaded' }); } catch(e) {}
+                                sameTargetAttackCount = 0;
+                                await sleep(5000);
+                                continue;
+                            }
+
+                            const result = await actions.attack(page, finalTarget, lastAttackTime);
                            lastAttackTime = result;
                            await sleep(500);
                       }
                  } else {
                       // Move
-                      const result = await actions.move(page, state, finalTarget);
-                      if (result === 'skip_target') {
+                       const result = await actions.move(page, state, finalTarget);
+                       if (result === 'skip_target') {
                            if (finalTarget.id) {
                                skippedMobs.set(finalTarget.id, Date.now());
                                logger.log(`📝 Blacklist: ${skippedMobs.size} mobs`);
