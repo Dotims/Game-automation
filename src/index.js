@@ -72,6 +72,12 @@ async function main() {
 
     // --- Main Loop ---
     const allMapNames = mapNav.getMapNames();
+    
+    // Log throttling state
+    let monsterModeLoggedMap = null; // Track last map where we logged "Hunting..."
+    let lastPausedLogTime = 0;
+    let lastWaitingLogTime = 0; // NEW: For "Waiting for E2"
+    let lastEngagedMobId = null; // NEW: To prevent "E2 DETECTED" spam
 
     while (true) {
         try {
@@ -90,7 +96,12 @@ async function main() {
 
         // Update local config if UI changed it
         if (!uiState.active) {
-                if (Date.now() % 5000 < 500) logger.info('💤 Bot paused. Click START in game UI.');
+                if (Date.now() - lastPausedLogTime > 15000) {
+                     if (Date.now() % 5000 < 500) {
+                         logger.info('💤 Bot paused. Click START in game UI.');
+                         lastPausedLogTime = Date.now();
+                     }
+                }
                 await sleep(500);
                 continue; // Paused
             }
@@ -127,12 +138,7 @@ async function main() {
                  continue; // Loading...
             }
             
-            // DEBUG: Inventory Log
-            if (state.inventory) {
-                if (Math.random() < 0.05) { 
-                     logger.info(`🎒 Inventory Status: ${state.inventory.used} / ${state.inventory.capacity} (Full? ${state.inventory.isFull})`);
-                }
-            }
+            // Inventory Log REMOVED per user request
 
             // 3.9. BLOCKING WINDOW CHECK (Centerbox/Shop)
             if (state.blockingWindow) {
@@ -232,7 +238,13 @@ async function main() {
             } else if (mode === 'monster') {
                 if (uiState.monsterTarget) {
                     mapsList = [uiState.monsterTarget.map];
-                    logger.log(`👹 MONSTER MODE: Hunting [${uiState.monsterTarget.name}] at ${uiState.monsterTarget.map} (${uiState.monsterTarget.x},${uiState.monsterTarget.y})`);
+                    
+                    // Throttle logging: Only log if map changed or different monster
+                    const logKey = `${uiState.monsterTarget.name}_${state.currentMapName}`;
+                    if (monsterModeLoggedMap !== logKey) {
+                        logger.log(`👹 MONSTER MODE: Hunting [${uiState.monsterTarget.name}] at ${uiState.monsterTarget.map} (${uiState.monsterTarget.x},${uiState.monsterTarget.y})`);
+                        monsterModeLoggedMap = logKey;
+                    }
                 }
             }
 
@@ -298,20 +310,79 @@ async function main() {
                 continue;
             }
 
+            // E2 MODE LOGIC
             // Stop if reached destination in monster mode
             if (mode === 'monster' && !isTraversing && uiState.monsterTarget) {
                  const mTarget = uiState.monsterTarget;
-                 const dist = Math.hypot(mTarget.x - state.hero.x, mTarget.y - state.hero.y);
+                 const distToTarget = Math.hypot(mTarget.x - state.hero.x, mTarget.y - state.hero.y);
 
-                 if (dist > 2.0) {
-                      logger.log(`👹 Reached Map! Moving to Monster [${mTarget.x}, ${mTarget.y}]...`);
-                      await actions.move(page, state, { x: mTarget.x, y: mTarget.y, nick: mTarget.name });
-                      await sleep(500);
-                      continue;
+                 // 1. Check if we have "arrived" (close enough)
+                 // Or we are already on the map, so we just scan for the mob
+                 
+                 // 2. SCAN FOR MOB - USE allMobs (bypass validMobs filter)
+                 // We look for any mob that matches the selected monster's name
+                 let targetMob = null;
+                 if (state.allMobs) {
+                     // Fuzzy match nick or exact match
+                     targetMob = state.allMobs.find(m => m.nick.includes(mTarget.name) || mTarget.name.includes(m.nick));
+                 }
+                 
+                 if (targetMob) {
+                     // --- MOB FOUND! ---
+                     // Log only if it's a new mob ID or enough time passed (optional, but ID check is better for unique mobs)
+                     if (lastEngagedMobId !== targetMob.id) {
+                         logger.log(`👹 E2 DETECTED: [${targetMob.nick}] at (${targetMob.x}, ${targetMob.y})! Engaging...`);
+                         lastEngagedMobId = targetMob.id;
+                     }
+                     
+                     const distToMob = Math.hypot(targetMob.x - state.hero.x, targetMob.y - state.hero.y);
+                     
+                     if (distToMob <= 1.5) {
+                         // ATTACK
+                         const result = await actions.attack(page, targetMob, lastAttackTime);
+                         lastAttackTime = result;
+                         await sleep(200);
+                         continue;
+                     } else {
+                         // APPROACH
+                         await actions.move(page, state, { x: targetMob.x, y: targetMob.y, nick: targetMob.nick });
+                         await sleep(400); // Shorter sleep for responsiveness
+                         continue;
+                     }
                  } else {
-                      logger.success(`✅ MONSTER ARRIVAL: Arrived at ${mTarget.name} location. Switching to IDLE.`);
-                      await sleep(5000);
-                      continue;
+                     // --- MOB NOT FOUND ---
+                     
+                     // Check if Battle just finished or target disappeared
+                     if (state.battleFinished) {
+                         logger.log(`⚔️ E2 DEFEATED! Moving randomly...`);
+                         await actions.closeBattle(page);
+                         // Trigger Random Move
+                         const rx = Math.floor(state.hero.x + (Math.random() * 6 - 3));
+                         const ry = Math.floor(state.hero.y + (Math.random() * 6 - 3));
+                         // Simple validation (can be improved with collision check)
+                         if (movement.isReachable(state, rx, ry)) {
+                              await actions.move(page, state, { x: rx, y: ry, nick: 'Random (Post-Fight)' });
+                         }
+                         await sleep(2000);
+                         continue;
+                     }
+
+                     // If we are far from spawn point, return to it
+                     if (distToTarget > 3.0) {
+                         logger.log(`👹 Returning to spawn point [${mTarget.name}] (${mTarget.x},${mTarget.y})...`);
+                         await actions.move(page, state, { x: mTarget.x, y: mTarget.y, nick: 'Spawn Point' });
+                         await sleep(1000);
+                         continue;
+                     } 
+                     
+                     // If we are close to spawn point and mob is not here -> IDLE / Random Wiggle?
+                     // Throttle "Waiting" log to every 10s
+                     if (Date.now() - lastWaitingLogTime > 10000) {
+                          logger.log(`👀 Waiting for E2 [${mTarget.name}]...`);
+                          lastWaitingLogTime = Date.now();
+                     }
+                     await sleep(1000);
+                     continue;
                  }
             }
 

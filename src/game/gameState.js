@@ -7,6 +7,7 @@ async function getGameState(page, config) {
 
         const obstacles = []; 
         const validMobs = []; // ALL valid mobs for path-based selection
+        const allMobs = [];   // NEW: ALL visible mobs (ignoring level/blacklist)
         let allMobsCount = 0;
         let deniedCount = 0;
         
@@ -34,7 +35,13 @@ async function getGameState(page, config) {
             }
 
             const isMob = (n.type === 2 || n.type === 3);
-            if (isMob) allMobsCount++;
+            if (isMob) {
+                allMobsCount++;
+                allMobs.push({
+                     x: n.x, y: n.y, id: n.id, nick: n.nick, lvl: n.lvl, 
+                     type: 'mob', isGateway: false
+                });
+            }
 
             // SKIP BLACKLISTED MOBS
             if (cfg.skippedMobIds && cfg.skippedMobIds.includes(n.id)) {
@@ -134,7 +141,8 @@ async function getGameState(page, config) {
             map: { id: map.id, w: map.x, h: map.y, col: map.col }, 
             battle: !!g.battle,
             target: validMobs.length > 0 ? validMobs[0] : null, // Fallback: nearest by geometry
-            validMobs: validMobs, // NEW: All mobs for path-based selection
+            validMobs: validMobs, // ALL valid mobs for path-based selection
+            allMobs: allMobs,     // NEW: ALL visible mobs
             gateways: gateways,
             obstacles: obstacles,
             debugInfo: { allMobsCount, deniedCount, validMobsCount: validMobs.length },
