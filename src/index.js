@@ -14,6 +14,7 @@ const POTION_SELLERS = require('./data/potion_sellers');
 const SHOPKEEPERS = require('./data/shopkeepers');
 const shopping = require('./game/shopping');
 const TRAVEL_OVERRIDES = require('./data/travel_overrides');
+const MONSTERS = require('./data/monsters');
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -75,7 +76,7 @@ async function main() {
     while (true) {
         try {
         // Inject UI (returns current config state)
-        const uiState = await ui.injectUI(page, config.DEFAULT_CONFIG, HUNTING_SPOTS, allMapNames); // Cleaned
+        const uiState = await ui.injectUI(page, config.DEFAULT_CONFIG, HUNTING_SPOTS, allMapNames, MONSTERS); // Cleaned
         
         const mode = uiState.mode || 'exp';
         const transportTarget = uiState.transportMap;
@@ -228,6 +229,11 @@ async function main() {
                     mapsList = [transportTarget]; // Force single map
                     logger.log(`🚚 TRANSPORT MODE: Destination -> ${transportTarget}`);
                 }
+            } else if (mode === 'monster') {
+                if (uiState.monsterTarget) {
+                    mapsList = [uiState.monsterTarget.map];
+                    logger.log(`👹 MONSTER MODE: Hunting [${uiState.monsterTarget.name}] at ${uiState.monsterTarget.map} (${uiState.monsterTarget.x},${uiState.monsterTarget.y})`);
+                }
             }
 
             const currentMapNorm = state.currentMapName ? state.currentMapName.toLowerCase().trim() : "";
@@ -290,6 +296,23 @@ async function main() {
                 // Prevent infinite log spam
                 await sleep(5000);
                 continue;
+            }
+
+            // Stop if reached destination in monster mode
+            if (mode === 'monster' && !isTraversing && uiState.monsterTarget) {
+                 const mTarget = uiState.monsterTarget;
+                 const dist = Math.hypot(mTarget.x - state.hero.x, mTarget.y - state.hero.y);
+
+                 if (dist > 2.0) {
+                      logger.log(`👹 Reached Map! Moving to Monster [${mTarget.x}, ${mTarget.y}]...`);
+                      await actions.move(page, state, { x: mTarget.x, y: mTarget.y, nick: mTarget.name });
+                      await sleep(500);
+                      continue;
+                 } else {
+                      logger.success(`✅ MONSTER ARRIVAL: Arrived at ${mTarget.name} location. Switching to IDLE.`);
+                      await sleep(5000);
+                      continue;
+                 }
             }
 
             // --- EMERGENCY FULL BAG STRATEGY ---

@@ -1,7 +1,7 @@
 const logger = require('../utils/logger');
 
-async function injectUI(page, defaultConfig, huntingSpots, allMapNames) {
-    return await page.evaluate(({ cfg, spots, allMaps }) => {
+async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonsters) {
+    return await page.evaluate(({ cfg, spots, allMaps, monsters }) => {
         if (!document.body) return { active: false, config: cfg }; // Safety check
 
         if (!window.BOT_CONFIG) {
@@ -15,6 +15,7 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames) {
         
         // Cache spots for easy access
         window.HUNTING_SPOTS = spots || [];
+        window.ALL_MONSTERS = monsters || [];
         
         // --- SECURITY MONITOR ---
         if (!window.SECURITY_MONITORED) {
@@ -134,6 +135,12 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames) {
                  mapDataList = allMaps.map(m => `<option value="${m}">`).join('');
              }
 
+             // Monster Datalist
+             let monsterDataList = '';
+             if (window.ALL_MONSTERS) {
+                 monsterDataList = window.ALL_MONSTERS.map(m => `<option value="${m.name} (Lvl ${m.lvl}) [${m.map}]">`).join('');
+             }
+
              div.innerHTML = `
                 <div class="mb-header">
                     <div class="mb-title">😼 MargoSzpont</div>
@@ -143,6 +150,7 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames) {
                 <div class="mb-tabs">
                     <div class="mb-tab active" data-tab="exp">EXP</div>
                     <div class="mb-tab" data-tab="transport">TRANSPORT</div>
+                    <div class="mb-tab" data-tab="e2">E2</div>
                 </div>
 
                 <div class="mb-content">
@@ -183,7 +191,7 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames) {
                         </div>
                     </div>
 
-                    <!-- TRANSPORT PANEL -->
+                     <!-- TRANSPORT PANEL -->
                     <div id="panel-transport" class="mb-tab-content" style="display: none;">
                          <div class="mb-col">
                             <div class="mb-label">Cel Podróży</div>
@@ -195,6 +203,22 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames) {
                          <div class="mb-row">
                              <div class="mb-label" style="font-size: 10px; color: #888; line-height: 1.4;">
                                 ℹ️ Tryb Transportu: Bot przejdzie do wskazanej mapy. Atakowanie wyłączone. Sprzedawanie wyłączone. Leczenie tylko krytyczne (<10% w mieście).
+                             </div>
+                         </div>
+                    </div>
+
+                    <!-- E2 PANEL -->
+                    <div id="panel-e2" class="mb-tab-content" style="display: none;">
+                         <div class="mb-col">
+                            <div class="mb-label">Wybierz E2</div>
+                            <input list="monster-datalist" id="inp-e2-monster" class="mb-input" placeholder="Wpisz nazwę potwora...">
+                            <datalist id="monster-datalist">
+                                ${monsterDataList}
+                            </datalist>
+                         </div>
+                         <div class="mb-row">
+                             <div class="mb-label" style="font-size: 10px; color: #888; line-height: 1.4;">
+                                ℹ️ Tryb E2: Bot przejdzie do mapy i koordynatów wybranego potwora.
                              </div>
                          </div>
                     </div>
@@ -212,6 +236,7 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames) {
              const tabs = div.querySelectorAll('.mb-tab');
              const panelExp = div.querySelector('#panel-exp');
              const panelTransport = div.querySelector('#panel-transport');
+             const panelE2 = div.querySelector('#panel-e2');
              
              // Default Tab State
              let currentTab = 'exp';
@@ -222,12 +247,16 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames) {
                      tab.classList.add('active');
                      currentTab = tab.dataset.tab;
                      
+                     panelExp.style.display = 'none';
+                     panelTransport.style.display = 'none';
+                     panelE2.style.display = 'none';
+
                      if (currentTab === 'exp') {
                          panelExp.style.display = 'block';
-                         panelTransport.style.display = 'none';
-                     } else {
-                         panelExp.style.display = 'none';
+                     } else if (currentTab === 'transport') {
                          panelTransport.style.display = 'block';
+                     } else if (currentTab === 'e2') {
+                         panelE2.style.display = 'block';
                      }
                  };
              });
@@ -275,6 +304,8 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames) {
                      document.getElementById('inp-maps').value = spot.maps.join('\n');
                  }
              };
+
+              // No JS search logic needed for datalist!
 
              // 2. Toggle Bot
              const toggleBtn = document.getElementById('btn-toggle');
@@ -377,17 +408,46 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames) {
         
         // Return current mode and target
         const activeTab = document.querySelector('.mb-tab.active');
-        const mode = activeTab && activeTab.dataset.tab === 'transport' ? 'transport' : 'exp';
-        const transportMap = document.getElementById('inp-transport-map') ? document.getElementById('inp-transport-map').value : '';
+        let mode = 'exp';
+        let transportMap = '';
+        let monsterTarget = null;
+        
+        if (activeTab) {
+            const tabName = activeTab.dataset.tab;
+            if (tabName === 'transport') {
+                mode = 'transport';
+                transportMap = document.getElementById('inp-transport-map') ? document.getElementById('inp-transport-map').value : '';
+            } else if (tabName === 'e2') {
+                mode = 'monster'; // Keep internal mode name 'monster'
+                const e2Input = document.getElementById('inp-e2-monster');
+                if (e2Input && e2Input.value) {
+                    const val = e2Input.value.toLowerCase();
+                    // Match by exact string format OR if name is contained
+                    // Format: "${m.name} (Lvl ${m.lvl}) [${m.map}]"
+                    
+                    // Simple find: Check if the value starts with the monster name (case insensitive)
+                    // Or exact match of the formatted string
+                     const match = window.ALL_MONSTERS.find(m => {
+                         const formatted = `${m.name} (Lvl ${m.lvl}) [${m.map}]`.toLowerCase();
+                         return formatted === val || val.startsWith(m.name.toLowerCase());
+                     });
+                     
+                     if (match) {
+                         monsterTarget = match;
+                     }
+                }
+            }
+        }
 
         return { 
             active: window.BOT_ACTIVE, 
             config: window.BOT_CONFIG,
             securityAlert: window.BOT_SECURITY_FLAG,
             mode: mode,
-            transportMap: transportMap
+            transportMap: transportMap,
+            monsterTarget: monsterTarget
         };
-    }, { cfg: defaultConfig, spots: huntingSpots, allMaps: allMapNames });
+    }, { cfg: defaultConfig, spots: huntingSpots, allMaps: allMapNames, monsters: allMonsters });
 }
 
 module.exports = { injectUI };
