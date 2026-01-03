@@ -78,6 +78,10 @@ async function main() {
     let lastPausedLogTime = 0;
     let lastWaitingLogTime = 0; // NEW: For "Waiting for E2"
     let lastEngagedMobId = null; // NEW: To prevent "E2 DETECTED" spam
+    
+    // Anti-AFK State
+    let lastActionTime = Date.now();
+    let afkThreshold = (Math.floor(Math.random() * 4) + 3) * 60 * 1000; // 3-6 min
 
     while (true) {
         try {
@@ -341,7 +345,8 @@ async function main() {
                          // ATTACK
                          const result = await actions.attack(page, targetMob, lastAttackTime);
                          lastAttackTime = result;
-                         await sleep(200);
+                         lastActionTime = Date.now(); // Reset AFK timer
+                         await sleep(Math.floor(Math.random() * 400) + 800); // 800-1200ms throttle
                          continue;
                      } else {
                          // APPROACH
@@ -352,14 +357,28 @@ async function main() {
                  } else {
                      // --- MOB NOT FOUND ---
                      
-                     // Check if Battle just finished or target disappeared
-                     if (state.battleFinished) {
-                         logger.log(`⚔️ E2 DEFEATED! Moving randomly...`);
+                     // --- MOB NOT FOUND ---
+                     
+                     // Check if Battle just finished OR if we were engaging a mob that is now gone using allMobs check
+                     // We check if lastEngagedMobId was set, and it's NOT in the current allMobs list
+                     let mobDisappeared = false;
+                     if (lastEngagedMobId) {
+                         // Check if this specific ID still exists in allMobs
+                         const stillExists = state.allMobs && state.allMobs.some(m => m.id === lastEngagedMobId);
+                         if (!stillExists) {
+                             mobDisappeared = true;
+                             logger.log(`👻 Target [${lastEngagedMobId}] disappeared! Assuming defeated/stolen.`);
+                             lastEngagedMobId = null; // Clear it so we don't trigger this loop again
+                         }
+                     }
+
+                     if (state.battleFinished || mobDisappeared) {
+                         logger.log(`⚔️ E2 DEFEATED/GONE! Moving randomly...`);
                          await actions.closeBattle(page);
                          // Trigger Random Move
                          const rx = Math.floor(state.hero.x + (Math.random() * 6 - 3));
                          const ry = Math.floor(state.hero.y + (Math.random() * 6 - 3));
-                         // Simple validation (can be improved with collision check)
+                         
                          if (movement.isReachable(state, rx, ry)) {
                               await actions.move(page, state, { x: rx, y: ry, nick: 'Random (Post-Fight)' });
                          }
@@ -376,6 +395,23 @@ async function main() {
                      } 
                      
                      // If we are close to spawn point and mob is not here -> IDLE / Random Wiggle?
+                     // If we are close to spawn point and mob is not here -> IDLE / Check Anti-AFK
+                     
+                     // Anti-AFK Logic
+                     if (Date.now() - lastActionTime > afkThreshold) {
+                         logger.log(`💤 Anti-AFK: Idling for ${(afkThreshold/60000).toFixed(1)}m. Moving slightly...`);
+                         const rx = Math.floor(state.hero.x + (Math.random() * 6 - 3));
+                         const ry = Math.floor(state.hero.y + (Math.random() * 6 - 3));
+                         
+                         if (movement.isReachable(state, rx, ry)) {
+                              await actions.move(page, state, { x: rx, y: ry, nick: 'Anti-AFK' });
+                         }
+                         
+                         lastActionTime = Date.now();
+                         afkThreshold = (Math.floor(Math.random() * 4) + 3) * 60 * 1000; // Reset 3-6m
+                         continue;
+                     }
+
                      // Throttle "Waiting" log to every 10s
                      if (Date.now() - lastWaitingLogTime > 10000) {
                           logger.log(`👀 Waiting for E2 [${mTarget.name}]...`);

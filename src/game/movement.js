@@ -61,7 +61,10 @@ function getPathLength(grid, heroX, heroY, targetX, targetY) {
     if (!gridClone.isWalkableAt(endX, endY)) {
         const neighbors = [
             [endX + 1, endY], [endX - 1, endY],
-            [endX, endY + 1], [endX, endY - 1]
+            [endX, endY + 1], [endX, endY - 1],
+            // Diagonals
+            [endX + 1, endY + 1], [endX - 1, endY - 1],
+            [endX + 1, endY - 1], [endX - 1, endY + 1]
         ];
         
         // Sort by distance to hero
@@ -267,7 +270,10 @@ const movement = {
                      
                      // Add neighbors, sorted by distance to Hero to prioritize reachable side
                      const neighbors = [
-                         [cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]
+                         [cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1],
+                         // Diagonals added for E2 attack positioning
+                         [cx + 1, cy + 1], [cx - 1, cy - 1],
+                         [cx + 1, cy - 1], [cx - 1, cy + 1]
                      ];
                      
                      // Sort neighbors by distance to Start (Hero)

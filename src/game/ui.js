@@ -12,6 +12,13 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
             const savedActive = localStorage.getItem('MARGO_BOT_ACTIVE');
             window.BOT_ACTIVE = savedActive === 'true'; 
         }
+
+        // Restore UI State (Tab & Inputs)
+        let uiState = { tab: 'exp', transport: '', e2: '' };
+        try {
+            const savedUI = localStorage.getItem('MARGO_UI_STATE');
+            if (savedUI) uiState = JSON.parse(savedUI);
+        } catch (e) {}
         
         // Cache spots for easy access
         window.HUNTING_SPOTS = spots || [];
@@ -238,28 +245,59 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
              const panelTransport = div.querySelector('#panel-transport');
              const panelE2 = div.querySelector('#panel-e2');
              
-             // Default Tab State
-             let currentTab = 'exp';
+             // Default Tab State (Restore)
+             let currentTab = uiState.tab || 'exp';
+              
+             // Restore Inputs
+             if (uiState.transport) {
+                  const tInp = document.getElementById('inp-transport-map');
+                  if (tInp) tInp.value = uiState.transport;
+             }
+             if (uiState.e2) {
+                  const e2Inp = document.getElementById('inp-e2-monster');
+                  if (e2Inp) e2Inp.value = uiState.e2;
+             }
+             
+             // FUNCTION TO SAVE STATE
+             const saveUIState = () => {
+                 const state = {
+                     tab: currentTab,
+                     transport: document.getElementById('inp-transport-map')?.value || '',
+                     e2: document.getElementById('inp-e2-monster')?.value || ''
+                 };
+                 localStorage.setItem('MARGO_UI_STATE', JSON.stringify(state));
+             };
+
+             // Restore Active Tab Visuals & Visibility
+             const updateTabs = () => {
+                 tabs.forEach(t => t.classList.remove('active'));
+                 const activeT = div.querySelector(`.mb-tab[data-tab="${currentTab}"]`);
+                 if (activeT) activeT.classList.add('active');
+
+                 panelExp.style.display = 'none';
+                 panelTransport.style.display = 'none';
+                 panelE2.style.display = 'none';
+
+                 if (currentTab === 'exp') panelExp.style.display = 'block';
+                 else if (currentTab === 'transport') panelTransport.style.display = 'block';
+                 else if (currentTab === 'e2') panelE2.style.display = 'block';
+             };
+             updateTabs(); // Call initially to set state
 
              tabs.forEach(tab => {
                  tab.onclick = () => {
-                     tabs.forEach(t => t.classList.remove('active'));
-                     tab.classList.add('active');
                      currentTab = tab.dataset.tab;
-                     
-                     panelExp.style.display = 'none';
-                     panelTransport.style.display = 'none';
-                     panelE2.style.display = 'none';
-
-                     if (currentTab === 'exp') {
-                         panelExp.style.display = 'block';
-                     } else if (currentTab === 'transport') {
-                         panelTransport.style.display = 'block';
-                     } else if (currentTab === 'e2') {
-                         panelE2.style.display = 'block';
-                     }
+                     updateTabs();
+                     saveUIState();
                  };
              });
+             
+             // Input Change Listeners for Autosave
+             const tInp = document.getElementById('inp-transport-map');
+             if (tInp) tInp.oninput = saveUIState;
+             
+             const e2Inp = document.getElementById('inp-e2-monster');
+             if (e2Inp) e2Inp.oninput = saveUIState;
              
              // 0. Force Visibility (Fix for "invisible" UI)
              const mainPanel = document.getElementById('margo-bot-panel');
