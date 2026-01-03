@@ -1,7 +1,7 @@
 const logger = require('../utils/logger');
 
-async function injectUI(page, defaultConfig, huntingSpots) {
-    return await page.evaluate(({ cfg, spots }) => {
+async function injectUI(page, defaultConfig, huntingSpots, allMapNames) {
+    return await page.evaluate(({ cfg, spots, allMaps }) => {
         if (!document.body) return { active: false, config: cfg }; // Safety check
 
         if (!window.BOT_CONFIG) {
@@ -17,7 +17,6 @@ async function injectUI(page, defaultConfig, huntingSpots) {
         window.HUNTING_SPOTS = spots || [];
         
         // --- SECURITY MONITOR ---
-        // Verify that inputs are accepted as "Trusted" (Human-like) by the browser
         if (!window.SECURITY_MONITORED) {
             window.SECURITY_MONITORED = true;
             window.BOT_SECURITY_FLAG = false;
@@ -25,9 +24,7 @@ async function injectUI(page, defaultConfig, huntingSpots) {
             const monitoredKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'e', 'r', ' '];
             
             const verifyInput = (e) => {
-                // We only care about inputs that MIGHT be ours
                 if (e.type === 'keydown' && !monitoredKeys.includes(e.key)) return;
-                
                 if (e.isTrusted === false) {
                     console.error('🛑 SECURITY ALERT: Untrusted (Script) Input Detected!', e);
                     window.BOT_SECURITY_FLAG = true;
@@ -50,13 +47,10 @@ async function injectUI(page, defaultConfig, huntingSpots) {
                     padding: 0; 
                     border-radius: 12px; 
                     font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-                    width: 300px; 
+                    width: 320px; 
                     border: 1px solid #444;
                     box-shadow: 0 10px 25px rgba(0,0,0,0.5);
                     backdrop-filter: blur(10px);
-                    backdrop-filter: blur(10px);
-                    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-                    overflow: hidden;
                     font-size: 13px;
                 }
                 .mb-header {
@@ -72,6 +66,11 @@ async function injectUI(page, defaultConfig, huntingSpots) {
                 .mb-title { font-weight: 700; font-size: 14px; letter-spacing: 0.5px; }
                 .mb-status { font-weight: 800; font-size: 12px; padding: 2px 6px; border-radius: 4px; background: #333; }
                 
+                .mb-tabs { display: flex; background: #222; border-bottom: 1px solid #444; }
+                .mb-tab { flex: 1; padding: 10px; text-align: center; cursor: pointer; color: #888; font-weight: 600; border-bottom: 2px solid transparent; transition: all 0.2s; }
+                .mb-tab:hover { color: #ccc; background: #2a2a2a; }
+                .mb-tab.active { color: #fff; border-bottom: 2px solid #2196F3; background: #2a2a30; }
+
                 .mb-content { padding: 15px; }
 
                 .mb-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
@@ -129,45 +128,75 @@ async function injectUI(page, defaultConfig, huntingSpots) {
                  });
              }
 
+             // Map Datalist
+             let mapDataList = '';
+             if (allMaps) {
+                 mapDataList = allMaps.map(m => `<option value="${m}">`).join('');
+             }
+
              div.innerHTML = `
                 <div class="mb-header">
                     <div class="mb-title">😼 MargoSzpont</div>
                     <div id="bot-status" class="mb-status" style="color: #f44336">OFF</div>
                 </div>
                 
+                <div class="mb-tabs">
+                    <div class="mb-tab active" data-tab="exp">EXP</div>
+                    <div class="mb-tab" data-tab="transport">TRANSPORT</div>
+                </div>
+
                 <div class="mb-content">
                     <div class="mb-row">
                         <button id="btn-toggle" class="mb-btn" style="background: linear-gradient(135deg, #4CAF50, #45a049); color: white; box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);">START BOT</button>
                     </div>
 
-                    <div class="mb-col">
-                        <div class="mb-label">Wybierz Expowisko</div>
-                        <select id="inp-spot" class="mb-select">
-                            ${optionsHtml}
-                        </select>
-                    </div>
-
-                    <div class="mb-row" style="gap: 10px;">
-                        <div style="flex: 1;">
-                            <div class="mb-label">Min Lvl</div>
-                            <input type="number" id="inp-min" class="mb-input" value="${window.BOT_CONFIG.minLvl}">
+                    <!-- EXP PANEL -->
+                    <div id="panel-exp" class="mb-tab-content">
+                        <div class="mb-col">
+                            <div class="mb-label">Wybierz Expowisko</div>
+                            <select id="inp-spot" class="mb-select">
+                                ${optionsHtml}
+                            </select>
                         </div>
-                        <div style="flex: 1;">
-                             <div class="mb-label">Max Lvl</div>
-                            <input type="number" id="inp-max" class="mb-input" value="${window.BOT_CONFIG.maxLvl}">
+
+                        <div class="mb-row" style="gap: 10px;">
+                            <div style="flex: 1;">
+                                <div class="mb-label">Min Lvl</div>
+                                <input type="number" id="inp-min" class="mb-input" value="${window.BOT_CONFIG.minLvl}">
+                            </div>
+                            <div style="flex: 1;">
+                                 <div class="mb-label">Max Lvl</div>
+                                <input type="number" id="inp-max" class="mb-input" value="${window.BOT_CONFIG.maxLvl}">
+                            </div>
+                        </div>
+
+                        <div class="mb-row">
+                             <label style="cursor:pointer; display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600;">
+                                <input type="checkbox" id="inp-heal" ${window.BOT_CONFIG.autoHeal ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: #2196F3;"> 
+                                Auto Heal
+                             </label>
+                        </div>
+
+                        <div class="mb-col">
+                            <div class="mb-label">Lista Map (edytowalna)</div>
+                            <textarea id="inp-maps" class="mb-textarea" spellcheck="false">${(window.BOT_CONFIG.maps || []).join('\n')}</textarea>
                         </div>
                     </div>
 
-                    <div class="mb-row">
-                         <label style="cursor:pointer; display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600;">
-                            <input type="checkbox" id="inp-heal" ${window.BOT_CONFIG.autoHeal ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: #2196F3;"> 
-                            Auto Heal
-                         </label>
-                    </div>
-
-                    <div class="mb-col">
-                        <div class="mb-label">Lista Map (edytowalna)</div>
-                        <textarea id="inp-maps" class="mb-textarea" spellcheck="false">${(window.BOT_CONFIG.maps || []).join('\n')}</textarea>
+                    <!-- TRANSPORT PANEL -->
+                    <div id="panel-transport" class="mb-tab-content" style="display: none;">
+                         <div class="mb-col">
+                            <div class="mb-label">Cel Podróży</div>
+                            <input list="map-datalist" id="inp-transport-map" class="mb-input" placeholder="Wpisz nazwę mapy (np. Eder)...">
+                            <datalist id="map-datalist">
+                                ${mapDataList}
+                            </datalist>
+                         </div>
+                         <div class="mb-row">
+                             <div class="mb-label" style="font-size: 10px; color: #888; line-height: 1.4;">
+                                ℹ️ Tryb Transportu: Bot przejdzie do wskazanej mapy. Atakowanie wyłączone. Sprzedawanie wyłączone. Leczenie tylko krytyczne (<10% w mieście).
+                             </div>
+                         </div>
                     </div>
 
                     <div class="mb-row" style="margin-bottom: 0;">
@@ -178,6 +207,30 @@ async function injectUI(page, defaultConfig, huntingSpots) {
              document.body.appendChild(div);
 
              // --- Logic ---
+             
+             // TAB LOGIC
+             const tabs = div.querySelectorAll('.mb-tab');
+             const panelExp = div.querySelector('#panel-exp');
+             const panelTransport = div.querySelector('#panel-transport');
+             
+             // Default Tab State
+             let currentTab = 'exp';
+
+             tabs.forEach(tab => {
+                 tab.onclick = () => {
+                     tabs.forEach(t => t.classList.remove('active'));
+                     tab.classList.add('active');
+                     currentTab = tab.dataset.tab;
+                     
+                     if (currentTab === 'exp') {
+                         panelExp.style.display = 'block';
+                         panelTransport.style.display = 'none';
+                     } else {
+                         panelExp.style.display = 'none';
+                         panelTransport.style.display = 'block';
+                     }
+                 };
+             });
              
              // 0. Force Visibility (Fix for "invisible" UI)
              const mainPanel = document.getElementById('margo-bot-panel');
@@ -257,10 +310,8 @@ async function injectUI(page, defaultConfig, huntingSpots) {
                  }
              };
 
-             // --- DRAGGABLE LOGIC (Moved inside Init Block) ---
-             const panel = div; 
-             const header = panel.querySelector('.mb-header');
-             
+             // --- DRAGGABLE LOGIC ---
+             const header = div.querySelector('.mb-header');
              let isDragging = false;
              let startX, startY, initialLeft, initialTop;
  
@@ -269,7 +320,7 @@ async function injectUI(page, defaultConfig, huntingSpots) {
                  isDragging = true;
                  startX = e.clientX;
                  startY = e.clientY;
-                 const rect = panel.getBoundingClientRect();
+                 const rect = div.getBoundingClientRect();
                  initialLeft = rect.left;
                  initialTop = rect.top;
                  header.style.cursor = 'grabbing';
@@ -280,9 +331,9 @@ async function injectUI(page, defaultConfig, huntingSpots) {
                  if (!isDragging) return;
                  const dx = e.clientX - startX;
                  const dy = e.clientY - startY;
-                 panel.style.left = `${initialLeft + dx}px`;
-                 panel.style.top = `${initialTop + dy}px`;
-                 panel.style.right = 'auto';
+                 div.style.left = `${initialLeft + dx}px`;
+                 div.style.top = `${initialTop + dy}px`;
+                 div.style.right = 'auto'; // Prevent right align issues
              };
  
              const onMouseUp = () => {
@@ -298,6 +349,7 @@ async function injectUI(page, defaultConfig, huntingSpots) {
         }
 
         // --- UPDATE UI STATE ---
+        const panel = document.getElementById('margo-bot-panel');
         const st = document.getElementById('bot-status');
         const btn = document.getElementById('btn-toggle');
         
@@ -322,13 +374,20 @@ async function injectUI(page, defaultConfig, huntingSpots) {
                 panel.style.borderColor = '#444';
             }
         }
+        
+        // Return current mode and target
+        const activeTab = document.querySelector('.mb-tab.active');
+        const mode = activeTab && activeTab.dataset.tab === 'transport' ? 'transport' : 'exp';
+        const transportMap = document.getElementById('inp-transport-map') ? document.getElementById('inp-transport-map').value : '';
 
         return { 
             active: window.BOT_ACTIVE, 
             config: window.BOT_CONFIG,
-            securityAlert: window.BOT_SECURITY_FLAG 
+            securityAlert: window.BOT_SECURITY_FLAG,
+            mode: mode,
+            transportMap: transportMap
         };
-    }, { cfg: defaultConfig, spots: huntingSpots });
+    }, { cfg: defaultConfig, spots: huntingSpots, allMaps: allMapNames });
 }
 
 module.exports = { injectUI };

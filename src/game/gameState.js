@@ -144,6 +144,31 @@ async function getGameState(page, config) {
             dazed: dazedState,
             potionsCount: potionsData.count,
             potionStackSize: potionsData.stackSize,
+            
+            // --- Inventory Analysis ---
+            inventory: (() => {
+                 let used = 0;
+                 let capacity = 100; // Default safe value
+                 const bag = document.querySelector('#bag');
+                 if (bag) {
+                     // 1. Capacity
+                     const header = bag.querySelector('.bag-header') || bag.querySelector('.title');
+                     if (header) {
+                         const match = header.innerText.match(/(\d+)\s*\/\s*(\d+)/);
+                         if (match) {
+                             used = parseInt(match[1]);
+                             capacity = parseInt(match[2]);
+                         }
+                     }
+                     // Fallback: Count items if header parsing failed but bag exists
+                     const items = bag.querySelectorAll('.item');
+                     if ((!header || !header.innerText.includes('/')) && items) {
+                         used = items.length;
+                     }
+                 }
+                 return { used, capacity, isFull: used >= capacity };
+            })(),
+
             isDead: (() => {
                 // Strict check: Only 0 HP is Dead.
                 if (hero.hp === 0) return true;

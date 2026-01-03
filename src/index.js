@@ -70,11 +70,16 @@ async function main() {
     logger.success('✅ Bot ready! Starting main loop.');
 
     // --- Main Loop ---
+    const allMapNames = mapNav.getMapNames();
+
     while (true) {
         try {
         // Inject UI (returns current config state)
-        const uiState = await ui.injectUI(page, config.DEFAULT_CONFIG, HUNTING_SPOTS); // Cleaned
+        const uiState = await ui.injectUI(page, config.DEFAULT_CONFIG, HUNTING_SPOTS, allMapNames); // Cleaned
         
+        const mode = uiState.mode || 'exp';
+        const transportTarget = uiState.transportMap;
+
         if (uiState.securityAlert) {
             logger.error('🛑 FATAL SECURITY WARNING: Bot inputs detected as UNTRUSTED/FAKE!');
             logger.error('   The game or browser is flagging our inputs. Stopping for safety.');
@@ -120,6 +125,13 @@ async function main() {
                  await sleep(500);
                  continue; // Loading...
             }
+            
+            // DEBUG: Inventory Log
+            if (state.inventory) {
+                if (Math.random() < 0.05) { 
+                     logger.info(`🎒 Inventory Status: ${state.inventory.used} / ${state.inventory.capacity} (Full? ${state.inventory.isFull})`);
+                }
+            }
 
             // 3.9. BLOCKING WINDOW CHECK (Centerbox/Shop)
             if (state.blockingWindow) {
@@ -144,7 +156,6 @@ async function main() {
             }
 
             // 4.0. DEAD CHECK (Close Battle Window logic improved)
-            // Checks strictly state.isDead (HP=0 or "Poległ" in log).
             if (state.isDead) { 
                  deadCloseAttempts++;
                  logger.log(`💀 Hero Dead. Attempting to close battle window (${deadCloseAttempts}/5)...`);
@@ -166,7 +177,6 @@ async function main() {
             }
 
             if (state.battle) {
-                 // Check if battle is properly finished (Victory/End)
                  if (state.battleFinished) {
                       logger.log('⚔️ Battle finished. Closing...');
                       await actions.closeBattle(page);
@@ -174,14 +184,12 @@ async function main() {
                       continue;
                  }
 
-                 // Failsafe: If we are in battle but HP is 0 (and isDead didn't catch it for some reason), force loop back
                  if (state.hero && state.hero.hp === 0) {
                      continue; 
                  }
 
                  const result = await actions.attack(page, { nick: 'Battle' }, lastAttackTime);
                  lastAttackTime = result;
-                 // On attack, wait for turn
                  await sleep(200); 
                  continue;
             }
@@ -189,29 +197,21 @@ async function main() {
             // 4.1. UNCONSCIOUS CHECK (Death)
             if (state.dazed && state.dazed.active) {
                  const waitSeconds = state.dazed.seconds || 5;
-                 
-                 // User Req: Reload page when 10-15s left to respawn.
-                 const reloadThreshold = Math.floor(Math.random() * 6) + 10; // 10-15s
-                 
+                 const reloadThreshold = Math.floor(Math.random() * 6) + 10;
                  if (waitSeconds > reloadThreshold + 2) {
-                     // Wait until we hit the threshold
                      const timeToWait = waitSeconds - reloadThreshold;
                      logger.warn(`💀 Unconscious. Respawn in ${waitSeconds}s. Waiting ${timeToWait}s to Auto-Reload...`);
-                     
                      await sleep(timeToWait * 1000);
-                     
                      logger.log(`🔄 Auto-Reloading page (Respawn in ~${reloadThreshold}s)...`);
                      try {
                          await page.reload({ waitUntil: 'domcontentloaded' });
                      } catch (e) {
                          logger.error("Reload failed, continuing...", e);
                      }
-                     await sleep(5000); // Allow initialization
+                     await sleep(5000); 
                      continue; 
                  } else {
-                     // Close to respawn, just wait
                      logger.warn(`💀 Unconscious. Respawn in ${waitSeconds}s. Waiting...`);
-                     // Check more frequently near end
                      const sleepTime = Math.min(waitSeconds * 1000 + 1000, 5000); 
                      await sleep(sleepTime); 
                      continue;
@@ -219,10 +219,18 @@ async function main() {
             }
 
             // Determine Target Map Index & Travel Mode
-            // MOVED UP due to dependency in Resupply Check
-            const mapsList = currentConfig.maps || [];
-            const currentMapNorm = state.currentMapName ? state.currentMapName.toLowerCase().trim() : "";
+            let mapsList = currentConfig.maps || [];
             let currentIndex = -1;
+
+            // --- TRANSPORT MODE OVERRIDE ---
+            if (mode === 'transport') {
+                if (transportTarget) {
+                    mapsList = [transportTarget]; // Force single map
+                    logger.log(`🚚 TRANSPORT MODE: Destination -> ${transportTarget}`);
+                }
+            }
+
+            const currentMapNorm = state.currentMapName ? state.currentMapName.toLowerCase().trim() : "";
             
             if (mapsList.length > 0 && currentMapNorm) {
                 for (let i = 0; i < mapsList.length; i++) {
@@ -234,8 +242,135 @@ async function main() {
             }
             
             // --- TRAVERSING MODE CHECK ---
-            // If traversing (currentIndex === -1), ignore ALL mobs!
+            // In Transport Mode, if we are NOT at the target (currentIndex === -1), we are traversing.
+            // If we ARE at the target (currentIndex !== -1), we stop.
             const isTraversing = (currentIndex === -1) && (mapsList.length > 0);
+            
+            // Stop if reached destination in transport mode
+            if (mode === 'transport' && !isTraversing) {
+                // Find "Zakonnik Planu Astralnego" or specific target NPC
+                let arrivalTarget = null;
+                
+                // 1. Search for Zakonnik
+                const zakonnik = await page.evaluate(() => {
+                     if (!g || !g.npc) return null;
+                     for (let id in g.npc) {
+                         const n = g.npc[id];
+                         if (n.nick && n.nick.includes('Zakonnik Planu Astralnego')) {
+                             return { x: n.x, y: n.y, nick: n.nick, id: n.id };
+                         }
+                     }
+                     return null;
+                });
+
+                if (zakonnik) {
+                     arrivalTarget = { ...zakonnik, type: 'npc' };
+                     const dist = Math.hypot(zakonnik.x - state.hero.x, zakonnik.y - state.hero.y);
+                     if (dist > 2.0) {
+                         logger.log(`🏁 Destination Reached! Moving to ${zakonnik.nick}...`);
+                         await actions.move(page, state, arrivalTarget);
+                         await sleep(500);
+                         continue;
+                     }
+                } else {
+                     // 2. Move to Center if no Zakonnik
+                     const centerX = Math.floor(state.map.w / 2);
+                     const centerY = Math.floor(state.map.h / 2);
+                     const distToCenter = Math.hypot(centerX - state.hero.x, centerY - state.hero.y);
+                     
+                     if (distToCenter > 4.0) {
+                         logger.log(`🏁 Destination Reached! Moving to Map Center [${centerX},${centerY}]...`);
+                         await actions.move(page, state, { x: centerX, y: centerY, nick: 'Map Center' });
+                         await sleep(500);
+                         continue;
+                     }
+                }
+
+                logger.success(`✅ TRANSPORT COMPLETE: Arrived at ${transportTarget} (Near ${zakonnik ? 'Zakonnik' : 'Center'}). Idling...`);
+                // Prevent infinite log spam
+                await sleep(5000);
+                continue;
+            }
+
+            // --- EMERGENCY FULL BAG STRATEGY ---
+            if (mode === 'exp' && state.inventory && state.inventory.isFull && state.hero.lvl >= 70) {
+                 const inKwieciste = state.currentMapName === 'Kwieciste Przejście';
+                 const inDomTunii = state.currentMapName === 'Dom Tunii';
+                 
+                 // CASE 1: Need to Teleport (Not there yet)
+                 if (state.inventory.teleportScrollId && !inKwieciste && !inDomTunii) {
+                     logger.warn("🎒 BAG FULL & LVL 70+ & SCROLL DETECTED! Initiating Emergency Sell Procedure...");
+                     
+                     // 1. Use Teleport
+                     logger.log("📜 Using Teleport Scroll to Kwieciste Przejście...");
+                     await actions.useItem(page, state.inventory.teleportScrollId);
+                     await sleep(4000); 
+                     
+                     // 2. Wait for Map Load
+                     let retries = 0;
+                     while(retries < 10) {
+                         const s = await gameState.getGameState(page, currentConfig);
+                         if (s && s.currentMapName === 'Kwieciste Przejście') break;
+                         await sleep(1000);
+                         retries++;
+                     }
+                 }
+                 
+                 // CASE 2: Already in Kwieciste (Just Arrived OR Loop Recovery)
+                 const currentState = await gameState.getGameState(page, currentConfig);
+                 if (currentState.currentMapName === 'Kwieciste Przejście') {
+                      logger.log("🚶 Navigating to 'Dom Tunii'...");
+                      
+                      // Find Gateway
+                      let gateway = currentState.gateways.find(g => g.name.toLowerCase().includes('dom tunii'));
+                      if (!gateway) {
+                           // Refresh state just in case
+                           await sleep(1000);
+                           const refresh = await gameState.getGameState(page, currentConfig);
+                           gateway = refresh.gateways.find(g => g.name.toLowerCase().includes('dom tunii'));
+                      }
+
+                      if (gateway) {
+                          // Force move to gateway even if logic thinks otherwise
+                          await actions.move(page, currentState, gateway);
+                          
+                          // Wait for transition
+                          await sleep(3000);
+                      } else {
+                          logger.error("❌ Gateway 'Dom Tunii' not found!");
+                      }
+                 }
+                 
+                 // CASE 3: In Dom Tunii (Process Trade)
+                 const domState = await gameState.getGameState(page, currentConfig); // Fresh state
+                 if (domState.currentMapName === 'Dom Tunii') {
+                      logger.success("✅ Entered Dom Tunii.");
+                      
+                      const tunia = await page.evaluate(() => {
+                           for (let id in g.npc) { // Type 1 check handled by raw iteration
+                               if (g.npc[id].nick === 'Tunia Frupotius') return g.npc[id];
+                           }
+                           return null;
+                      });
+                      
+                      if (tunia) {
+                           logger.log("💰 Found Tunia Frupotius. Initiating Trade...");
+                           await actions.move(page, domState, { x: tunia.x, y: tunia.y });
+                           await sleep(1000);
+                           
+                           await shopping.performSell(page);
+                           await sleep(1000);
+                           
+                           const stateAfterSell = await gameState.getGameState(page, currentConfig);
+                           await shopping.buyPotions(page, stateAfterSell);
+                           
+                           logger.success("✅ Emergency Sell/Resupply Logic Complete. Returning to Exp...");
+                           // Logic falls through to next loop iteration which will trigger 'Traversing' back to exp
+                      } else {
+                          logger.error("❌ Tunia Frupotius not found in Dom Tunii!");
+                      }
+                 }
+            }
 
                 // 4.2. RESUPPLY CHECK (Healer / Potions)
                 // USER REQUIREMENT: Only resupply if we are in a CITY.
@@ -252,49 +387,50 @@ async function main() {
                 const hpPercent = state.hero.hp / state.hero.maxhp;
                 
                 // Critical needs (ignore cooldown)
-                const isCriticalHp = hpPercent < 0.35;
-                const isCriticalPots = state.potionsCount < 5; // Almost empty
+                let isCriticalHp = hpPercent < 0.35;
+                let isCriticalPots = state.potionsCount < 5; // Almost empty
                 
+                // --- MODE SPECIFIC RULES ---
+                let allowSelling = true;
+                if (mode === 'transport') {
+                    allowSelling = false; // Disable selling
+                    isCriticalHp = hpPercent < 0.10; // Only heal if < 10%
+                    isCriticalPots = false; // Don't buy potions
+                }
+
                 // Should we resupply?
                 const shouldResupply = isCityMap && (
-                    (timeSinceShop > RESUPPLY_COOLDOWN) || 
+                    (timeSinceShop > RESUPPLY_COOLDOWN && mode !== 'transport') || 
                     isCriticalHp || 
-                    isCriticalPots
+                    (isCriticalPots && mode !== 'transport')
                 );
 
                 if (state.hero.maxhp > 0 && shouldResupply) { 
                     
                     // --- 1. ALWAYS SELL TRASH FIRST (if needed) ---
-                    if (!soldItems) {
+                    if (!soldItems && allowSelling) {
                         const shopkeeper = SHOPKEEPERS.find(s => s.map === state.currentMapName);
                         if (shopkeeper) {
-                            const shopId = `npc_${shopkeeper.map}_${shopkeeper.name.replace(/\s+/g, '_')}`; // Unique ID
-
-                            // Check Blacklist
-                            if (!skippedMobs.has(shopId)) {
-                                const dist = Math.hypot(shopkeeper.x - state.hero.x, shopkeeper.y - state.hero.y);
-                                
-                                // If close to shopkeeper, SELL!
-                                if (dist < 2.0) {
-                                    logger.log(`💰 Reach Shopkeeper: ${shopkeeper.name}. Selling junk...`);
-                                    await shopping.performSell(page);
-                                    soldItems = true; 
-                                    lastShopVisit = Date.now(); // Update timer
-                                    await sleep(500);
-                                    continue; 
-                                } else {
-                                    // Go to Shopkeeper
-                                    logger.log(`💰 City Visit -> Going to Shopkeeper: ${shopkeeper.name} (Sell)...`);
-                                    resupplyTarget = { 
-                                        x: shopkeeper.x, 
-                                        y: shopkeeper.y, 
-                                        type: 'npc', 
-                                        nick: `💰 ${shopkeeper.name}`, 
-                                        id: shopId 
-                                    };
-                                }
+                            const dist = Math.hypot(shopkeeper.x - state.hero.x, shopkeeper.y - state.hero.y);
+                             
+                            // If close to shopkeeper, SELL!
+                            if (dist < 2.0) {
+                                logger.log(`💰 Reach Shopkeeper: ${shopkeeper.name}. Selling junk...`);
+                                await shopping.performSell(page);
+                                soldItems = true; 
+                                lastShopVisit = Date.now(); // Update timer
+                                await sleep(500);
+                                continue; 
                             } else {
-                                // logger.warn(`⚠️ Shopkeeper ${shopkeeper.name} is unreachable (Blacklisted). Skipping...`);
+                                // Go to Shopkeeper
+                                logger.log(`💰 City Visit -> Going to Shopkeeper: ${shopkeeper.name} (Sell)...`);
+                                resupplyTarget = { 
+                                    x: shopkeeper.x, 
+                                    y: shopkeeper.y, 
+                                    type: 'npc', 
+                                    nick: `💰 ${shopkeeper.name}`, 
+                                    id: `npc_${shopkeeper.id}` 
+                                };
                             }
                         }
                     }
@@ -314,39 +450,35 @@ async function main() {
                          
                          const seller = POTION_SELLERS.find(s => s.map === state.currentMapName);
                          if (seller) {
-                             const sellerId = `npc_${seller.map}_${seller.name.replace(/\s+/g, '_')}`; // Unique ID
-
-                             if (!skippedMobs.has(sellerId)) {
-                                 const dist = Math.hypot(seller.x - state.hero.x, seller.y - state.hero.y);
+                             const dist = Math.hypot(seller.x - state.hero.x, seller.y - state.hero.y);
+                             
+                             if (dist < 2.0) {
+                                 logger.log(`🏥 Reach Healer: ${seller.name}. Starting interaction...`);
                                  
-                                 if (dist < 2.0) {
-                                     logger.log(`🏥 Reach Healer: ${seller.name}. Starting interaction...`);
-                                     
-                                     // 1. Heal
-                                     await shopping.performHeal(page);
-                                     await sleep(1000);
-                                     
-                                     // 2. Buy Potions
-                                     await shopping.buyPotions(page, state);
-                                     
-                                     logger.log("✅ Resupply cycle finished. Resuming hunt...");
-                                     resupplyTarget = null;
-                                     soldItems = true; // Assume we are 'good' for now
-                                     lastShopVisit = Date.now(); // Update timer
-                                     
-                                     await sleep(1000);
-                                     continue; 
-                                 }
-                                 else {
-                                     logger.warn(`🏥 Needed (HP: ${(hpPercent*100).toFixed(0)}%, Pots: ${state.potionsCount}/${maxCapacity})! Going to ${seller.name}...`);
-                                     resupplyTarget = { 
-                                         x: seller.x, 
-                                         y: seller.y, 
-                                         type: 'npc', 
-                                         nick: `🏥 ${seller.name}`, 
-                                         id: sellerId 
-                                     };
-                                 }
+                                 // 1. Heal
+                                 await shopping.performHeal(page);
+                                 await sleep(1000);
+                                 
+                                 // 2. Buy Potions
+                                 await shopping.buyPotions(page, state);
+                                 
+                                 logger.log("✅ Resupply cycle finished. Resuming hunt...");
+                                 resupplyTarget = null;
+                                 soldItems = true; // Assume we are 'good' for now
+                                 lastShopVisit = Date.now(); // Update timer
+                                 
+                                 await sleep(1000);
+                                 continue; 
+                             }
+                             else {
+                                 logger.warn(`🏥 Needed (HP: ${(hpPercent*100).toFixed(0)}%, Pots: ${state.potionsCount}/${maxCapacity})! Going to ${seller.name}...`);
+                                 resupplyTarget = { 
+                                     x: seller.x, 
+                                     y: seller.y, 
+                                     type: 'npc', 
+                                     nick: `🏥 ${seller.name}`, 
+                                     id: `npc_${seller.id}` 
+                                 };
                              }
                          }
                      }

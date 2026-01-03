@@ -143,4 +143,11 @@ function findPath(startMap, targetMaps) {
     return null; // Path not found
 }
 
-module.exports = { loadMapConnections, findPath };
+/**
+ * Returns a list of all known map names from the graph
+ */
+function getMapNames() {
+    return Object.keys(graph).sort();
+}
+
+module.exports = { loadMapConnections, findPath, getMapNames };
