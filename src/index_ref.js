@@ -1,4 +1,4 @@
-const { initBrowser } = require('./core/browser');
+﻿const { initBrowser } = require('./core/browser');
 const config = require('./config');
 const logger = require('./utils/logger');
 const ui = require('./game/ui');
@@ -14,7 +14,6 @@ const POTION_SELLERS = require('./data/potion_sellers');
 const SHOPKEEPERS = require('./data/shopkeepers');
 const shopping = require('./game/shopping');
 const TRAVEL_OVERRIDES = require('./data/travel_overrides');
-const MONSTERS = require('./data/monsters');
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -23,7 +22,7 @@ let escapeTarget = null;
 let soldItems = false; // Flag to track if we have visited the shopkeeper during this resupply cycle
 
 async function main() {
-    logger.log('🚀 Starting MargoBot v2.1 (Modular Rewrite)');
+    logger.log('­čÜÇ Starting MargoBot v2.1 (Modular Rewrite)');
 
     let browser, page;
     try {
@@ -35,7 +34,7 @@ async function main() {
         process.exit(1);
     }
 
-    logger.log('⏳ Waiting for map and hero...');
+    logger.log('ÔĆ│ Waiting for map and hero...');
     
     // Load Map Graph
     mapNav.loadMapConnections(path.join(__dirname, '../przejscia_na_mapach.txt'));
@@ -68,44 +67,29 @@ async function main() {
     let cachedMapId = null;
     let mapChangedAt = 0; // Cooldown timer
 
-    logger.success('✅ Bot ready! Starting main loop.');
+    logger.success('Ôťů Bot ready! Starting main loop.');
 
     // --- Main Loop ---
     const allMapNames = mapNav.getMapNames();
-    
-    // Log throttling state
-    let monsterModeLoggedMap = null; // Track last map where we logged "Hunting..."
-    let lastPausedLogTime = 0;
-    let lastWaitingLogTime = 0; // NEW: For "Waiting for E2"
-    let lastEngagedMobId = null; // NEW: To prevent "E2 DETECTED" spam
-    
-    // Anti-AFK State
-    let lastActionTime = Date.now();
-    let afkThreshold = (Math.floor(Math.random() * 4) + 2) * 60 * 1000; // 2-5 min
 
     while (true) {
         try {
-            // Inject UI (returns current config state)
-            const uiState = await ui.injectUI(page, config.DEFAULT_CONFIG, HUNTING_SPOTS, allMapNames, MONSTERS); // Cleaned
-            
-            const mode = uiState.mode || 'exp';
-            const transportTarget = uiState.transportMap;
+        // Inject UI (returns current config state)
+        const uiState = await ui.injectUI(page, config.DEFAULT_CONFIG, HUNTING_SPOTS, allMapNames); // Cleaned
+        
+        const mode = uiState.mode || 'exp';
+        const transportTarget = uiState.transportMap;
 
-            if (uiState.securityAlert) {
-                logger.error('🛑 FATAL SECURITY WARNING: Bot inputs detected as UNTRUSTED/FAKE!');
-                logger.error('   The game or browser is flagging our inputs. Stopping for safety.');
-                await sleep(5000);
-                continue;
-            }
+        if (uiState.securityAlert) {
+            logger.error('­čŤĹ FATAL SECURITY WARNING: Bot inputs detected as UNTRUSTED/FAKE!');
+            logger.error('   The game or browser is flagging our inputs. Stopping for safety.');
+            await sleep(5000);
+            continue;
+        }
 
-            // Update local config if UI changed it
-            if (!uiState.active) {
-                if (Date.now() - lastPausedLogTime > 15000) {
-                     if (Date.now() % 5000 < 500) {
-                         logger.info('💤 Bot paused. Click START in game UI.');
-                         lastPausedLogTime = Date.now();
-                     }
-                }
+        // Update local config if UI changed it
+        if (!uiState.active) {
+                if (Date.now() % 5000 < 500) logger.info('­čĺĄ Bot paused. Click START in game UI.');
                 await sleep(500);
                 continue; // Paused
             }
@@ -114,7 +98,7 @@ async function main() {
             try {
                 const solved = await captcha.solve(page);
                 if (solved) {
-                    logger.info('🤖 CAPTCHA handled. Pausing for stability...');
+                    logger.info('­čĄľ CAPTCHA handled. Pausing for stability...');
                     await sleep(3000);
                     continue;
                 }
@@ -142,15 +126,20 @@ async function main() {
                  continue; // Loading...
             }
             
-            // Inventory Log REMOVED per user request
+            // DEBUG: Inventory Log
+            if (state.inventory) {
+                if (Math.random() < 0.05) { 
+                     logger.info(`­čÄĺ Inventory Status: ${state.inventory.used} / ${state.inventory.capacity} (Full? ${state.inventory.isFull})`);
+                }
+            }
 
             // 3.9. BLOCKING WINDOW CHECK (Centerbox/Shop)
             if (state.blockingWindow) {
                  blockingWindowAttempts++;
-                 logger.log(`🛑 Blocking window detected (${blockingWindowAttempts}/10). Closing...`);
+                 logger.log(`­čŤĹ Blocking window detected (${blockingWindowAttempts}/10). Closing...`);
                  
                  if (blockingWindowAttempts >= 10) {
-                      logger.warn('🛑 Failed to close blocking window. Force Reloading...');
+                      logger.warn('­čŤĹ Failed to close blocking window. Force Reloading...');
                       try {
                           await page.reload({ waitUntil: 'domcontentloaded' });
                       } catch (e) { logger.error("Reload failed", e); }
@@ -169,10 +158,10 @@ async function main() {
             // 4.0. DEAD CHECK (Close Battle Window logic improved)
             if (state.isDead) { 
                  deadCloseAttempts++;
-                 logger.log(`💀 Hero Dead. Attempting to close battle window (${deadCloseAttempts}/5)...`);
+                 logger.log(`­čĺÇ Hero Dead. Attempting to close battle window (${deadCloseAttempts}/5)...`);
                  
                  if (deadCloseAttempts >= 5) {
-                      logger.warn('💀 Failed to close battle window after multiple attempts. Force Reloading...');
+                      logger.warn('­čĺÇ Failed to close battle window after multiple attempts. Force Reloading...');
                       try { await page.reload({ waitUntil: 'domcontentloaded' }); } 
                       catch (e) {}
                       deadCloseAttempts = 0;
@@ -189,7 +178,7 @@ async function main() {
 
             if (state.battle) {
                  if (state.battleFinished) {
-                      logger.log('⚔️ Battle finished. Closing...');
+                      logger.log('ÔÜö´ŞĆ Battle finished. Closing...');
                       await actions.closeBattle(page);
                       await sleep(500);
                       continue;
@@ -211,9 +200,9 @@ async function main() {
                  const reloadThreshold = Math.floor(Math.random() * 6) + 10;
                  if (waitSeconds > reloadThreshold + 2) {
                      const timeToWait = waitSeconds - reloadThreshold;
-                     logger.warn(`💀 Unconscious. Respawn in ${waitSeconds}s. Waiting ${timeToWait}s to Auto-Reload...`);
+                     logger.warn(`­čĺÇ Unconscious. Respawn in ${waitSeconds}s. Waiting ${timeToWait}s to Auto-Reload...`);
                      await sleep(timeToWait * 1000);
-                     logger.log(`🔄 Auto-Reloading page (Respawn in ~${reloadThreshold}s)...`);
+                     logger.log(`­čöä Auto-Reloading page (Respawn in ~${reloadThreshold}s)...`);
                      try {
                          await page.reload({ waitUntil: 'domcontentloaded' });
                      } catch (e) {
@@ -222,7 +211,7 @@ async function main() {
                      await sleep(5000); 
                      continue; 
                  } else {
-                     logger.warn(`💀 Unconscious. Respawn in ${waitSeconds}s. Waiting...`);
+                     logger.warn(`­čĺÇ Unconscious. Respawn in ${waitSeconds}s. Waiting...`);
                      const sleepTime = Math.min(waitSeconds * 1000 + 1000, 5000); 
                      await sleep(sleepTime); 
                      continue;
@@ -237,18 +226,7 @@ async function main() {
             if (mode === 'transport') {
                 if (transportTarget) {
                     mapsList = [transportTarget]; // Force single map
-                    logger.log(`🚚 TRANSPORT MODE: Destination -> ${transportTarget}`);
-                }
-            } else if (mode === 'monster') {
-                if (uiState.monsterTarget) {
-                    mapsList = [uiState.monsterTarget.map];
-                    
-                    // Throttle logging: Only log if map changed or different monster
-                    const logKey = `${uiState.monsterTarget.name}_${state.currentMapName}`;
-                    if (monsterModeLoggedMap !== logKey) {
-                        logger.log(`👹 MONSTER MODE: Hunting [${uiState.monsterTarget.name}] at ${uiState.monsterTarget.map} (${uiState.monsterTarget.x},${uiState.monsterTarget.y})`);
-                        monsterModeLoggedMap = logKey;
-                    }
+                    logger.log(`­čÜÜ TRANSPORT MODE: Destination -> ${transportTarget}`);
                 }
             }
 
@@ -289,7 +267,7 @@ async function main() {
                      arrivalTarget = { ...zakonnik, type: 'npc' };
                      const dist = Math.hypot(zakonnik.x - state.hero.x, zakonnik.y - state.hero.y);
                      if (dist > 2.0) {
-                         logger.log(`🏁 Destination Reached! Moving to ${zakonnik.nick}...`);
+                         logger.log(`­čĆü Destination Reached! Moving to ${zakonnik.nick}...`);
                          await actions.move(page, state, arrivalTarget);
                          await sleep(500);
                          continue;
@@ -301,167 +279,30 @@ async function main() {
                      const distToCenter = Math.hypot(centerX - state.hero.x, centerY - state.hero.y);
                      
                      if (distToCenter > 4.0) {
-                         logger.log(`🏁 Destination Reached! Moving to Map Center [${centerX},${centerY}]...`);
+                         logger.log(`­čĆü Destination Reached! Moving to Map Center [${centerX},${centerY}]...`);
                          await actions.move(page, state, { x: centerX, y: centerY, nick: 'Map Center' });
                          await sleep(500);
                          continue;
                      }
                 }
 
-                logger.success(`✅ TRANSPORT COMPLETE: Arrived at ${transportTarget} (Near ${zakonnik ? 'Zakonnik' : 'Center'}). Idling...`);
+                logger.success(`Ôťů TRANSPORT COMPLETE: Arrived at ${transportTarget} (Near ${zakonnik ? 'Zakonnik' : 'Center'}). Idling...`);
                 // Prevent infinite log spam
                 await sleep(5000);
                 continue;
             }
 
-            // E2 MODE LOGIC
-            // Stop if reached destination in monster mode
-            if (mode === 'monster' && !isTraversing && uiState.monsterTarget) {
-                 const mTarget = uiState.monsterTarget;
-                 const distToTarget = Math.hypot(mTarget.x - state.hero.x, mTarget.y - state.hero.y);
-
-                 // 1. Check if we have "arrived" (close enough)
-                 // Or we are already on the map, so we just scan for the mob
-                 
-                 // 2. SCAN FOR MOB - USE allMobs (bypass validMobs filter)
-                 // We look for any mob that matches the selected monster's name
-                 let targetMob = null;
-                 if (state.allMobs) {
-                     // Fuzzy match nick or exact match
-                     targetMob = state.allMobs.find(m => m.nick.includes(mTarget.name) || mTarget.name.includes(m.nick));
-                 }
-                 
-                 if (targetMob) {
-                     // --- MOB FOUND! ---
-                     // Log only if it's a new mob ID or enough time passed (optional, but ID check is better for unique mobs)
-                     if (lastEngagedMobId !== targetMob.id) {
-                         logger.log(`👹 E2 DETECTED: [${targetMob.nick}] at (${targetMob.x}, ${targetMob.y})! Engaging...`);
-                         lastEngagedMobId = targetMob.id;
-                     }
-                     
-                     const distToMob = Math.hypot(targetMob.x - state.hero.x, targetMob.y - state.hero.y);
-                     
-                     if (distToMob <= 1.5) {
-                         // ATTACK
-                         await sleep(Math.floor(Math.random() * 150) + 50); // 50-200ms human delay
-                         const result = await actions.attack(page, targetMob, lastAttackTime);
-                         lastAttackTime = result;
-                         lastActionTime = Date.now(); // Reset AFK timer
-                         await sleep(Math.floor(Math.random() * 400) + 800); // 800-1200ms throttle
-                         continue;
-                     } else {
-                         // APPROACH
-                         await actions.move(page, state, { x: targetMob.x, y: targetMob.y, nick: targetMob.nick });
-                         await sleep(400); // Shorter sleep for responsiveness
-                         continue;
-                     }
-                 } else {
-                     // --- MOB NOT FOUND ---
-                     
-                     // Check if Battle just finished OR if we were engaging a mob that is now gone using allMobs check
-                     // We check if lastEngagedMobId was set, and it's NOT in the current allMobs list
-                     let mobDisappeared = false;
-                     if (lastEngagedMobId) {
-                         // Check if this specific ID still exists in allMobs
-                         const stillExists = state.allMobs && state.allMobs.some(m => m.id === lastEngagedMobId);
-                         if (!stillExists) {
-                             mobDisappeared = true;
-                             logger.log(`👻 Target [${lastEngagedMobId}] disappeared! Assuming defeated/stolen.`);
-                             lastEngagedMobId = null; // Clear it so we don't trigger this loop again
-                         }
-                     }
-
-                     if (state.battleFinished || mobDisappeared) {
-                         logger.log(`⚔️ E2 DEFEATED/GONE! Moving randomly...`);
-                         await actions.closeBattle(page);
-                         // Trigger Random Move
-                         const rx = Math.floor(state.hero.x + (Math.random() * 6 - 3));
-                         const ry = Math.floor(state.hero.y + (Math.random() * 6 - 3));
-                         
-                         if (movement.isReachable(state, rx, ry)) {
-                               await actions.move(page, state, { x: rx, y: ry, nick: 'Random (Post-Fight)' });
-                         }
-                         
-                         // Fix: Heal after fight!
-                         if (config.DEFAULT_CONFIG.autoHeal) await actions.autoHeal(page);
-                         
-                         await sleep(2000);
-                         continue;
-                     }
-
-                     // If we are far from spawn point, return to it
-                     if (distToTarget > 3.0) {
-                         logger.log(`👹 Returning to spawn point [${mTarget.name}] (${mTarget.x},${mTarget.y})...`);
-                         await actions.move(page, state, { x: mTarget.x, y: mTarget.y, nick: 'Spawn Point' });
-                         await sleep(1000);
-                         continue;
-                     } 
-                     
-                     // If we are close to spawn point and mob is not here -> IDLE / Random Wiggle?
-                     // If we are close to spawn point and mob is not here -> IDLE / Check Anti-AFK
-                     
-                     // Anti-AFK Logic
-                     if (Date.now() - lastActionTime > afkThreshold) {
-                         // Find a valid random spot nearby (Retry up to 5 times)
-                         let validMove = null;
-                         const mw = state.map.w;
-                         const col = state.map.col;
-                         
-                         for (let i = 0; i < 5; i++) {
-                             const rx = Math.floor(state.hero.x + (Math.random() * 6 - 3));
-                             const ry = Math.floor(state.hero.y + (Math.random() * 6 - 3));
-                             
-                             // Bounds check
-                             if (rx < 0 || rx >= mw || ry < 0 || ry >= state.map.h) continue;
-                             
-                             // Collision check (if map data available)
-                             let isBlocked = false;
-                             if (col) {
-                                 const idx = ry * mw + rx;
-                                 if (col[idx] === '1') isBlocked = true;
-                             }
-                             
-                             // Valid if not blocked AND not current pos
-                             if (!isBlocked && (rx !== Math.round(state.hero.x) || ry !== Math.round(state.hero.y))) {
-                                 validMove = { x: rx, y: ry };
-                                 break;
-                             }
-                         }
-
-                         if (validMove) {
-                             logger.log(`💤 Anti-AFK: Idling for ${(afkThreshold/60000).toFixed(1)}m. Moving to (${validMove.x}, ${validMove.y})...`);
-                             // Use 'move' (A*) just to be safe, but we pre-checked collision
-                             await actions.move(page, state, { x: validMove.x, y: validMove.y, nick: 'Anti-AFK' });
-                         } else {
-                             logger.warn(`💤 Anti-AFK: Could not find valid nearby spot. Skipping move.`);
-                         }
-                         
-                         lastActionTime = Date.now();
-                         afkThreshold = (Math.floor(Math.random() * 4) + 2) * 60 * 1000; // Reset 2-5m
-                         continue;
-                     }
-
-                     // Throttle "Waiting" log to every 10s
-                     if (Date.now() - lastWaitingLogTime > 10000) {
-                          logger.log(`👀 Waiting for E2 [${mTarget.name}]...`);
-                          lastWaitingLogTime = Date.now();
-                     }
-                     await sleep(1000);
-                     continue;
-                 }
-            }
-
             // --- EMERGENCY FULL BAG STRATEGY ---
             if (mode === 'exp' && state.inventory && state.inventory.isFull && state.hero.lvl >= 70) {
-                 const inKwieciste = state.currentMapName === 'Kwieciste Przejście';
+                 const inKwieciste = state.currentMapName === 'Kwieciste Przej┼Ťcie';
                  const inDomTunii = state.currentMapName === 'Dom Tunii';
                  
                  // CASE 1: Need to Teleport (Not there yet)
                  if (state.inventory.teleportScrollId && !inKwieciste && !inDomTunii) {
-                     logger.warn("🎒 BAG FULL & LVL 70+ & SCROLL DETECTED! Initiating Emergency Sell Procedure...");
+                     logger.warn("­čÄĺ BAG FULL & LVL 70+ & SCROLL DETECTED! Initiating Emergency Sell Procedure...");
                      
                      // 1. Use Teleport
-                     logger.log("📜 Using Teleport Scroll to Kwieciste Przejście...");
+                     logger.log("­čôť Using Teleport Scroll to Kwieciste Przej┼Ťcie...");
                      await actions.useItem(page, state.inventory.teleportScrollId);
                      await sleep(4000); 
                      
@@ -469,7 +310,7 @@ async function main() {
                      let retries = 0;
                      while(retries < 10) {
                          const s = await gameState.getGameState(page, currentConfig);
-                         if (s && s.currentMapName === 'Kwieciste Przejście') break;
+                         if (s && s.currentMapName === 'Kwieciste Przej┼Ťcie') break;
                          await sleep(1000);
                          retries++;
                      }
@@ -477,8 +318,8 @@ async function main() {
                  
                  // CASE 2: Already in Kwieciste (Just Arrived OR Loop Recovery)
                  const currentState = await gameState.getGameState(page, currentConfig);
-                 if (currentState.currentMapName === 'Kwieciste Przejście') {
-                      logger.log("🚶 Navigating to 'Dom Tunii'...");
+                 if (currentState.currentMapName === 'Kwieciste Przej┼Ťcie') {
+                      logger.log("­čÜÂ Navigating to 'Dom Tunii'...");
                       
                       // Find Gateway
                       let gateway = currentState.gateways.find(g => g.name.toLowerCase().includes('dom tunii'));
@@ -496,14 +337,14 @@ async function main() {
                           // Wait for transition
                           await sleep(3000);
                       } else {
-                          logger.error("❌ Gateway 'Dom Tunii' not found!");
+                          logger.error("ÔŁî Gateway 'Dom Tunii' not found!");
                       }
                  }
                  
                  // CASE 3: In Dom Tunii (Process Trade)
                  const domState = await gameState.getGameState(page, currentConfig); // Fresh state
                  if (domState.currentMapName === 'Dom Tunii') {
-                      logger.success("✅ Entered Dom Tunii.");
+                      logger.success("Ôťů Entered Dom Tunii.");
                       
                       const tunia = await page.evaluate(() => {
                            for (let id in g.npc) { // Type 1 check handled by raw iteration
@@ -513,7 +354,7 @@ async function main() {
                       });
                       
                       if (tunia) {
-                           logger.log("💰 Found Tunia Frupotius. Initiating Trade...");
+                           logger.log("­čĺ░ Found Tunia Frupotius. Initiating Trade...");
                            await actions.move(page, domState, { x: tunia.x, y: tunia.y });
                            await sleep(1000);
                            
@@ -523,10 +364,10 @@ async function main() {
                            const stateAfterSell = await gameState.getGameState(page, currentConfig);
                            await shopping.buyPotions(page, stateAfterSell);
                            
-                           logger.success("✅ Emergency Sell/Resupply Logic Complete. Returning to Exp...");
+                           logger.success("Ôťů Emergency Sell/Resupply Logic Complete. Returning to Exp...");
                            // Logic falls through to next loop iteration which will trigger 'Traversing' back to exp
                       } else {
-                          logger.error("❌ Tunia Frupotius not found in Dom Tunii!");
+                          logger.error("ÔŁî Tunia Frupotius not found in Dom Tunii!");
                       }
                  }
             }
@@ -574,7 +415,7 @@ async function main() {
                              
                             // If close to shopkeeper, SELL!
                             if (dist < 2.0) {
-                                logger.log(`💰 Reach Shopkeeper: ${shopkeeper.name}. Selling junk...`);
+                                logger.log(`­čĺ░ Reach Shopkeeper: ${shopkeeper.name}. Selling junk...`);
                                 await shopping.performSell(page);
                                 soldItems = true; 
                                 lastShopVisit = Date.now(); // Update timer
@@ -582,12 +423,12 @@ async function main() {
                                 continue; 
                             } else {
                                 // Go to Shopkeeper
-                                logger.log(`💰 City Visit -> Going to Shopkeeper: ${shopkeeper.name} (Sell)...`);
+                                logger.log(`­čĺ░ City Visit -> Going to Shopkeeper: ${shopkeeper.name} (Sell)...`);
                                 resupplyTarget = { 
                                     x: shopkeeper.x, 
                                     y: shopkeeper.y, 
                                     type: 'npc', 
-                                    nick: `💰 ${shopkeeper.name}`, 
+                                    nick: `­čĺ░ ${shopkeeper.name}`, 
                                     id: `npc_${shopkeeper.id}` 
                                 };
                             }
@@ -612,7 +453,7 @@ async function main() {
                              const dist = Math.hypot(seller.x - state.hero.x, seller.y - state.hero.y);
                              
                              if (dist < 2.0) {
-                                 logger.log(`🏥 Reach Healer: ${seller.name}. Starting interaction...`);
+                                 logger.log(`­čĆą Reach Healer: ${seller.name}. Starting interaction...`);
                                  
                                  // 1. Heal
                                  await shopping.performHeal(page);
@@ -621,7 +462,7 @@ async function main() {
                                  // 2. Buy Potions
                                  await shopping.buyPotions(page, state);
                                  
-                                 logger.log("✅ Resupply cycle finished. Resuming hunt...");
+                                 logger.log("Ôťů Resupply cycle finished. Resuming hunt...");
                                  resupplyTarget = null;
                                  soldItems = true; // Assume we are 'good' for now
                                  lastShopVisit = Date.now(); // Update timer
@@ -630,12 +471,12 @@ async function main() {
                                  continue; 
                              }
                              else {
-                                 logger.warn(`🏥 Needed (HP: ${(hpPercent*100).toFixed(0)}%, Pots: ${state.potionsCount}/${maxCapacity})! Going to ${seller.name}...`);
+                                 logger.warn(`­čĆą Needed (HP: ${(hpPercent*100).toFixed(0)}%, Pots: ${state.potionsCount}/${maxCapacity})! Going to ${seller.name}...`);
                                  resupplyTarget = { 
                                      x: seller.x, 
                                      y: seller.y, 
                                      type: 'npc', 
-                                     nick: `🏥 ${seller.name}`, 
+                                     nick: `­čĆą ${seller.name}`, 
                                      id: `npc_${seller.id}` 
                                  };
                              }
@@ -643,15 +484,15 @@ async function main() {
                      }
                 } else if (isCityMap && !shouldResupply && isTraversing) {
                      // We are in city, navigating, and Cooldown is active -> IGNORE SHOP
-                     // logger.log(`⏳ Shop Cooldown Active (${((RESUPPLY_COOLDOWN - timeSinceShop)/1000).toFixed(0)}s). Ignoring shop.`);
+                     // logger.log(`ÔĆ│ Shop Cooldown Active (${((RESUPPLY_COOLDOWN - timeSinceShop)/1000).toFixed(0)}s). Ignoring shop.`);
                 }
 
             // 5. Map Rotation Logic & PvP Persistence
             // Handle Map Change
             if (!cachedMapId || cachedMapId !== state.map.id) {
-                logger.info(`🗺️ -- New Map: ${state.map.id} --`);
+                logger.info(`­čŚ║´ŞĆ -- New Map: ${state.map.id} --`);
                 if (skippedMobs.size > 0) {
-                    logger.log(`🗑️ Clearing blacklist (${skippedMobs.size} mobs) - map change!`);
+                    logger.log(`­čŚĹ´ŞĆ Clearing blacklist (${skippedMobs.size} mobs) - map change!`);
                     skippedMobs.clear();
                 }
                 
@@ -667,7 +508,7 @@ async function main() {
 
                      if (currentMapName) {
                          lastMapName = currentMapName;
-                         logger.log(`🗺️ [HISTORY] Last: '${lastMapName}' | Curr: '${state.currentMapName}'`);
+                         logger.log(`­čŚ║´ŞĆ [HISTORY] Last: '${lastMapName}' | Curr: '${state.currentMapName}'`);
                      }
                      currentMapName = state.currentMapName;
                      // Track visit time
@@ -686,65 +527,10 @@ async function main() {
                 
                 // Set cooldown - wait 4s before making gateway decisions
                 mapChangedAt = Date.now();
-                logger.log('⏳ Waiting 4s for map data to load...');
+                logger.log('ÔĆ│ Waiting 4s for map data to load...');
             }
 
-            // Traversal Logic: Calculate specific path to target map
-            if (isTraversing && !resupplyTarget) {
-                 // Try to find a path using graph
-                 const pathData = mapNav.findPath(state.currentMapName, mapsList);
-                 
-                 if (pathData && pathData.nextMap) {
-                     // Find gateway to nextMap
-                     // We need to match nextMap name to gateways. 
-                     // normalizeName handles HTML tags, etc. match loosely
-                     
-                     // 1. Exact/Partial Match in Gateways
-                     let gateway = state.gateways.find(g => 
-                         g.name.toLowerCase().includes(pathData.nextMap.toLowerCase()) || 
-                         pathData.nextMap.toLowerCase().includes(g.name.toLowerCase())
-                     );
-                     
-                     if (gateway) {
-                         // logger.log(`🧭 Traversing: ${state.currentMapName} -> ${pathData.nextMap} (Target: ${mapsList[0]})`);
-                         // Only log if we are newly targeting this gateway?
-                         // Let's just set it as resupplyTarget-like override
-                         
-                         // BUT: We want it to be finalTarget later.
-                         // We can set it to a temporary var, we'll assign it to finalTarget if resupplyTarget is null.
-                         
-                         // We'll set a special flag or just use 'finalTarget' assignment directly?
-                         // If we assign strictly here, we must ensure resupply check didn't already happen.
-                         // But resupplyTarget is NULL here (checked in IF).
-                         
-                         // Ensure we don't spam logs
-                         // logger.log(`🚶 Next Step: Gateway to [${gateway.name}]`);
-                         
-                         // We should treat this gateway as the PRIORITY target unless escape/locked
-                         // Actually, let's treat it as "Nav Target"
-                         
-                         // NOTE: We should check if we are already close to it?
-                         const dist = Math.hypot(gateway.x - state.hero.x, gateway.y - state.hero.y);
-                         if (dist < 1.0) {
-                             // We are ON the gateway. Just wait or move slightly?
-                             // Usually game engine handles transfer.
-                             // But sometimes we need to 'step' on it.
-                         }
-                         
-                         // Override 'state.target' (auto-target) with this gateway
-                         // But we construct 'finalTarget' below.
-                         
-                         // Let's add a `traversalTarget`
-                         state.traversalTarget = gateway;
-                     } else {
-                         logger.warn(`⚠️ Traversing: Need to go to [${pathData.nextMap}], but no matching gateway found!`);
-                     }
-                 } else {
-                     // No graph path found?
-                     // Fallback to simple logic (handled later? or just sit?)
-                     // logger.warn(`⚠️ No path found from ${state.currentMapName} to ${mapsList[0]}`);
-                 }
-            }
+            // Traversal logic moved up to 4.2
 
             
             // Skip gateway logic if within 4 second cooldown after map change
@@ -756,7 +542,7 @@ async function main() {
                 continue; // Wait for mobs to load
             }
             
-            let finalTarget = resupplyTarget || state.traversalTarget || state.target;
+            let finalTarget = resupplyTarget || state.target;
 
             // --- 0. Persistence Checks (Escape / Locked) ---
              if (escapeTarget) {
@@ -765,11 +551,11 @@ async function main() {
                  
                  // Check if escape timer expired OR we reached the gateway
                  if ((escapeTarget.escapeUntil && now > escapeTarget.escapeUntil) || dist < 1.5) {
-                     logger.log('✅ Escape complete.');
+                     logger.log('Ôťů Escape complete.');
                      escapeTarget = null;
                  } else {
                      // Keep escaping - IGNORE all mobs!
-                     logger.log(`🏃 ESCAPING (${((escapeTarget.escapeUntil - now)/1000).toFixed(1)}s left): Moving to gateway (${dist.toFixed(1)}m)`);
+                     logger.log(`­čĆâ ESCAPING (${((escapeTarget.escapeUntil - now)/1000).toFixed(1)}s left): Moving to gateway (${dist.toFixed(1)}m)`);
                      finalTarget = escapeTarget;
                  }
             }
@@ -784,7 +570,7 @@ async function main() {
                      const closestMob = state.validMobs[0];
                      if (closestMob.dist <= 1.5) {
                           if (!finalTarget || finalTarget.id !== closestMob.id) {
-                               logger.log(`⚔️ OPTN: Engaging neighbour [${closestMob.nick}] (${closestMob.dist.toFixed(1)}m)!`);
+                               logger.log(`ÔÜö´ŞĆ OPTN: Engaging neighbour [${closestMob.nick}] (${closestMob.dist.toFixed(1)}m)!`);
                                finalTarget = closestMob;
                                lockedTarget = null;
                           }
@@ -797,13 +583,13 @@ async function main() {
                     if (pathOptimalTarget) {
                         // Efficiency Check
                         if (state.validMobs.length <= 8 && pathOptimalTarget.pathLength > 60) {
-                            logger.log(`📉 Low mob count & Far target. Skipping map.`);
+                            logger.log(`­čôë Low mob count & Far target. Skipping map.`);
                             finalTarget = null; 
                         } else {
                             finalTarget = pathOptimalTarget;
                         }
                     } else {
-                        logger.warn(`🚫 All nearby mobs are unreachable! Initiating map change...`);
+                        logger.warn(`­čÜź All nearby mobs are unreachable! Initiating map change...`);
                         finalTarget = null;
                     }
                 }
@@ -821,7 +607,7 @@ async function main() {
                     noAttackCounter++;
                     
                     if (targetSwitchCount > 3) {
-                        logger.warn(`🔒 TARGET LOCK: Oscillation detected! Locking to [${finalTarget.nick}]`);
+                        logger.warn(`­čöĺ TARGET LOCK: Oscillation detected! Locking to [${finalTarget.nick}]`);
                         lockedTarget = { ...finalTarget, lockedAt: Date.now() };
                         targetSwitchCount = 0;
                         noAttackCounter = 0;
@@ -839,7 +625,7 @@ async function main() {
                     }
 
                     if (dist < 1.5 || lockAge > 8000) {
-                        logger.log('🔓 Target lock released.');
+                        logger.log('­čöô Target lock released.');
                         lockedTarget = null;
                         noAttackCounter = 0;
                     } else {
@@ -868,7 +654,7 @@ async function main() {
             } else {
                 // If TRAVERSING - clear any Mob target aggressively
                 if (finalTarget && finalTarget.type === 'mob') {
-                    // logger.log('🚫 Traversing Mode: Ignoring mob target.');
+                    // logger.log('­čÜź Traversing Mode: Ignoring mob target.');
                     finalTarget = null;
                 }
             }
@@ -882,94 +668,358 @@ async function main() {
             if (finalTarget && positionHistory.length >= 20 && !escapeTarget && !isFighting) {
                 const uniquePos = new Set(positionHistory.map(p => `${p.x},${p.y}`));
                 
-                // If we have been moving around but only visited < 3 unique tiles in last 20 steps -> STUCK
-                if (uniquePos.size < 3) {
-                    logger.warn('😵 STUCK detected (looping on same tiles). Attempting random escape step...');
-                    
-                    const rx = state.hero.x + (Math.floor(Math.random() * 3) - 1);
-                    const ry = state.hero.y + (Math.floor(Math.random() * 3) - 1);
-                    
-                    await actions.move(page, state, { x: rx, y: ry, nick: 'Unstuck' });
-                    positionHistory = [];
-                    lockedTarget = null;
-                    await sleep(1000);
-                    continue;
-                }
-            }
-
-            // --- EXECUTE MOVEMENT / ACTION ---
-            if (finalTarget) {
-                // If mob is close -> Attack
-                if (finalTarget.dist <= 1.5 && finalTarget.type === 'mob') {
-                     // Check for repeated attacks on same target without result
-                     if (finalTarget.id === lastAttackTargetId) {
-                         sameTargetAttackCount++;
-                     } else {
-                         sameTargetAttackCount = 0;
-                         lastAttackTargetId = finalTarget.id;
-                     }
-
-                     if (sameTargetAttackCount > 10) {
-                         logger.warn(`🛑 Attacked [${finalTarget.nick}] 10 times with no effect. Blacklisting & Skipping...`);
+                if (uniquePos.size < 12) { 
+                     // Only blacklist mobs if we were actually hunting
+                     if (!isTraversing && finalTarget && finalTarget.type === 'mob' && finalTarget.id) {
+                         logger.warn(`­čÜź BLACKLISTING mob [${finalTarget.nick}] (ID: ${finalTarget.id}) - unreachable!`);
                          skippedMobs.set(finalTarget.id, Date.now());
-                         sameTargetAttackCount = 0;
-                         lockedTarget = null;
-                         continue;
                      }
                      
-                     // ATTACK!
-                     await sleep(Math.floor(Math.random() * 150) + 50); // 50-200ms human delay
-                     const res = await actions.attack(page, finalTarget, lastAttackTime);
-                     lastAttackTime = res;
-                     lastActionTime = Date.now(); // Reset AFK timer
-                     await sleep(Math.floor(Math.random() * 400) + 800); // 800-1200ms throttle
-                } 
-                else {
-                    // Start of Move
-                    await actions.move(page, state, finalTarget);
-                    // End of Move logic handled by sleep below
-                }
-            } else {
-                // No Target
-                
-                // 1. Gateway Scan (if nothing else to do)
-                // If no target, and we are not traversing, maybe we should switch map?
-                // Logic: If (validMobs == 0 and not traversing) -> Find Gateway
-                
-                if (!isTraversing && state.validMobs.length === 0 && !resupplyTarget) {
-                    const nextMap = mapNav.getNextMap(state.currentMapName, mapHistory);
-                    
-                    if (nextMap && nextMap.gateway) {
-                         // Check if we just came from there to avoid ping-pong
-                         // (Handled by mapHistory logic mostly, but explicit check helps)
-                         // if (nextMap.name !== lastMapName) ...
-                         
-                         logger.log(`🚪 No mobs. Moving to Gateway -> ${nextMap.name}...`);
-                         await actions.move(page, state, nextMap.gateway);
-                         
-                         escapeTarget = { ...nextMap.gateway, escapeUntil: Date.now() + 10000 };
-                         
-                         await sleep(500);
-                    } else {
-                         // No explicit path found or single map config
-                         // logger.info('💤 Idle. No mobs and no map path.');
-                    }
-                }
-            }
-            
-            // Loop delay - REMOVED to match original smooth movement logic
-            // await sleep(150);
+                     const escapeDuration = 10000 + Math.floor(Math.random() * 5000); 
+                     
+                     // NEW: Strict Loop Detection (Auto-Reload for tight loops)
+                     if (uniquePos.size <= 4) {
+                         logger.warn(`ÔÜá´ŞĆ EXTREME LOOP DETECTED (${uniquePos.size} unique tiles). Force Reloading to break glitch...`);
+                         try { await page.reload({ waitUntil: 'domcontentloaded' }); } catch (e) {}
+                         positionHistory = [];
+                         await sleep(5000);
+                         continue;
+                     }
 
-        } catch (error) {
-            logger.error('❌ Main loop error:', error);
-            // logger.error(error.stack);
-            
-            if (error.message && error.message.includes('Target closed')) {
-                logger.error('❌ Browser closed. Exiting...');
-                process.exit(1);
+                     logger.warn(`ÔÜá´ŞĆ LOOP DETECTED (${uniquePos.size} tiles)! Forcing ESCAPE...`);
+                     
+                     const gwWithDist = state.gateways.map(gw => ({
+                         ...gw,
+                         dist: Math.hypot(gw.x - state.hero.x, gw.y - state.hero.y)
+                     }));
+                     
+                     const farGateways = gwWithDist.filter(g => g.dist > 25);
+                     let chosenGw = farGateways.length > 0 
+                        ? farGateways.sort((a,b) => b.dist - a.dist)[0]
+                        : gwWithDist.sort((a,b) => a.dist - b.dist)[0];
+                     
+                     if (chosenGw) {
+                         escapeTarget = { 
+                             ...chosenGw, 
+                             type: 'gateway', isGateway: true, nick: 'ESCAPE LOOP',
+                             escapeUntil: Date.now() + escapeDuration 
+                         };
+                         finalTarget = escapeTarget;
+                         positionHistory = [];
+                     }
+                }
+            }
+
+            // =========================================================================
+            // NAVIGATION / GATEWAY LOGIC
+            // =========================================================================
+            if (!finalTarget) {
+                 if (!isTraversing) {
+                     // IDLE in Hunting Map
+                     // logger.log(`­čĺĄ IDLE | Mobs: ${state.debugInfo.allMobsCount}`);
+                 } else {
+                     // TRAVERSING MODE
+                 }
+                 
+                 // --- GLOBAL NAVIGATION (If Traversing) ---
+                 if (isTraversing) {
+                       const route = mapNav.findPath(currentMapName, mapsList);
+                       
+                       // --- OVERRIDE LOGIC START ---
+                       if (route) {
+                           for (const override of TRAVEL_OVERRIDES) {
+                               // 1. Are we in the matching Start Map?
+                               if (currentMapName === override.fromMap) {
+                                   
+                                   // 2. Is our DESTINATION the target? (Check if any map in config matches override target)
+                                   // Fuzzy match: e.g. "Wioska Gnolli" in ["Wioska Gnolli", "Jaskinia..."]
+                                   const isDestination = mapsList.some(m => m.includes(override.targetMap));
+                                   
+                                   if (isDestination) {
+                                        // 3. Condition Check (Last Map)
+                                        if (override.requiredLastMap) {
+                                            if (lastMapName !== override.requiredLastMap) {
+                                                logger.warn(`­čöÇ OVERRIDE: [${currentMapName}] -> Redirecting to '${override.redirect}' (Avoid blocked path)`);
+                                                route.nextMap = override.redirect;
+                                                break; 
+                                            }
+                                        } else {
+                                            // Unconditional Override
+                                           logger.log(`­čöÇ OVERRIDE: [${currentMapName}] -> Forcing detour to '${override.redirect}'`);
+                                           route.nextMap = override.redirect;
+                                           break;
+                                        }
+                                   }
+                               }
+                           }
+                       }
+                       // --- OVERRIDE LOGIC END ---
+
+                       if (route && route.nextMap) {
+                           // Find ALL gateways matching the target name
+                           // Prioritize exact matches, but allow fuzzy fallback
+                           let candidates = state.gateways.filter(g => g.name === route.nextMap);
+                           
+                           if (candidates.length === 0) {
+                               candidates = state.gateways.filter(g => 
+                                   g.name.toLowerCase().includes(route.nextMap.toLowerCase()) || 
+                                   route.nextMap.toLowerCase().includes(g.name.toLowerCase())
+                               );
+                           }
+                           
+                           // Sort candidates by distance to Hero
+                           candidates.sort((a, b) => {
+                               const distA = Math.hypot(a.x - state.hero.x, a.y - state.hero.y);
+                               const distB = Math.hypot(b.x - state.hero.x, b.y - state.hero.y);
+                               return distA - distB;
+                           });
+
+                           let gw = null;
+                           // Pick the first one that is strictly reachable
+                           for (const candidate of candidates) {
+                               if (movement.isReachable(state, candidate.x, candidate.y)) {
+                                   gw = candidate;
+                                   break;
+                               }
+                           }
+                           
+                           // Fallback: If none are reachable, pick the closest one anyway
+                           if (!gw && candidates.length > 0) {
+                               gw = candidates[0];
+                               logger.warn(`ÔÜá´ŞĆ No reachable gateway found for ${route.nextMap}. Defaulting to closest: ${gw.name} (${gw.x},${gw.y})`);
+                           }
+
+                           if (gw) {
+                                // Ensure we update finalTarget
+                               const fullRoute = route.fullPath ? route.fullPath.join(' -> ') : 'unknown';
+                               
+                               // Log only if changed to avoid spam
+                               if (!finalTarget || finalTarget.x !== gw.x || finalTarget.y !== gw.y) {
+                                    logger.log(`­čîŹ Global Travel: [${fullRoute}] (Dist: ${route.distance})`);
+                                    logger.log(`­čÜ¬ Gateway Selected: [${gw.name}] at [${gw.x},${gw.y}]`);
+                               }
+                               finalTarget = { ...gw, type: 'gateway', isGateway: true, nick: `>> ${gw.name}` };
+                           } else {
+                               logger.warn(`ÔÜá´ŞĆ Path found to ${route.nextMap}, but gateway is unreachable!`);
+                           }
+                           } else {
+                               if (Math.random() < 0.05) logger.warn(`ÔÜá´ŞĆ Navigation: Should go to '${route.nextMap}', but gateway not found.`);
+                           }
+                   }
+                  
+                  // --- LOCAL GATEWAY LOGIC (Only if NO target yet) ---
+                  if (!finalTarget) {
+                      
+                      // Find Gateway Logic (Equal Treatment / Nearest Neighbor)
+                      let gw = null;
+                      
+                      // DEBUG LOGS (Temporary)
+                      if (state.gateways.length > 0) {
+                          logger.log(`­čöŹ [DEBUG] Current: '${currentMapName}' | Last: '${lastMapName}'`);
+                          logger.log(`­čöŹ [DEBUG] Gateways found: ${state.gateways.map(g => g.name).join(', ')}`);
+                    }
+
+                  // 1. Identify valid gateways (Preferred: In Config AND Not Last Map)
+                      const validGateways = state.gateways.filter(g => {
+                           if (!g.name) return false;
+                           const gName = g.name.toLowerCase();
+
+                           // Is it in our list?
+                           const targetMap = mapsList.find(m => {
+                               const mClean = m.toLowerCase().trim();
+                               if (!mClean) return false;
+                               return gName.includes(mClean); 
+                           });
+                           
+                           if (!targetMap) return false;
+
+                           // Is it the one we just came from?
+                           if (lastMapName && gName.trim() === lastMapName.toLowerCase().trim()) {
+                               return false;
+                           }
+                           return true;
+                      });
+
+                       if (validGateways.length > 0) {
+                           // 2. Prioritize: Unvisited > Oldest Visit > Nearest
+                           // AND MUST BE REACHABLE
+                           
+                           const scoredGateways = validGateways.map(g => {
+                               const gName = g.name;
+                               let lastVisit = 0;
+                               
+                               // Try to find if we visited this map
+                               for (const [vMap, time] of mapHistory.entries()) {
+                                   if (gName.toLowerCase().includes(vMap.toLowerCase().trim()) || 
+                                       vMap.toLowerCase().includes(gName.toLowerCase().trim())) {
+                                       lastVisit = time;
+                                       break;
+                                   }
+                               }
+                               
+                               return {
+                                   ...g,
+                                   lastVisit: lastVisit, // 0 = never visited (Priority 1)
+                                   dist: Math.hypot(g.x - state.hero.x, g.y - state.hero.y)
+                               };
+                           });
+                           
+                           // Sort:
+                           // 1. Has it been visited? (0 is best)
+                           // 2. If both visited, Oldest timestamp is best (Ascending)
+                           // 3. Distance (Ascending)
+                           const sorted = scoredGateways.sort((a,b) => {
+                               if (a.lastVisit !== b.lastVisit) {
+                                   return a.lastVisit - b.lastVisit; // 0 comes first, then older timestamps (smaller numbers)
+                               }
+                               return a.dist - b.dist; // Nearest fallback
+                           });
+
+                           for (const candidate of sorted) {
+                               if (movement.isReachable(state, candidate.x, candidate.y)) {
+                                   gw = candidate;
+                                   const status = candidate.lastVisit === 0 ? "­čćĽ Unvisited" : `­čĽĺ ${(Date.now() - candidate.lastVisit)/1000}s ago`;
+                                   logger.log(`   Ôťů Best Gateway found: ${gw.name} (${status}, ${candidate.dist.toFixed(1)}m)`);
+                                   break;
+                               } else {
+                                   logger.warn(`   ÔÜá´ŞĆ Skipping Gateway: ${candidate.name} (Unreachable/Blocked)`);
+                               }
+                           }
+                       } 
+                      
+                       // Fallback 1: Allow backtracking to a configured map (MUST BE REACHABLE)
+                       if (!gw) {
+                            gw = state.gateways.find(g => {
+                                if (!g.name) return false;
+                                // Must be in config AND reachable
+                                const inConfig = mapsList.some(m => g.name.toLowerCase().includes(m.toLowerCase().trim()));
+                                return inConfig && movement.isReachable(state, g.x, g.y);
+                            });
+                            if (gw) logger.log(`   ­čöÖ Backtracking to Configured Map: ${gw.name}`);
+                       }
+
+                       // Fallback 2: Return to Last Map (Escape Dead End) - MUST BE REACHABLE
+                       if (!gw && lastMapName) {
+                            gw = state.gateways.find(g => {
+                                const isLast = g.name.toLowerCase().trim() === lastMapName.toLowerCase().trim();
+                                return isLast && movement.isReachable(state, g.x, g.y);
+                            });
+                            if (gw) logger.log(`   ­čöÖ Escaping Dead End -> Last Map: ${gw.name}`);
+                       }
+
+                      // Fallback 3: PANIC MODE - Any nearest gateway (Avoid stuck)
+                      if (!gw && state.gateways.length > 0) {
+                           // Try to pick one that is NOT the last map if possible
+                           const notLast = state.gateways.filter(g => !lastMapName || g.name.toLowerCase().trim() !== lastMapName.toLowerCase().trim());
+                           if (notLast.length > 0) {
+                                gw = notLast.sort((a,b) => {
+                                    const distA = Math.hypot(a.x - state.hero.x, a.y - state.hero.y);
+                                    const distB = Math.hypot(b.x - state.hero.x, b.y - state.hero.y);
+                                    return distA - distB;
+                                }).find(g => movement.isReachable(state, g.x, g.y)) || notLast[0]; // Fallback to [0] if all unreachable
+                                
+                                logger.log(`   ­čćś PANIC: Taking random gateway (Not Last): ${gw.name}`);
+                           } else {
+                                // Just take the nearest one
+                                gw = state.gateways.sort((a,b) => {
+                                    const distA = Math.hypot(a.x - state.hero.x, a.y - state.hero.y);
+                                    const distB = Math.hypot(b.x - state.hero.x, b.y - state.hero.y);
+                                    return distA - distB;
+                                }).find(g => movement.isReachable(state, g.x, g.y)) || state.gateways[0]; // Fallback 
+                                
+                                logger.log(`   ­čćś PANIC: Taking nearest gateway: ${gw.name}`);
+                           }
+                      }
+                      
+                      if (gw) {
+                          finalTarget = { ...gw, type: 'gateway', isGateway: true, nick: `>> ${gw.name}` };
+                      }
+                  }
+            }
+
+            // 6. Action Execution
+            if (finalTarget) {
+                 const dist = Math.hypot(finalTarget.x - state.hero.x, finalTarget.y - state.hero.y);
+                 finalTarget.dist = dist;
+                 
+                 const interactionDist = finalTarget.isGateway ? 0.5 : 1.5;
+
+                 if (dist <= interactionDist) {
+                      if (finalTarget.isGateway) {
+                           // Gateway Recovery Logic
+                           if (!global.gatewayAttempts) global.gatewayAttempts = 0;
+                           
+                           if (global.gatewayAttempts > 3) {
+                               logger.warn(`ÔÜá´ŞĆ Gateway stuck (${global.gatewayAttempts})! Performing random move...`);
+                               // Move away random
+                               const rx = state.hero.x + (Math.random() * 6 - 3);
+                               const ry = state.hero.y + (Math.random() * 6 - 3);
+                               await actions.move(page, state, { x: rx, y: ry, nick: 'Unstuck' });
+                               await sleep(1000);
+                               global.gatewayAttempts = 0; // Reset after move
+                           } else {
+                               global.gatewayAttempts++;
+                               await actions.enterGateway(page, finalTarget);
+                           }
+                      } else {
+                            // Attack
+                            // NEW: Ghost Mob Detection
+                            if (finalTarget.id === lastAttackTargetId) {
+                                sameTargetAttackCount++;
+                            } else {
+                                sameTargetAttackCount = 1;
+                                lastAttackTargetId = finalTarget.id;
+                            }
+
+                            if (sameTargetAttackCount > 8) {
+                                logger.warn(`ÔÜá´ŞĆ Stuck attacking [${finalTarget.nick}] (${sameTargetAttackCount} times). Ghost mob/Bug detected. Force Reloading...`);
+                                try { await page.reload({ waitUntil: 'domcontentloaded' }); } catch(e) {}
+                                sameTargetAttackCount = 0;
+                                await sleep(5000);
+                                continue;
+                            }
+
+                            const result = await actions.attack(page, finalTarget, lastAttackTime);
+                           lastAttackTime = result;
+                           await sleep(500);
+                      }
+                 } else {
+                      // Move
+                       const result = await actions.move(page, state, finalTarget);
+                       if (result === 'skip_target') {
+                           if (finalTarget.id) {
+                               skippedMobs.set(finalTarget.id, Date.now());
+                               logger.log(`­čôŁ Blacklist: ${skippedMobs.size} mobs`);
+                           }
+                           // If gateway, wait
+                           if (finalTarget.isGateway) await sleep(2000);
+                      } else if (result === 'moved') {
+                           // continue immediate loop?
+                      }
+                 }
+            } else {
+                await sleep(500); // Wait for spawn
             }
             
-            await sleep(2000);
+            // Auto Heal Check
+            if (currentConfig.autoHeal) {
+                 const healed = await actions.autoHeal(page);
+                 if (healed) {
+                     logger.log(`ÔŁĄ´ŞĆ Healed using item ${healed.id}`);
+                     await sleep(300);
+                 }
+            }
+
+
+    } catch (err) {
+            if (err.message.includes('Execution context was destroyed')) {
+                 logger.warn('ÔÜá´ŞĆ Navigation detected (Context Destroyed). Retrying...');
+                 await sleep(1000);
+                 cachedMapId = null; // force refresh
+            } else {
+                 logger.error('Main Loop Error:', err);
+                 await sleep(1000);
+            }
         }
     }
 }

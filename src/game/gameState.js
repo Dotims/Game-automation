@@ -179,16 +179,8 @@ async function getGameState(page, config) {
 
             isDead: (() => {
                 // Strict check: Only 0 HP is Dead.
-                if (hero.hp === 0) return true;
-
-                // Battle Log Check for "Poległ [MyNick]"
-                if (g.battle) {
-                    const log = document.getElementById('battlelog');
-                    if (log && hero.nick && log.innerText.includes('Poległ ' + hero.nick)) {
-                        return true;
-                    }
-                }
-                return false;
+                // We trust the game object data more than the text log which might contain old messages.
+                return hero.hp === 0;
             })(),
             battleFinished: (() => {
                  const timer = document.getElementById('battletimer');

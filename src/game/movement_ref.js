@@ -1,4 +1,4 @@
-const PF = require('pathfinding');
+﻿const PF = require('pathfinding');
 const logger = require('../utils/logger');
 const { CONSTANTS } = require('../config');
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -17,7 +17,7 @@ let baseGrid = null;
  */
 function ensureGrid(gameState) {
     if (!baseGrid || cachedMapId !== gameState.map.id) {
-        logger.info(`🗺️ Building collision grid for map ${gameState.map.id}...`);
+        logger.info(`­čŚ║´ŞĆ Building collision grid for map ${gameState.map.id}...`);
         baseGrid = new PF.Grid(gameState.map.w, gameState.map.h);
         const colStr = gameState.map.col;
         if (colStr) {
@@ -148,7 +148,7 @@ function findBestTarget(gameState, maxCandidates = 8) {
         // Log only if we picked a different mob than the geometrically nearest one
         const nearest = gameState.validMobs[0];
         if (nearest && nearest.id !== bestMob.id) {
-            logger.log(`🧭 Path optimization: Picking [${bestMob.nick}] (${bestMob.pathLength} steps) over [${nearest.nick}] (geometrically closer)`);
+            logger.log(`­čžş Path optimization: Picking [${bestMob.nick}] (${bestMob.pathLength} steps) over [${nearest.nick}] (geometrically closer)`);
         }
     }
     
@@ -198,7 +198,7 @@ const movement = {
         lastHeroPos = { ...gameState.hero };
 
         if (stuckCounter > CONSTANTS.STUCK_LIMIT) {
-             logger.warn(`⚠️ Bot stuck (${stuckCounter} iterations)! Performing unstuck maneuver...`);
+             logger.warn(`ÔÜá´ŞĆ Bot stuck (${stuckCounter} iterations)! Performing unstuck maneuver...`);
              
              // Aggressive multi-directional unstuck
              const directions = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
@@ -240,7 +240,7 @@ const movement = {
             let targetY = endY;
 
             if (!grid.isWalkableAt(endX, endY)) {
-                 logger.log(`   🧱 Target [${endX},${endY}] is blocked/wall. Searching nearest walkable tile (Radius 5)...`);
+                 logger.log(`   ­čž▒ Target [${endX},${endY}] is blocked/wall. Searching nearest walkable tile (Radius 5)...`);
                  
                  // BFS search for nearest walkable tile spiraling out
                  const queue = [[endX, endY]];
@@ -257,7 +257,7 @@ const movement = {
                      if (grid.isWalkableAt(cx, cy)) {
                          targetX = cx;
                          targetY = cy;
-                         logger.log(`   📍 Found walkable spot: [${targetX}, ${targetY}] (Dist from GW: ${Math.max(Math.abs(targetX-endX), Math.abs(targetY-endY))})`);
+                         logger.log(`   ­čôŹ Found walkable spot: [${targetX}, ${targetY}] (Dist from GW: ${Math.max(Math.abs(targetX-endX), Math.abs(targetY-endY))})`);
                          found = true;
                          break;
                      }
@@ -289,7 +289,7 @@ const movement = {
                      }
                  }
 
-                 if (!found) logger.warn(`   ⚠️ Could not find ANY walkable tile near gateway [${endX},${endY}]!`);
+                 if (!found) logger.warn(`   ÔÜá´ŞĆ Could not find ANY walkable tile near gateway [${endX},${endY}]!`);
             }
 
             path = finder.findPath(startX, startY, targetX, targetY, grid);
@@ -298,14 +298,14 @@ const movement = {
             if (!path || path.length === 0) {
                 const isStartWalkable = grid.isWalkableAt(startX, startY);
                 const isEndWalkable = grid.isWalkableAt(targetX, targetY);
-                logger.warn(`❌ Path Fail Diag: Start[${startX},${startY}] Walkable? ${isStartWalkable} | End[${targetX},${targetY}] Walkable? ${isEndWalkable} | Grid: ${gameState.map.w}x${gameState.map.h}`);
+                logger.warn(`ÔŁî Path Fail Diag: Start[${startX},${startY}] Walkable? ${isStartWalkable} | End[${targetX},${targetY}] Walkable? ${isEndWalkable} | Grid: ${gameState.map.w}x${gameState.map.h}`);
             }
 
         } catch(e) { }
 
         if (path && path.length > 1) {
              const distTotal = Math.hypot(endX - startX, endY - startY);
-             logger.log(`👣 Moving to [${finalTarget.nick || finalTarget.name}] (${distTotal.toFixed(1)}m, ${path.length} steps)`);
+             logger.log(`­čĹú Moving to [${finalTarget.nick || finalTarget.name}] (${distTotal.toFixed(1)}m, ${path.length} steps)`);
              
              pathfindFailCounter = 0;
              lastFailedTargetId = null;
@@ -335,7 +335,7 @@ const movement = {
                      const isGw = gameState.gateways.some(g => g.x === nextStep[0] && g.y === nextStep[1]);
                      if (isGw) {
                          if (activeKey) await page.keyboard.up(activeKey);
-                         logger.warn(`🛑 MOVEMENT ABORTED: Gateway ahead!`);
+                         logger.warn(`­čŤĹ MOVEMENT ABORTED: Gateway ahead!`);
                          return 'fail';
                      }
                  }
@@ -386,10 +386,10 @@ const movement = {
                  lastFailedTargetId = targetId;
              }
              
-             logger.log(`❌ [${pathfindFailCounter}/${CONSTANTS.PATHFIND_FAIL_LIMIT}] Pathfinding FAIL`);
+             logger.log(`ÔŁî [${pathfindFailCounter}/${CONSTANTS.PATHFIND_FAIL_LIMIT}] Pathfinding FAIL`);
 
              if (pathfindFailCounter >= CONSTANTS.PATHFIND_FAIL_LIMIT) {
-                 logger.warn(`🚫 Skipping unreachable target...`);
+                 logger.warn(`­čÜź Skipping unreachable target...`);
                  pathfindFailCounter = 0;
                  lastFailedTargetId = null;
                  return 'skip_target';
