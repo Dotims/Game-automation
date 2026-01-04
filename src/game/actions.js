@@ -143,7 +143,8 @@ const actions = {
 
     async closeBattle(page) {
          try {
-             logger.log('💀 Hero Dead (0%). Closing battle window...');
+             // Note: This function is called for various reasons (battle end, death, etc.)
+             // The caller should log the specific reason.
              await page.evaluate(() => {
                  const btn = document.getElementById('battleclose');
                  if (btn) btn.click();

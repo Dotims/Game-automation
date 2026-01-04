@@ -392,7 +392,7 @@ async function main() {
                      } else {
                          // APPROACH
                          await actions.move(page, state, { x: targetMob.x, y: targetMob.y, nick: targetMob.nick });
-                         await sleep(400); // Shorter sleep for responsiveness
+                         // Removed sleep(400) for fluid movement
                          continue;
                      }
                  } else {
@@ -411,9 +411,12 @@ async function main() {
                          }
                      }
 
-                     if (state.battleFinished || mobDisappeared) {
+                     // Only treat as "defeated" if we actually had an engagement or were in battle
+                     const wasInCombat = state.battle || lastEngagedMobId !== null;
+                     if (wasInCombat && (state.battleFinished || mobDisappeared)) {
                          logger.log(`⚔️ E2 DEFEATED/GONE! Moving randomly...`);
                          await actions.closeBattle(page);
+                         lastEngagedMobId = null; // Clear after handling
                          // Trigger Random Move
                          const rx = Math.floor(state.hero.x + (Math.random() * 6 - 3));
                          const ry = Math.floor(state.hero.y + (Math.random() * 6 - 3));
@@ -433,7 +436,7 @@ async function main() {
                      if (distToTarget > 3.0) {
                          logger.log(`👹 Returning to spawn point [${mTarget.name}] (${mTarget.x},${mTarget.y})...`);
                          await actions.move(page, state, { x: mTarget.x, y: mTarget.y, nick: 'Spawn Point' });
-                         await sleep(1000);
+                         // Removed sleep(1000) for fluid movement
                          continue;
                      } 
                      
