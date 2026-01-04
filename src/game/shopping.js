@@ -4,7 +4,16 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+async function checkActive(page) {
+    const active = await page.evaluate(() => window.BOT_ACTIVE !== false);
+    if (!active) {
+        logger.warn("🛑 Action interrupted by user request.");
+    }
+    return active;
+}
+
 async function performHeal(page) {
+    if (!await checkActive(page)) return;
     logger.log(" ❤️ Interaction: Healer (Heal Sequence)");
     
     // Sequence: Q -> 1 -> 1
@@ -26,6 +35,7 @@ async function performHeal(page) {
    
     await page.keyboard.press('q');
     await sleep(800);
+    if (!await checkActive(page)) return;
     
     // Check if dialog appeared? (We assume yes for now)
     
@@ -39,6 +49,7 @@ async function performHeal(page) {
 }
 
 async function buyPotions(page, currentState) {
+    if (!await checkActive(page)) return;
     logger.log(" 🛒 Interaction: Healer (Shop Sequence)");
     
     // 1. Open Shop: Q -> 2
@@ -46,6 +57,8 @@ async function buyPotions(page, currentState) {
     await sleep(800);
     await page.keyboard.press('2');
     await sleep(1500); // Wait for shop to open
+    
+    if (!await checkActive(page)) return;
     
     // 2. Analyze Shop via Page Evaluation
     // We need to find the best potion and its element selector
@@ -71,7 +84,7 @@ async function buyPotions(page, currentState) {
                                tip.match(/Stack:?\s*(\d+)/i);
             
             const stackSize = stackMatch ? parseInt(stackMatch[1]) : 30; // Default 30
-
+            
             // Extract Shop Unit Size (Amount sold per click)
             // Matches "Ilość: 5", "Ilość: <span...>5</span>", etc.
             // Using a greedy skip of non-digits after "Ilość:"
@@ -148,6 +161,8 @@ async function buyPotions(page, currentState) {
     } else {
         // Shift+Click = 15 UNITS (not potions)
         while (unitsToBuy >= 15) {
+            if (!await checkActive(page)) return; // STOP CHECK
+
             await page.keyboard.down('Shift');
             await page.click(`#${bestItem.id}`);
             await page.keyboard.up('Shift');
@@ -160,6 +175,8 @@ async function buyPotions(page, currentState) {
         
         // Singles
         while (unitsToBuy > 0) {
+             if (!await checkActive(page)) return; // STOP CHECK
+
              await page.click(`#${bestItem.id}`);
              await sleep(150);
              unitsToBuy--;
@@ -186,6 +203,7 @@ async function buyPotions(page, currentState) {
 }
 
 async function performSell(page) {
+    if (!await checkActive(page)) return;
     logger.log(" 💰 Interaction: Shopkeeper (Selling Sequence)");
 
     // 1. Open Shop: Q -> 1 (User said Q -> 1 for selling at these NPCs)
@@ -202,9 +220,13 @@ async function performSell(page) {
     const categories = ['1', '2', '3'];
     
     for (const cat of categories) {
+        if (!await checkActive(page)) return; // STOP CHECK
+
         logger.log(`      Selling Category [${cat}]...`);
         // Repeat 3 times to ensure all pages/items are sold? User said "3 powtórzenia"
         for (let i = 0; i < 3; i++) {
+            if (!await checkActive(page)) return; // STOP CHECK
+            
             // Find and Click Category Button
             const clicked = await page.evaluate((btnText) => {
                 // Find button in .gargonem-quick-sell-wrapper with text btnText

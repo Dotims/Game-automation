@@ -35,6 +35,16 @@ async function main() {
         process.exit(1);
     }
 
+    // Capture Browser Console Logs (Debugging Healing) - DISABLED to reduce spam
+    /*
+    page.on('console', msg => {
+        const text = msg.text();
+        if (text.includes('[AutoHeal]') || text.includes('Error')) {
+             logger.log(`🖥️ PAGE: ${text}`);
+        }
+    });
+    */
+
     logger.log('⏳ Waiting for map and hero...');
     
     // Load Map Graph
@@ -82,6 +92,10 @@ async function main() {
     // Anti-AFK State
     let lastActionTime = Date.now();
     let afkThreshold = (Math.floor(Math.random() * 4) + 2) * 60 * 1000; // 2-5 min
+
+    // Teleport Return After Death (Level 70+)
+    let needsTeleportReturn = false;
+    let wasDeadLastLoop = false;
 
     while (true) {
         try {
@@ -142,7 +156,13 @@ async function main() {
                  continue; // Loading...
             }
             
-            // Inventory Log REMOVED per user request
+            // DEBUG: Inventory Log (Once per session)
+            if (state.inventory && !global.hasLoggedInventory) {
+                 logger.info(`🎒 Inventory Status: Used: ${state.inventory.used} | Free: ${state.inventory.free} | Total: ${state.inventory.capacity} (Full? ${state.inventory.isFull})`);
+                 logger.log(`    🔍 Debug bags: ${JSON.stringify(state.inventory._debug)}`);
+                 logger.log(`    📜 TeleportScrollId: ${state.inventory.teleportScrollId || 'NOT FOUND'}`);
+                 global.hasLoggedInventory = true;
+            }
 
             // 3.9. BLOCKING WINDOW CHECK (Centerbox/Shop)
             if (state.blockingWindow) {
@@ -227,6 +247,25 @@ async function main() {
                      await sleep(sleepTime); 
                      continue;
                  }
+            }
+
+            // --- TELEPORT RETURN AFTER RESPAWN (Level 70+) ---
+            // Detect transition from dead/dazed to alive
+            const currentlyDead = state.isDead || (state.dazed && state.dazed.active);
+            if (wasDeadLastLoop && !currentlyDead && state.hero && state.hero.lvl >= 70) {
+                 logger.info('🔄 Respawned! Level 70+ character - will use teleport return.');
+                 needsTeleportReturn = true;
+            }
+            wasDeadLastLoop = currentlyDead;
+
+            // --- REGULAR AUTO-HEAL ---
+            // Call autoHeal every loop iteration to use potions efficiently
+            if (state.potionsCount > 0 && state.hero.hp < state.hero.maxhp) {
+                const healed = await actions.autoHeal(page);
+                if (healed) {
+                    logger.success(`💗 Healed with ${healed.id} (Restored ~${healed.heal || '?'})`);
+                    await sleep(300);
+                }
             }
 
             // Determine Target Map Index & Travel Mode
@@ -451,27 +490,80 @@ async function main() {
                  }
             }
 
-            // --- EMERGENCY FULL BAG STRATEGY ---
-            if (mode === 'exp' && state.inventory && state.inventory.isFull && state.hero.lvl >= 70) {
-                 const inKwieciste = state.currentMapName === 'Kwieciste Przejście';
-                 const inDomTunii = state.currentMapName === 'Dom Tunii';
-                 
-                 // CASE 1: Need to Teleport (Not there yet)
-                 if (state.inventory.teleportScrollId && !inKwieciste && !inDomTunii) {
-                     logger.warn("🎒 BAG FULL & LVL 70+ & SCROLL DETECTED! Initiating Emergency Sell Procedure...");
+            // --- TELEPORT RETURN (Level 70+ with Full Bag OR in City) ---
+            // Trigger when:
+            // 1. BAG IS FULL (from ANY location) -> Go to Dom Tunii
+            // 2. OR in a city (Respawn) -> Go to Dom Tunii
+            // 3. OR in Kwieciste/Dom Tunii AND Need Resupply -> Finish job
+            const isCityWithShops = SHOPKEEPERS.some(s => s.map === state.currentMapName);
+            const inKwieciste = state.currentMapName === 'Kwieciste Przejście';
+            const inDomTunii = state.currentMapName === 'Dom Tunii';
+            const hasTeleportScroll = state.inventory && state.inventory.teleportScrollId;
+            const isBagFull = state.inventory && state.inventory.isFull;
+            
+            // Check needs
+            // We need to import shopping if not available, or duplicate logic?
+            // shopping is required at top.
+            // We assume we need potions if not full stack? 
+            // Simplified: If potionCount < target? 
+            // Better to rely on isBagFull mainly. The user emphasized SELLING.
+            // If Bag is NOT full, do we need to force Tunia? 
+            // Only if we explicitly teleported there (previous state?).
+            // But we don't have memory.
+            // So: If in Kwieciste, go to Tunia ONLY IF Bag Full OR Potion Critical?
+            
+            const needsResupply = isBagFull; // Strict for now. If you need potions, normal resupply logic handles it?
+            // Normal resupply logic (line 590) handles potions. But it uses local shopkeepers.
+            // If Lvl 70+, we want Tunia for Potions too?
+            // The user said: "prioritize teleport over local".
+            
+            // Let's use a simplified potion check if available in state
+            // state.potionsCount is available.
+            const LOW_POTIONS = 5; // minimal check
+            const needsPotions = (state.potionsCount || 0) < LOW_POTIONS;
+
+            const isTransitOrBase = inKwieciste || inDomTunii;
+            const hasBusinessInBase = isBagFull || needsPotions;
+
+            const shouldTeleportReturn = mode === 'exp' && 
+                state.hero && state.hero.lvl >= 70 && 
+                (
+                    // Trigger 1: Full Bag Anywhere
+                    (hasTeleportScroll && isBagFull) || 
+                    // Trigger 2: City Respawn with Empty Bag? (Maybe we want to check potions?)
+                    // If we respawned, we probably need potions.
+                    (isCityWithShops && hasTeleportScroll) ||
+                    // Trigger 3: In Transit/Base AND has business
+                    (isTransitOrBase && hasBusinessInBase)
+                );
+            
+            // Refined Check for safety:
+            // If in Dom Tunii and NO Business, exit.
+            const finalShouldTeleport = shouldTeleportReturn && !(inDomTunii && !hasBusinessInBase);
+
+            // DEBUG: Show teleport check values
+            if (global.lastTeleportCheck !== finalShouldTeleport) {
+                 logger.log(`📜 TELEPORT CHECK: lvl=${state.hero?.lvl}, BagFull=${isBagFull}, Pots=${state.potionsCount}, Kwieciste=${inKwieciste}, Tunia=${inDomTunii}`);
+                 logger.log(`   → Active: ${finalShouldTeleport}`);
+                 global.lastTeleportCheck = finalShouldTeleport;
+            }
+            
+            if (finalShouldTeleport) {
+                 // CASE 1: Use Teleport (Only if NOT already there)
+                 if (!inKwieciste && !inDomTunii) {
+                     logger.warn(`🚀 LVL 70+ in CITY with SCROLL! Teleporting to Dom Tunii instead of local shopkeeper...`);
                      
                      // 1. Use Teleport
                      logger.log("📜 Using Teleport Scroll to Kwieciste Przejście...");
-                     await actions.useItem(page, state.inventory.teleportScrollId);
-                     await sleep(4000); 
-                     
-                     // 2. Wait for Map Load
-                     let retries = 0;
-                     while(retries < 10) {
+                     const used = await actions.useItem(page, state.inventory.teleportScrollId);
+                     if (used) {
+                         await sleep(4000); 
+                         // Check result
                          const s = await gameState.getGameState(page, currentConfig);
-                         if (s && s.currentMapName === 'Kwieciste Przejście') break;
-                         await sleep(1000);
-                         retries++;
+                         if (s && s.currentMapName === 'Kwieciste Przejście') {
+                             // We arrived. The loop will restart and hit CASE 2 next time.
+                             continue;
+                         }
                      }
                  }
                  
@@ -495,6 +587,7 @@ async function main() {
                           
                           // Wait for transition
                           await sleep(3000);
+                          continue; // Skip rest of loop (don't traverse to exp yet)
                       } else {
                           logger.error("❌ Gateway 'Dom Tunii' not found!");
                       }
@@ -530,6 +623,10 @@ async function main() {
                       }
                  }
             }
+            // Reset flag after teleport procedure attempts (success or any path through the block)
+            if (shouldTeleportReturn) {
+                 needsTeleportReturn = false;
+            }
 
                 // 4.2. RESUPPLY CHECK (Healer / Potions)
                 // USER REQUIREMENT: Only resupply if we are in a CITY.
@@ -558,7 +655,8 @@ async function main() {
                 }
 
                 // Should we resupply?
-                const shouldResupply = isCityMap && (
+                // SKIP if teleport return is active (level 70+ respawn uses Dom Tunii instead)
+                const shouldResupply = isCityMap && !shouldTeleportReturn && (
                     (timeSinceShop > RESUPPLY_COOLDOWN && mode !== 'transport') || 
                     isCriticalHp || 
                     (isCriticalPots && mode !== 'transport')
@@ -684,12 +782,23 @@ async function main() {
                 noAttackCounter = 0;
                 positionHistory = [];
                 
-                // Set cooldown - wait 4s before making gateway decisions
+                // Set cooldown - wait 2.5s before making gateway decisions
                 mapChangedAt = Date.now();
-                logger.log('⏳ Waiting 4s for map data to load...');
+                logger.log('⏳ Waiting 2.5s for map data to load...');
             }
 
             // Traversal Logic: Calculate specific path to target map
+            // SAFETY: If HP is Critical, PAUSE traversal to heal!
+            if (state.hero.hp < state.hero.maxhp * 0.60 && state.potionsCount > 0) {
+                 // But wait, if we are in loop, autoHeal is called at top. 
+                 // We just need to stop moving.
+                 logger.warn(`❤️ Critical HP (${(state.hero.hp/state.hero.maxhp*100).toFixed(0)}%)! Pausing traversal to heal...`);
+                 await sleep(1000); 
+                 // Explicitly call heal (redundant but safe)
+                 await actions.autoHeal(page, state);
+                 continue;
+            }
+
             if (isTraversing && !resupplyTarget) {
                  // Try to find a path using graph
                  const pathData = mapNav.findPath(state.currentMapName, mapsList);
@@ -750,7 +859,7 @@ async function main() {
             // Skip gateway logic if within 4 second cooldown after map change
             // BUT: If traversing, we might want to move immediately? 
             // Let's stick to safety: wait for load.
-            const mapCooldownActive = mapChangedAt && (Date.now() - mapChangedAt < 4000);
+            const mapCooldownActive = mapChangedAt && (Date.now() - mapChangedAt < 2500);
             if (mapCooldownActive && !state.target) {
                 await sleep(500);
                 continue; // Wait for mobs to load
@@ -795,16 +904,31 @@ async function main() {
                 if (!lockedTarget && (!finalTarget || finalTarget.dist > 1.5) && state.validMobs && state.validMobs.length > 0) {
                     const pathOptimalTarget = movement.findBestTarget(state);
                     if (pathOptimalTarget) {
-                        // Efficiency Check
-                        if (state.validMobs.length <= 8 && pathOptimalTarget.pathLength > 60) {
-                            logger.log(`📉 Low mob count & Far target. Skipping map.`);
-                            finalTarget = null; 
-                        } else {
-                            finalTarget = pathOptimalTarget;
-                        }
+                        finalTarget = pathOptimalTarget;
                     } else {
-                        logger.warn(`🚫 All nearby mobs are unreachable! Initiating map change...`);
-                        finalTarget = null;
+                        logger.warn(`🚫 All nearby mobs are unreachable! Force switching map...`);
+                        
+                        // Force cyclic map change
+                        if (mapsList && mapsList.length > 0) {
+                             const currentIdx = mapsList.indexOf(state.currentMapName);
+                             if (currentIdx !== -1) {
+                                 const nextMap = mapsList[(currentIdx + 1) % mapsList.length];
+                                 const pathData = mapNav.findPath(state.currentMapName, [nextMap]);
+                                 if (pathData && pathData.nextMap) {
+                                      const gw = state.gateways.find(g => 
+                                          g.name.toLowerCase().includes(pathData.nextMap.toLowerCase()) || 
+                                          pathData.nextMap.toLowerCase().includes(g.name.toLowerCase())
+                                      );
+                                      if (gw) {
+                                          logger.log(`🚪 Unreachable Mobs -> Force Escape to [${pathData.nextMap}]`);
+                                          escapeTarget = { ...gw, escapeUntil: Date.now() + 15000 };
+                                          finalTarget = escapeTarget;
+                                      }
+                                 }
+                             }
+                        } else {
+                             finalTarget = null;
+                        }
                     }
                 }
 
@@ -933,33 +1057,64 @@ async function main() {
                 // No Target
                 
                 // 1. Gateway Scan (if nothing else to do)
-                // If no target, and we are not traversing, maybe we should switch map?
-                // Logic: If (validMobs == 0 and not traversing) -> Find Gateway
+                // Logic: If (validMobs == 0 and not traversing) -> Switch Map Cyclically
                 
                 if (!isTraversing && state.validMobs.length === 0 && !resupplyTarget) {
-                    const nextMap = mapNav.getNextMap(state.currentMapName, mapHistory);
                     
-                    if (nextMap && nextMap.gateway) {
-                         // Check if we just came from there to avoid ping-pong
-                         // (Handled by mapHistory logic mostly, but explicit check helps)
-                         // if (nextMap.name !== lastMapName) ...
+                    let nextMapTarget = null;
+                    if (typeof mapsList !== 'undefined' && Array.isArray(mapsList) && mapsList.length > 0) {
+                         let targetDestName = null;
+                         const currentIdx = mapsList.findIndex(m => m === state.currentMapName);
                          
-                         logger.log(`🚪 No mobs. Moving to Gateway -> ${nextMap.name}...`);
-                         await actions.move(page, state, nextMap.gateway);
+                         // Determine FINAL destination
+                         if (currentIdx !== -1) {
+                             targetDestName = mapsList[(currentIdx + 1) % mapsList.length];
+                         } 
+                         // Else: targetDestName remains null (fallback to ANY map in list)
+
+                         // Calculate Path to Destination
+                         let pathData = null;
+                         if (targetDestName) {
+                             pathData = mapNav.findPath(state.currentMapName, [targetDestName]);
+                         } else {
+                             pathData = mapNav.findPath(state.currentMapName, mapsList);
+                         }
                          
-                         escapeTarget = { ...nextMap.gateway, escapeUntil: Date.now() + 10000 };
-                         
-                         await sleep(500);
-                    } else {
-                         // No explicit path found or single map config
-                         // logger.info('💤 Idle. No mobs and no map path.');
+                         if (pathData && pathData.nextMap) {
+                             const nextStepName = pathData.nextMap;
+                             
+                             const gateway = state.gateways.find(g => 
+                                 g.name.toLowerCase().includes(nextStepName.toLowerCase()) || 
+                                 nextStepName.toLowerCase().includes(g.name.toLowerCase())
+                             );
+                             
+                             if (gateway) {
+                                 nextMapTarget = { name: nextStepName, gateway };
+                             } else {
+                                  // Only log rarely to avoid spam
+                                  if (Math.random() < 0.05) logger.warn(`⚠️ Path calculated to [${targetDestName || 'List'}], via [${nextStepName}], but gateway not found!`);
+                             }
+                         }
+                    }
+
+                    if (nextMapTarget && nextMapTarget.gateway) {
+                         logger.log(`🚪 No mobs. Cyclic Move -> ${nextMapTarget.name}...`);
+                         await actions.move(page, state, nextMapTarget.gateway);
+                         escapeTarget = { ...nextMapTarget.gateway, escapeUntil: Date.now() + 10000 };
+                         // Removed sleep(500) for fluidity
                     }
                 }
             }
             
-            // Loop delay - REMOVED to match original smooth movement logic
-            // await sleep(150);
-
+            // Loop Throttle (prevent CPU burn, but keep it snappy)
+            if (state.hero.hp < state.hero.maxhp * 0.4) {
+                 await sleep(500); // Slow down if dying
+            } else {
+                 await sleep(50); // 50ms for responsiveness (was 150)
+            }
+            
+            // Loop delay - RESTORED for stability
+            
         } catch (error) {
             logger.error('❌ Main loop error:', error);
             // logger.error(error.stack);

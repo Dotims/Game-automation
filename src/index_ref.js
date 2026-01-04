@@ -34,7 +34,7 @@ async function main() {
         process.exit(1);
     }
 
-    logger.log('ÔĆ│ Waiting for map and hero...');
+    logger.log('Waiting for map and hero...');
     
     // Load Map Graph
     mapNav.loadMapConnections(path.join(__dirname, '../przejscia_na_mapach.txt'));
@@ -98,7 +98,7 @@ async function main() {
             try {
                 const solved = await captcha.solve(page);
                 if (solved) {
-                    logger.info('­čĄľ CAPTCHA handled. Pausing for stability...');
+                    logger.info('CAPTCHA handled. Pausing for stability...');
                     await sleep(3000);
                     continue;
                 }
@@ -178,7 +178,7 @@ async function main() {
 
             if (state.battle) {
                  if (state.battleFinished) {
-                      logger.log('ÔÜö´ŞĆ Battle finished. Closing...');
+                      logger.log('Battle finished. Closing...');
                       await actions.closeBattle(page);
                       await sleep(500);
                       continue;
@@ -739,13 +739,13 @@ async function main() {
                                         // 3. Condition Check (Last Map)
                                         if (override.requiredLastMap) {
                                             if (lastMapName !== override.requiredLastMap) {
-                                                logger.warn(`­čöÇ OVERRIDE: [${currentMapName}] -> Redirecting to '${override.redirect}' (Avoid blocked path)`);
+                                                logger.warn(`OVERRIDE: [${currentMapName}] -> Redirecting to '${override.redirect}' (Avoid blocked path)`);
                                                 route.nextMap = override.redirect;
                                                 break; 
                                             }
                                         } else {
                                             // Unconditional Override
-                                           logger.log(`­čöÇ OVERRIDE: [${currentMapName}] -> Forcing detour to '${override.redirect}'`);
+                                           logger.log(`OVERRIDE: [${currentMapName}] -> Forcing detour to '${override.redirect}'`);
                                            route.nextMap = override.redirect;
                                            break;
                                         }
@@ -795,15 +795,15 @@ async function main() {
                                
                                // Log only if changed to avoid spam
                                if (!finalTarget || finalTarget.x !== gw.x || finalTarget.y !== gw.y) {
-                                    logger.log(`­čîŹ Global Travel: [${fullRoute}] (Dist: ${route.distance})`);
-                                    logger.log(`­čÜ¬ Gateway Selected: [${gw.name}] at [${gw.x},${gw.y}]`);
+                                    logger.log(`Global Travel: [${fullRoute}] (Dist: ${route.distance})`);
+                                    logger.log(`Gateway Selected: [${gw.name}] at [${gw.x},${gw.y}]`);
                                }
                                finalTarget = { ...gw, type: 'gateway', isGateway: true, nick: `>> ${gw.name}` };
                            } else {
-                               logger.warn(`ÔÜá´ŞĆ Path found to ${route.nextMap}, but gateway is unreachable!`);
+                               logger.warn(`Path found to ${route.nextMap}, but gateway is unreachable!`);
                            }
                            } else {
-                               if (Math.random() < 0.05) logger.warn(`ÔÜá´ŞĆ Navigation: Should go to '${route.nextMap}', but gateway not found.`);
+                               if (Math.random() < 0.05) logger.warn(`Navigation: Should go to '${route.nextMap}', but gateway not found.`);
                            }
                    }
                   
@@ -815,8 +815,8 @@ async function main() {
                       
                       // DEBUG LOGS (Temporary)
                       if (state.gateways.length > 0) {
-                          logger.log(`­čöŹ [DEBUG] Current: '${currentMapName}' | Last: '${lastMapName}'`);
-                          logger.log(`­čöŹ [DEBUG] Gateways found: ${state.gateways.map(g => g.name).join(', ')}`);
+                          logger.log(`[DEBUG] Current: '${currentMapName}' | Last: '${lastMapName}'`);
+                          logger.log(`[DEBUG] Gateways found: ${state.gateways.map(g => g.name).join(', ')}`);
                     }
 
                   // 1. Identify valid gateways (Preferred: In Config AND Not Last Map)
@@ -878,11 +878,11 @@ async function main() {
                            for (const candidate of sorted) {
                                if (movement.isReachable(state, candidate.x, candidate.y)) {
                                    gw = candidate;
-                                   const status = candidate.lastVisit === 0 ? "­čćĽ Unvisited" : `­čĽĺ ${(Date.now() - candidate.lastVisit)/1000}s ago`;
-                                   logger.log(`   Ôťů Best Gateway found: ${gw.name} (${status}, ${candidate.dist.toFixed(1)}m)`);
+                                   const status = candidate.lastVisit === 0 ? "Unvisited" : `­čĽĺ ${(Date.now() - candidate.lastVisit)/1000}s ago`;
+                                   logger.log(`Best Gateway found: ${gw.name} (${status}, ${candidate.dist.toFixed(1)}m)`);
                                    break;
                                } else {
-                                   logger.warn(`   ÔÜá´ŞĆ Skipping Gateway: ${candidate.name} (Unreachable/Blocked)`);
+                                   logger.warn(`Skipping Gateway: ${candidate.name} (Unreachable/Blocked)`);
                                }
                            }
                        } 
@@ -895,7 +895,7 @@ async function main() {
                                 const inConfig = mapsList.some(m => g.name.toLowerCase().includes(m.toLowerCase().trim()));
                                 return inConfig && movement.isReachable(state, g.x, g.y);
                             });
-                            if (gw) logger.log(`   ­čöÖ Backtracking to Configured Map: ${gw.name}`);
+                            if (gw) logger.log(`Backtracking to Configured Map: ${gw.name}`);
                        }
 
                        // Fallback 2: Return to Last Map (Escape Dead End) - MUST BE REACHABLE
@@ -904,7 +904,7 @@ async function main() {
                                 const isLast = g.name.toLowerCase().trim() === lastMapName.toLowerCase().trim();
                                 return isLast && movement.isReachable(state, g.x, g.y);
                             });
-                            if (gw) logger.log(`   ­čöÖ Escaping Dead End -> Last Map: ${gw.name}`);
+                            if (gw) logger.log(`Escaping Dead End -> Last Map: ${gw.name}`);
                        }
 
                       // Fallback 3: PANIC MODE - Any nearest gateway (Avoid stuck)
@@ -918,7 +918,7 @@ async function main() {
                                     return distA - distB;
                                 }).find(g => movement.isReachable(state, g.x, g.y)) || notLast[0]; // Fallback to [0] if all unreachable
                                 
-                                logger.log(`   ­čćś PANIC: Taking random gateway (Not Last): ${gw.name}`);
+                                logger.log(`PANIC: Taking random gateway (Not Last): ${gw.name}`);
                            } else {
                                 // Just take the nearest one
                                 gw = state.gateways.sort((a,b) => {
@@ -927,7 +927,7 @@ async function main() {
                                     return distA - distB;
                                 }).find(g => movement.isReachable(state, g.x, g.y)) || state.gateways[0]; // Fallback 
                                 
-                                logger.log(`   ­čćś PANIC: Taking nearest gateway: ${gw.name}`);
+                                logger.log(`PANIC: Taking nearest gateway: ${gw.name}`);
                            }
                       }
                       
@@ -950,7 +950,7 @@ async function main() {
                            if (!global.gatewayAttempts) global.gatewayAttempts = 0;
                            
                            if (global.gatewayAttempts > 3) {
-                               logger.warn(`ÔÜá´ŞĆ Gateway stuck (${global.gatewayAttempts})! Performing random move...`);
+                               logger.warn(`Gateway stuck (${global.gatewayAttempts})! Performing random move...`);
                                // Move away random
                                const rx = state.hero.x + (Math.random() * 6 - 3);
                                const ry = state.hero.y + (Math.random() * 6 - 3);
@@ -972,7 +972,7 @@ async function main() {
                             }
 
                             if (sameTargetAttackCount > 8) {
-                                logger.warn(`ÔÜá´ŞĆ Stuck attacking [${finalTarget.nick}] (${sameTargetAttackCount} times). Ghost mob/Bug detected. Force Reloading...`);
+                                logger.warn(`Stuck attacking [${finalTarget.nick}] (${sameTargetAttackCount} times). Ghost mob/Bug detected. Force Reloading...`);
                                 try { await page.reload({ waitUntil: 'domcontentloaded' }); } catch(e) {}
                                 sameTargetAttackCount = 0;
                                 await sleep(5000);
@@ -1005,7 +1005,7 @@ async function main() {
             if (currentConfig.autoHeal) {
                  const healed = await actions.autoHeal(page);
                  if (healed) {
-                     logger.log(`ÔŁĄ´ŞĆ Healed using item ${healed.id}`);
+                     logger.log(`Healed using item ${healed.id}`);
                      await sleep(300);
                  }
             }
@@ -1013,7 +1013,7 @@ async function main() {
 
     } catch (err) {
             if (err.message.includes('Execution context was destroyed')) {
-                 logger.warn('ÔÜá´ŞĆ Navigation detected (Context Destroyed). Retrying...');
+                 logger.warn('Navigation detected (Context Destroyed). Retrying...');
                  await sleep(1000);
                  cachedMapId = null; // force refresh
             } else {

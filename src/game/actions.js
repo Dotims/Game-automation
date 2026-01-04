@@ -49,73 +49,91 @@ const actions = {
     },
 
     async autoHeal(page) {
-         // 1. Find Potion Coordinates (in browser context)
-         const potionCoords = await page.evaluate(() => {
-             if (typeof hero === 'undefined') return null;
-             // Heal if HP < 85%
-             if (hero.hp > hero.maxhp * 0.85) return null;
+         // 1. Analyze Potions in Browser
+         const analysis = await page.evaluate(() => {
+             const debug = [];
+             if (typeof window.hero === 'undefined') return { error: 'No Hero', debug };
+             
+             const hero = window.hero;
+             const missingHp = hero.maxhp - hero.hp;
+             const isCritical = hero.hp < hero.maxhp * 0.40;
+             debug.push(`HP: ${hero.hp}/${hero.maxhp} (Miss: ${missingHp}, Crit: ${isCritical})`);
 
              const bag = document.querySelector('#bag');
-             if (!bag) return null;
+             if (!bag) return { error: 'No Bag', debug };
 
-             // Get all items and filter for Potions (Leczy)
              const items = Array.from(bag.querySelectorAll('.item'));
              const potions = [];
 
              for (let item of items) {
                   const tip = item.getAttribute('tip');
                   if (tip && tip.includes('Leczy')) {
-                      // Parse coordinates for sorting
-                      const top = parseInt(item.style.top || '0', 10);
-                      const left = parseInt(item.style.left || '0', 10);
+                      // Regex match - Must find at least one digit!
+                      const match = tip.match(/Leczy.*?(\d[\d\s]*)/i);
+                      const healRaw = match ? match[1].replace(/\s/g, '') : '0';
+                      const healAmount = parseInt(healRaw, 10);
                       
-                      // Calculate absolute center of the element for clicking
-                      const rect = item.getBoundingClientRect();
-                      const centerX = rect.x + rect.width / 2;
-                      const centerY = rect.y + rect.height / 2;
-
                       potions.push({ 
-                          top, 
-                          left, 
                           id: item.id, 
-                          x: centerX, 
-                          y: centerY 
+                          heal: healAmount,
+                          tipPreview: tip.substring(0, 50),
+                          top: parseInt(item.style.top || '0', 10),
+                          left: parseInt(item.style.left || '0', 10),
+                          rect: {
+                              x: item.getBoundingClientRect().x + item.getBoundingClientRect().width/2,
+                              y: item.getBoundingClientRect().y + item.getBoundingClientRect().height/2
+                          }
                       });
                   }
              }
 
-             if (potions.length === 0) return null;
+             if (potions.length === 0) {
+                 debug.push('No potions found.');
+                 return { error: 'No Potions', debug };
+             }
 
-             // SORT: Top-to-Bottom, Left-to-Right
-             potions.sort((a, b) => {
-                 if (Math.abs(a.top - b.top) > 5) {
-                     return a.top - b.top;
+             // Filter
+             const usable = potions.filter(p => {
+                 const effCheck = missingHp >= p.heal * 0.85;
+                 if (!isCritical && !effCheck) {
+                     debug.push(`Skip [${p.id}] Heal ${p.heal} vs Miss ${missingHp} (Eff: ${expected=p.heal*0.85})`);
+                     return false;
                  }
-                 return a.left - b.left;
+                 return true;
              });
 
-             // Return the best potion's data
-             return potions[0];
+             if (usable.length === 0) {
+                 debug.push('No usable potions (Efficiency Blocked).');
+                 return { error: 'Efficiency Block', debug };
+             }
+
+             usable.sort((a, b) => b.heal - a.heal);
+             const best = usable[0];
+             debug.push(`Chose [${best.id}] Heal ${best.heal}`);
+             
+             return { success: true, target: best, debug };
          });
 
-         // 2. Perform Trusted Action (Node.js context)
-         if (potionCoords) {
-             try {
-                // Human-like movement to the potion
-                // steps: 10 makes the move take ~10 frames (smoother)
-                await page.mouse.move(potionCoords.x, potionCoords.y, { steps: 5 });
-                
-                // Trusted Double Click
-                await page.mouse.click(potionCoords.x, potionCoords.y, { clickCount: 2, delay: 100 });
-                
-                return { id: potionCoords.id, info: 'Used potion (Trusted Input)' };
-             } catch (e) {
-                 logger.error('Failed to click potion:', e);
-                 return null;
-             }
+         // 2. Log Debug Info
+        //  if (analysis.debug && analysis.debug.length > 0) {
+        //      console.log('[AutoHeal Debug]', analysis.debug.join(' | '));
+        //  }
+
+         if (!analysis.success || !analysis.target) {
+            return null;
          }
+
+         const target = analysis.target;
          
-         return null;
+         // 3. Execute Click
+         try {
+             await page.mouse.move(target.rect.x, target.rect.y, { steps: 5 });
+             await page.mouse.click(target.rect.x, target.rect.y, { clickCount: 2, delay: 100 });
+             return { id: target.id, heal: target.heal };
+         } catch (e) {
+             logger.error('Failed to click potion:', e);
+             return null;
+         }
     },
 
     async closeBattle(page) {
@@ -157,6 +175,42 @@ const actions = {
             return true;
         } catch (e) {
             logger.error('Failed to close blocking window:', e);
+            return false;
+        }
+    },
+
+    async useItem(page, itemId) {
+        try {
+            logger.log(`📜 Attempting to use item [ID: ${itemId}]...`);
+            
+            // 1. Find Item Coordinates
+            const itemCoords = await page.evaluate((id) => {
+                // Ensure ID format matches DOM (game uses 'item' prefix often but our passed ID might be raw)
+                let el = document.getElementById('item' + id);
+                if (!el) el = document.getElementById(id); // Try raw ID
+                
+                if (!el) return null;
+                
+                const rect = el.getBoundingClientRect();
+                return {
+                    x: rect.x + rect.width / 2,
+                    y: rect.y + rect.height / 2
+                };
+            }, itemId);
+
+            if (!itemCoords) {
+                logger.error(`❌ Item [${itemId}] not found in DOM!`);
+                return false;
+            }
+
+            // 2. Perform Trusted Double Click
+            await page.mouse.move(itemCoords.x, itemCoords.y, { steps: 5 });
+            await page.mouse.click(itemCoords.x, itemCoords.y, { clickCount: 2, delay: 100 });
+            
+            logger.success(`✅ Used item [${itemId}]`);
+            return true;
+        } catch (e) {
+            logger.error(`Failed to use item [${itemId}]:`, e);
             return false;
         }
     }

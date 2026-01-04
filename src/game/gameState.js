@@ -137,7 +137,7 @@ async function getGameState(page, config) {
             })();
 
         return {
-            hero: { x: hero.x, y: hero.y, hp: hero.hp, maxhp: hero.maxhp },
+            hero: { x: hero.x, y: hero.y, hp: hero.hp, maxhp: hero.maxhp, lvl: hero.lvl },
             map: { id: map.id, w: map.x, h: map.y, col: map.col }, 
             battle: !!g.battle,
             target: validMobs.length > 0 ? validMobs[0] : null, // Fallback: nearest by geometry
@@ -153,28 +153,83 @@ async function getGameState(page, config) {
             potionsCount: potionsData.count,
             potionStackSize: potionsData.stackSize,
             
-            // --- Inventory Analysis ---
+            // --- Inventory Analysis (Detailed - REFURBISHED) ---
             inventory: (() => {
-                 let used = 0;
-                 let capacity = 100; // Default safe value
-                 const bag = document.querySelector('#bag');
-                 if (bag) {
-                     // 1. Capacity
-                     const header = bag.querySelector('.bag-header') || bag.querySelector('.title');
-                     if (header) {
-                         const match = header.innerText.match(/(\d+)\s*\/\s*(\d+)/);
-                         if (match) {
-                             used = parseInt(match[1]);
-                             capacity = parseInt(match[2]);
-                         }
+                 let totalFree = 0;
+                 let totalCapacity = 0;
+                 
+                 // 1. Find BAGS (Containers) - They have 'bag' attribute and are usually outside #bag
+                 // We search globally because they are siblings of #bag, not children.
+                 const bagElements = Array.from(document.querySelectorAll('.item[bag]'));
+                 
+                 // Calculate Capacity & Free Slots from Bags
+                 for (const item of bagElements) {
+                     // SKIP KEY POUCH (bag="6") - it only holds keys, not regular items
+                     if (item.getAttribute('bag') === '6') continue;
+                     
+                     // 1. FREE SLOTS form <small> (Visual Number)
+                     // User confirmed: "16 10 and 10 means 36 free slots"
+                     const small = item.querySelector('small');
+                     if (small) {
+                          const num = parseInt(small.innerText);
+                          if (!isNaN(num)) {
+                              totalFree += num;
+                          }
                      }
-                     // Fallback: Count items if header parsing failed but bag exists
-                     const items = bag.querySelectorAll('.item');
-                     if ((!header || !header.innerText.includes('/')) && items) {
-                         used = items.length;
+                     
+                     // 2. TOTAL CAPACITY from Tooltip
+                     // Example: "Mieści 42 przedmioty"
+                     const tip = item.getAttribute('tip') || "";
+                     const capMatch = tip.match(/Mieści\D*(\d+)/);
+                     if (capMatch) {
+                         totalCapacity += parseInt(capMatch[1]);
                      }
                  }
-                 return { used, capacity, isFull: used >= capacity };
+                 
+                 // Fallback if no bags found (e.g. game not fully loaded or no bags equipped)
+                 if (totalCapacity === 0 && bagElements.length === 0) {
+                      // Try header fallback
+                      const bagDiv = document.querySelector('#bag');
+                      if (bagDiv) {
+                          const header = bagDiv.querySelector('.bag-header') || bagDiv.querySelector('.title');
+                          if (header) {
+                              // "Used / Capacity"
+                             const match = header.innerText.match(/(\d+)\s*\/\s*(\d+)/);
+                             if (match) {
+                                  totalCapacity = parseInt(match[2]);
+                                  const usedHeader = parseInt(match[1]);
+                                  totalFree = totalCapacity - usedHeader;
+                             }
+                          }
+                      }
+                      // Default safe fallback
+                      if (totalCapacity === 0) totalCapacity = 20; 
+                 }
+                 
+                 const used = Math.max(0, totalCapacity - totalFree);
+                 
+                 // Find Teleport Scroll to Kwieciste Przejście (for lvl 70+ respawn)
+                 let teleportScrollId = null;
+                 const allItems = document.querySelectorAll('#bag .item');
+                 for (const item of allItems) {
+                     const tip = item.getAttribute('tip') || '';
+                     if (tip.includes('Zwój teleportacji na Kwieciste Przejście')) {
+                         teleportScrollId = item.id?.replace('item', '');
+                         break;
+                     }
+                 }
+                 
+                 return { 
+                     used, 
+                     capacity: totalCapacity, 
+                     isFull: used >= totalCapacity,
+                     free: totalFree,
+                     teleportScrollId,
+                     _debug: { 
+                         bagCount: bagElements.filter(b => b.getAttribute('bag') !== '6').length, 
+                         bagSmalls: bagElements.filter(b => b.getAttribute('bag') !== '6').map(b => b.querySelector('small')?.innerText)
+                     }
+                 };
             })(),
 
             isDead: (() => {
