@@ -95,6 +95,7 @@ async function main() {
 
     // Teleport Return After Death (Level 70+)
     let needsTeleportReturn = false;
+    let lastTuniaTrade = 0; // Cooldown to prevent trade loop
     let wasDeadLastLoop = false;
 
     while (true) {
@@ -548,7 +549,11 @@ async function main() {
                  global.lastTeleportCheck = finalShouldTeleport;
             }
             
-            if (finalShouldTeleport) {
+            // Skip teleport if we just finished trading (30s cooldown)
+            const tuniaCooldownActive = Date.now() - lastTuniaTrade < 30000;
+            if (tuniaCooldownActive && (inKwieciste || inDomTunii)) {
+                // logger.log('📜 Tunia Trade Cooldown Active. Skipping...');
+            } else if (finalShouldTeleport) {
                  // CASE 1: Use Teleport (Only if NOT already there)
                  if (!inKwieciste && !inDomTunii) {
                      logger.warn(`🚀 LVL 70+ in CITY with SCROLL! Teleporting to Dom Tunii instead of local shopkeeper...`);
@@ -582,11 +587,18 @@ async function main() {
                       }
 
                       if (gateway) {
+                           // OPTIMIZATION: Target the closer tile (20,17) explicitly
+                           if (gateway.x === 19 && gateway.y === 17) {
+                               // logger.log("📍 Optimizing Gateway Target: (19,17) -> (20,17)");
+                               gateway.x = 20;
+                               gateway.y = 17;
+                           }
+
                           // Force move to gateway even if logic thinks otherwise
                           await actions.move(page, currentState, gateway);
                           
-                          // Wait for transition
-                          await sleep(3000);
+                          // Wait for transition (Instant)
+                          await sleep(50); 
                           continue; // Skip rest of loop (don't traverse to exp yet)
                       } else {
                           logger.error("❌ Gateway 'Dom Tunii' not found!");
@@ -610,14 +622,25 @@ async function main() {
                            await actions.move(page, domState, { x: tunia.x, y: tunia.y });
                            await sleep(1000);
                            
-                           await shopping.performSell(page);
-                           await sleep(1000);
+                           // Optimized: Sell THEN Buy without closing window (Tunia has common window)
+                           await shopping.performSell(page, true); // leaveOpen = true
+                           await sleep(800);
                            
                            const stateAfterSell = await gameState.getGameState(page, currentConfig);
-                           await shopping.buyPotions(page, stateAfterSell);
+                           
+                           // Buy Teleport Scrolls if running low (≤5 uses)
+                           const teleportCount = stateAfterSell.inventory?.teleportScrollCount || 0;
+                           if (teleportCount <= 5) {
+                               logger.log(`📜 Low teleport scrolls (${teleportCount}). Buying 2 units...`);
+                               await shopping.buyTeleportScrolls(page);
+                               await sleep(500);
+                           }
+                           
+                           await shopping.buyPotions(page, stateAfterSell, true); // skipOpen = true
                            
                            logger.success("✅ Emergency Sell/Resupply Logic Complete. Returning to Exp...");
-                           // Logic falls through to next loop iteration which will trigger 'Traversing' back to exp
+                           lastTuniaTrade = Date.now(); // Set cooldown to prevent re-entry
+                           continue; // IMPORTANT: Skip rest of loop to avoid re-triggering
                       } else {
                           logger.error("❌ Tunia Frupotius not found in Dom Tunii!");
                       }

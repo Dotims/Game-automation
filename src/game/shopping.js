@@ -48,15 +48,17 @@ async function performHeal(page) {
     logger.log("   ✅ Heated to full.");
 }
 
-async function buyPotions(page, currentState) {
+async function buyPotions(page, currentState, skipOpen = false) {
     if (!await checkActive(page)) return;
     logger.log(" 🛒 Interaction: Healer (Shop Sequence)");
     
-    // 1. Open Shop: Q -> 2
-    await page.keyboard.press('q');
-    await sleep(800);
-    await page.keyboard.press('2');
-    await sleep(1500); // Wait for shop to open
+    // 1. Open Shop: Q -> 2 (Unless skipped)
+    if (!skipOpen) {
+        await page.keyboard.press('q');
+        await sleep(800);
+        await page.keyboard.press('2');
+        await sleep(1500); // Wait for shop to open
+    }
     
     if (!await checkActive(page)) return;
     
@@ -202,7 +204,7 @@ async function buyPotions(page, currentState) {
     logger.log("   ✅ Shopping complete.");
 }
 
-async function performSell(page) {
+async function performSell(page, leaveOpen = false) {
     if (!await checkActive(page)) return;
     logger.log(" 💰 Interaction: Shopkeeper (Selling Sequence)");
 
@@ -257,10 +259,56 @@ async function performSell(page) {
         }
     }
     
-    // 3. Close Shop
-    await page.evaluate(() => window.shop_close && window.shop_close());
-    await sleep(500);
+    // 3. Close Shop (Unless leaveOpen is true)
+    if (!leaveOpen) {
+        await page.evaluate(() => window.shop_close && window.shop_close());
+        await sleep(500);
+    }
     logger.log("   ✅ Selling complete.");
 }
 
-module.exports = { performHeal, buyPotions, performSell };
+async function buyTeleportScrolls(page) {
+    if (!await checkActive(page)) return;
+    logger.log(" 📜 Interaction: Buying Teleport Scrolls");
+    
+    // Shop should already be open (called after performSell with leaveOpen=true)
+    // Find the teleport scroll item in the shop
+    const scrollResult = await page.evaluate(() => {
+        const shop = document.getElementById('shop');
+        if (!shop || shop.style.display === 'none') return { success: false, reason: "Shop not open" };
+        
+        const items = Array.from(shop.querySelectorAll('.item'));
+        for (const item of items) {
+            const tip = item.getAttribute('tip') || "";
+            if (tip.includes('Zwój teleportacji na Kwieciste Przejście')) {
+                return { success: true, itemId: item.id };
+            }
+        }
+        return { success: false, reason: "Teleport scroll not found in shop" };
+    });
+
+    if (!scrollResult.success) {
+        logger.warn(`   ⚠️ ${scrollResult.reason}`);
+        return;
+    }
+
+    // Buy 2 units (2 clicks = 10 teleport uses)
+    logger.log(`   🛒 Found scroll: ${scrollResult.itemId}. Buying 2 units...`);
+    for (let i = 0; i < 2; i++) {
+        if (!await checkActive(page)) return;
+        await page.click(`#${scrollResult.itemId}`);
+        await sleep(300);
+    }
+
+    // Accept transaction
+    const acceptSelector = '#shop_accept';
+    if (await page.$(acceptSelector) !== null) {
+        await page.click(acceptSelector);
+        logger.log("   ✅ Teleport scrolls purchased.");
+        await sleep(500);
+    } else {
+        logger.warn("   ⚠️ Could not find Accept button!");
+    }
+}
+
+module.exports = { performHeal, buyPotions, performSell, buyTeleportScrolls };

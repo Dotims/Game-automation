@@ -107,9 +107,14 @@ const actions = {
                  return { error: 'Efficiency Block', debug };
              }
 
-             usable.sort((a, b) => b.heal - a.heal);
+             // Sort by position: Bottom-Right first (highest top, then highest left)
+             // This ensures we deplete one stack before moving to the next
+             usable.sort((a, b) => {
+                 if (b.top !== a.top) return b.top - a.top; // Highest top first (bottom row)
+                 return b.left - a.left; // Then highest left first (rightmost)
+             });
              const best = usable[0];
-             debug.push(`Chose [${best.id}] Heal ${best.heal}`);
+             debug.push(`Chose [${best.id}] Heal ${best.heal} at (${best.left},${best.top})`);
              
              return { success: true, target: best, debug };
          });

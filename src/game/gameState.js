@@ -210,11 +210,17 @@ async function getGameState(page, config) {
                  
                  // Find Teleport Scroll to Kwieciste Przejście (for lvl 70+ respawn)
                  let teleportScrollId = null;
+                 let teleportScrollCount = 0;
                  const allItems = document.querySelectorAll('#bag .item');
                  for (const item of allItems) {
                      const tip = item.getAttribute('tip') || '';
                      if (tip.includes('Zwój teleportacji na Kwieciste Przejście')) {
                          teleportScrollId = item.id?.replace('item', '');
+                         // Extract quantity: "Ilość: <span...>5</span>" or "Ilość: 5"
+                         const qtyMatch = tip.match(/Ilość:.*?class="amount-text">(\d+)/) || tip.match(/Ilość:\s*(\d+)/);
+                         if (qtyMatch) {
+                             teleportScrollCount = parseInt(qtyMatch[1], 10);
+                         }
                          break;
                      }
                  }
@@ -225,6 +231,7 @@ async function getGameState(page, config) {
                      isFull: used >= totalCapacity,
                      free: totalFree,
                      teleportScrollId,
+                     teleportScrollCount,
                      _debug: { 
                          bagCount: bagElements.filter(b => b.getAttribute('bag') !== '6').length, 
                          bagSmalls: bagElements.filter(b => b.getAttribute('bag') !== '6').map(b => b.querySelector('small')?.innerText)
