@@ -1,7 +1,7 @@
 const logger = require('../utils/logger');
 const { CONSTANTS } = require('../config');
 const movement = require('./movement');
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const { sleep } = require('../utils/sleep');
 
 const actions = {
     // Delegate movement to specialized module

@@ -1,8 +1,5 @@
 const logger = require('../utils/logger');
-
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
+const { sleep } = require('../utils/sleep');
 
 async function checkActive(page) {
     const active = await page.evaluate(() => window.BOT_ACTIVE !== false);

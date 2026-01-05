@@ -1,7 +1,7 @@
 const PF = require('pathfinding');
 const logger = require('../utils/logger');
 const { CONSTANTS } = require('../config');
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const { sleep } = require('../utils/sleep');
 
 let stuckCounter = 0;
 let lastHeroPos = { x: 0, y: 0 };

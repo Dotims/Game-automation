@@ -1,3 +1,9 @@
+// Suppress TimeoutOverflowWarning from Margonem game code
+process.on('warning', (warning) => {
+    if (warning.name === 'TimeoutOverflowWarning') return; // Ignore
+    console.warn(warning.name, warning.message);
+});
+
 const { initBrowser } = require('./core/browser');
 const config = require('./config');
 const logger = require('./utils/logger');
@@ -15,8 +21,7 @@ const SHOPKEEPERS = require('./data/shopkeepers');
 const shopping = require('./game/shopping');
 const TRAVEL_OVERRIDES = require('./data/travel_overrides');
 const MONSTERS = require('./data/monsters');
-
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const { sleep } = require('./utils/sleep');
 
 // Global Flags
 let escapeTarget = null;
