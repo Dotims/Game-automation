@@ -24,10 +24,14 @@ const MONSTERS = require('./data/monsters');
 const { sleep } = require('./utils/sleep');
 
 // Global Flags
-let escapeTarget = null;
-let soldItems = false; // Flag to track if we have visited the shopkeeper during this resupply cycle
+// Global Flags
+// (Moved to local scope in main)
 
 async function main() {
+    // DEBUG: Verify Env Var
+    const envNick = process.env.CHARACTER_NICK;
+    logger.log(`🔧 Bot Startup. Configured Nick: "${envNick || 'UNDEFINED/EMPTY'}"`);
+
     logger.log('🚀 Starting MargoBot v2.1 (Modular Rewrite)');
 
     let browser, page;
@@ -39,6 +43,81 @@ async function main() {
         logger.error('Critical initialization error:', err);
         process.exit(1);
     }
+
+    // --- WAIT FOR USER TO NAVIGATE TO GAME (Proxy/Login) ---
+    logger.log('⏳ Waiting for Margonem game to be active in browser...');
+    while (true) {
+        if (page.url().includes('margonem.pl') && !page.url().includes('login')) {
+            // Basic check if map is loaded (optional, but good)
+            const mapLoaded = await page.evaluate(() => typeof map !== 'undefined' && map.id);
+            if (mapLoaded) {
+                logger.success('✅ Margonem game detected! Starting bot...');
+                break;
+            }
+        }
+        
+        // Check all tabs across ALL browser contexts (for multi-profile support)
+        const allContexts = browser.contexts();
+        let allPages = [];
+        for (const ctx of allContexts) {
+            allPages = allPages.concat(ctx.pages());
+        }
+        const detectedGamePages = allPages.filter(p => p.url().includes('margonem.pl') && !p.url().includes('login'));
+
+        const targetNick = process.env.CHARACTER_NICK; // Optional: Specific nick to target
+        let breakOuter = false;
+
+        for (const candidatePage of detectedGamePages) {
+             // Check if map/hero is loaded
+             try {
+                const gameInfo = await candidatePage.evaluate(() => {
+                    if (typeof map === 'undefined' || !map.id || typeof hero === 'undefined') return null;
+                    return { mapId: map.id, nick: hero.nick };
+                });
+
+                if (gameInfo) {
+                    // Match Logic (Lenient)
+                    const onPageNick = gameInfo.nick.trim();
+                    const targetNickClean = targetNick ? targetNick.trim() : null;
+
+                    // If target nick is specified, enforce match (Case Insensitive)
+                    if (targetNickClean && onPageNick.toLowerCase() !== targetNickClean.toLowerCase()) {
+                        // Only log mismatch once per unique nick to avoid spam
+                        // (implied by the verbose log below)
+                        continue;
+                    }
+
+                    // MATCH FOUND!
+                    page = candidatePage;
+                    logger.success(`✅ Found active game tab! Hero: "${onPageNick}" Map: ${gameInfo.mapId}`);
+                    await page.bringToFront();
+                    
+                    // Break outer loop
+                    breakOuter = true; 
+                    break;
+                }
+             } catch (e) {
+                 // Ignore evaluation errors on loading pages
+             }
+        }
+        
+        if (breakOuter) break;
+
+        // Verbose log every 5 seconds (modulo)
+        if (Date.now() % 5000 < 2100) {
+            const seenNicks = [];
+            for (const p of detectedGamePages) {
+                try {
+                    const n = await p.evaluate(() => typeof hero !== 'undefined' ? hero.nick : 'Loading...');
+                    seenNicks.push(n);
+                } catch (e) { seenNicks.push('Error'); }
+            }
+            logger.log(`🔎 Scanning. Tabs: ${detectedGamePages.length}. Seen Nicks: [${seenNicks.join(', ')}]. Target: "${targetNick}"`);
+        }
+
+        await sleep(2000);
+    }
+
 
     // Capture Browser Console Logs (Debugging Healing) - DISABLED to reduce spam
     /*
@@ -269,7 +348,7 @@ async function main() {
             if (state.potionsCount > 0 && state.hero.hp < state.hero.maxhp) {
                 const healed = await actions.autoHeal(page);
                 if (healed) {
-                    logger.success(`💗 Healed with ${healed.id} (Restored ~${healed.heal || '?'})`);
+                    logger.success(`💗 [${healed.nick || 'Unknown'}] Healed with ${healed.id} (Restored ~${healed.heal || '?'})`);
                     await sleep(300);
                 }
             }
@@ -1098,8 +1177,20 @@ async function main() {
                          const currentIdx = mapsList.findIndex(m => m === state.currentMapName);
                          
                          // Determine FINAL destination
-                         if (currentIdx !== -1) {
-                             targetDestName = mapsList[(currentIdx + 1) % mapsList.length];
+                         // Strategy: LRU (Least Recently Used)
+                         // Prioritize maps visited longest ago to ensure full cycle
+                         const available = mapsList.filter(m => m !== state.currentMapName);
+                         available.sort((a, b) => {
+                             const tA = mapHistory.get(a) || 0;
+                             const tB = mapHistory.get(b) || 0;
+                             return tA - tB;
+                         });
+
+                         if (available.length > 0) {
+                             targetDestName = available[0];
+                             // logger.log(`🧭 LRU Target: ${targetDestName} (Last Visit: ${tA})`); -- tA scope issue, skipping log or moving it
+                         } else if (mapsList.length > 0) {
+                             targetDestName = mapsList[0];
                          } 
                          // Else: targetDestName remains null (fallback to ANY map in list)
 
