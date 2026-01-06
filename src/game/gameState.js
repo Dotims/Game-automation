@@ -15,11 +15,16 @@ async function getGameState(page, config) {
         let ping = 50; // Default safe value
         const lagMeter = document.getElementById('lagmeter');
         if (lagMeter) {
-            const tip = lagMeter.getAttribute('tip'); // e.g. "198ms"
+            const tip = lagMeter.getAttribute('tip'); // e.g. "198ms" or "Server time: ..."
             if (tip) {
                  const match = tip.match(/(\d+)ms/);
                  if (match && match[1]) {
-                     ping = parseInt(match[1], 10);
+                     const parsedPing = parseInt(match[1], 10);
+                     // Fix: Sometimes 'tip' contains server timestamp (huge number)
+                     // Cap ping at 5000ms to prevent TimeoutOverflowWarning in movement.js
+                     if (parsedPing < 5000) {
+                         ping = parsedPing;
+                     }
                  }
             }
         }

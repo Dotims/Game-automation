@@ -1139,6 +1139,13 @@ async function main() {
                                     // Find exact map name to query graph
                                     const targetMapName = mapsList.find(m => gwNameLower.includes(m.toLowerCase()) || m.toLowerCase().includes(gwNameLower));
                                     if (targetMapName) {
+                                        // 1. Check Cycle Prevention (Don't go back to where we just came from via Smart Skip)
+                                        if (lastMapName && targetMapName.toLowerCase() === lastMapName.toLowerCase()) {
+                                            // logger.log(`🚫 Smart Skip block: Avoiding backtracking to [${targetMapName}]`);
+                                            continue;
+                                        }
+
+                                        // 2. Dead End Check
                                         const conns = mapNav.getConnections(targetMapName);
                                         // If map has only 1 connection (the way back), treat as dead end and skip
                                         if (conns && conns.length <= 1) continue;

@@ -349,9 +349,9 @@ const movement = {
              // Fix for "Turning instead of moving":
              // The FIRST step in a direction needs a longer hold (~250ms) to register as a move.
              // Subsequent steps (holding) can be faster (~170ms).
-             const currentPing = gameState.ping || 50;
-             const initialStepDelay = Math.max(200, currentPing + 60); 
-             const continuousStepDelay = Math.max(170, currentPing + 30);
+             const currentPing = Math.min(gameState.ping || 50, 1000); // safety cap
+             const initialStepDelay = Math.min(Math.max(200, currentPing + 60), 2000); 
+             const continuousStepDelay = Math.min(Math.max(170, currentPing + 30), 1000);
              
              let activeKey = null;
 
