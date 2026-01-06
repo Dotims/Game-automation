@@ -244,11 +244,24 @@ async function performSell(page, leaveOpen = false) {
             }
             await sleep(400);
 
-            // Click Accept
+            // Click Accept (with timeout protection)
             const acceptSelector = '#shop_accept';
-            if (await page.$(acceptSelector)) {
-                await page.click(acceptSelector);
-                // logger.log(`         Sell iteration ${i+1}/3 accepted.`);
+            try {
+                const acceptBtn = await page.$(acceptSelector);
+                if (acceptBtn) {
+                    // Use short timeout to avoid hanging
+                    await page.click(acceptSelector, { timeout: 5000 });
+                }
+            } catch (e) {
+                // Timeout or click failed - shop might be frozen
+                logger.warn(`   ⚠️ Shop accept button failed: ${e.message}. Reloading page...`);
+                try {
+                    await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 });
+                } catch (reloadErr) {
+                    logger.error(`   ❌ Reload failed: ${reloadErr.message}`);
+                }
+                await sleep(3000);
+                return; // Exit sell function - let main loop retry
             }
             await sleep(400); // Wait for transaction
         }

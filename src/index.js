@@ -1,6 +1,11 @@
-// Suppress TimeoutOverflowWarning from Margonem game code
+// Detect TimeoutOverflowWarning from frozen game - set flag for reload
+global.needsGameReload = false;
 process.on('warning', (warning) => {
-    if (warning.name === 'TimeoutOverflowWarning') return; // Ignore
+    if (warning.name === 'TimeoutOverflowWarning') {
+        console.warn('⚠️ TimeoutOverflowWarning detected! Game may be frozen. Flagging for reload...');
+        global.needsGameReload = true;
+        return;
+    }
     console.warn(warning.name, warning.message);
 });
 
@@ -162,6 +167,8 @@ async function main() {
     // --- Cached Map Data ---
     let cachedMapId = null;
     let mapChangedAt = 0; // Cooldown timer
+    let pathfindFailCount = 0; // Track consecutive pathfinding failures to detect unreachable gateways
+    let lastFailedGatewayName = null; // Track which gateway keeps failing
 
     logger.success('✅ Bot ready! Starting main loop.');
 
@@ -182,6 +189,10 @@ async function main() {
     let needsTeleportReturn = false;
     let lastTuniaTrade = 0; // Cooldown to prevent trade loop
     let wasDeadLastLoop = false;
+    
+    // Map oscillation detection (prevent Smart Skip loops)
+    let mapChangeTimestamps = []; // Track last N map changes with timestamps
+    let smartSkipDisabledUntil = 0; // Timestamp when Smart Skip can be re-enabled
 
     while (true) {
         try {
@@ -228,6 +239,20 @@ async function main() {
                 if (now - timestamp > CONSTANTS.SKIP_TIMEOUT) {
                     skippedMobs.delete(mobId);
                 }
+            }
+            
+            // 3.5. CHECK FOR GAME FREEZE (TimeoutOverflowWarning detected)
+            if (global.needsGameReload) {
+                logger.warn('🔄 Game freeze detected (TimeoutOverflowWarning). Performing Ctrl+F5 reload...');
+                global.needsGameReload = false; // Reset flag
+                try {
+                    await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+                    logger.success('✅ Page reloaded successfully.');
+                    await sleep(5000); // Wait for game to fully load
+                } catch (e) {
+                    logger.error(`❌ Reload failed: ${e.message}`);
+                }
+                continue; // Skip this iteration
             }
 
             // 4. Get Game State
@@ -877,6 +902,20 @@ async function main() {
                      if (currentMapName) {
                          lastMapName = currentMapName;
                          logger.log(`🗺️ [HISTORY] Last: '${lastMapName}' | Curr: '${state.currentMapName}'`);
+                         
+                         // Track map change for oscillation detection
+                         mapChangeTimestamps.push(Date.now());
+                         // Keep only last 10 map changes
+                         if (mapChangeTimestamps.length > 10) mapChangeTimestamps.shift();
+                         
+                         // Detect rapid oscillation: 6+ map changes in 30 seconds = loop detected
+                         const thirtySecondsAgo = Date.now() - 30000;
+                         const recentChanges = mapChangeTimestamps.filter(t => t > thirtySecondsAgo);
+                         if (recentChanges.length >= 6) {
+                             logger.warn(`🔄 MAP OSCILLATION DETECTED! ${recentChanges.length} map changes in 30s. Disabling Smart Skip for 60s...`);
+                             smartSkipDisabledUntil = Date.now() + 60000; // Disable for 60 seconds
+                             mapChangeTimestamps = []; // Reset to prevent spam
+                         }
                      }
                      currentMapName = state.currentMapName;
                      // Track visit time
@@ -972,9 +1011,41 @@ async function main() {
                          logger.warn(`   Available Gateways: ${state.gateways.map(g => `[${g.name} at ${g.x},${g.y}]`).join(', ')}`);
                      }
                  } else {
-                     // No graph path found?
-                     // Fallback to simple logic (handled later? or just sit?)
-                     // logger.warn(`⚠️ No path found from ${state.currentMapName} to ${mapsList[0]}`);
+                     // No graph path found - we might be on a map OUTSIDE our hunting list
+                     const isOnHuntingMap = mapsList.some(m => m.toLowerCase() === state.currentMapName.toLowerCase());
+                     
+                     if (!isOnHuntingMap && lastMapName) {
+                         // We are LOST! Try to go back to the last map
+                         logger.warn(`🚨 OUT OF BOUNDS: On [${state.currentMapName}] (not in hunting list). Trying to return to [${lastMapName}]...`);
+                         
+                         // Find gateway to lastMapName
+                         const returnGateway = state.gateways.find(g => 
+                             g.name.toLowerCase().includes(lastMapName.toLowerCase()) ||
+                             lastMapName.toLowerCase().includes(g.name.toLowerCase())
+                         );
+                         
+                         if (returnGateway) {
+                             logger.log(`↩️ Found return gateway: [${returnGateway.name}] at (${returnGateway.x}, ${returnGateway.y})`);
+                             state.traversalTarget = returnGateway;
+                         } else {
+                             // Can't find return gateway - try ANY gateway on the map 
+                             logger.warn(`⚠️ No gateway to [${lastMapName}] found. Trying any available gateway...`);
+                             if (state.gateways.length > 0) {
+                                 // Pick the nearest gateway
+                                 let nearestGw = state.gateways[0];
+                                 let nearestDist = Math.hypot(nearestGw.x - state.hero.x, nearestGw.y - state.hero.y);
+                                 for (const gw of state.gateways) {
+                                     const dist = Math.hypot(gw.x - state.hero.x, gw.y - state.hero.y);
+                                     if (dist < nearestDist) {
+                                         nearestDist = dist;
+                                         nearestGw = gw;
+                                     }
+                                 }
+                                 logger.log(`↩️ Using nearest gateway: [${nearestGw.name}] at (${nearestGw.x}, ${nearestGw.y})`);
+                                 state.traversalTarget = nearestGw;
+                             }
+                         }
+                     }
                  }
             }
 
@@ -1009,7 +1080,10 @@ async function main() {
             // =========================================================================
             // HUNTING MODE LOGIC (Only if NOT traversing)
             // =========================================================================
-            if (!isTraversing && !escapeTarget && !resupplyTarget) {
+            // Check if allowed to hunt here (or if mapsList is empty/undefined)
+            const isOnHuntingMap = !mapsList || mapsList.length === 0 || mapsList.some(m => m.toLowerCase() === state.currentMapName.toLowerCase());
+
+            if (!isTraversing && !escapeTarget && !resupplyTarget && isOnHuntingMap) {
 
                 // --- OPPORTUNISTIC ATTACK (Priority: HIGH) ---
                 if (state.validMobs && state.validMobs.length > 0) {
@@ -1028,29 +1102,52 @@ async function main() {
                     const pathOptimalTarget = movement.findBestTarget(state);
                     if (pathOptimalTarget) {
                         // --- SMART MAP SKIP LOGIC ---
-                        // If few mobs left (<6), they are far (>35 steps), and gateway is nearby (<50% of mob distance), skip to next map
+                        // If few mobs left (<6), they are far (>35 steps), and gateway to ANOTHER HUNT MAP is nearby (<50% of mob distance), skip to next map
+                        // DISABLED if oscillation was detected recently
                         const mobCount = state.validMobs.length;
                         const mobDistance = pathOptimalTarget.pathLength || Infinity;
+                        const smartSkipEnabled = Date.now() > smartSkipDisabledUntil;
                         
-                        if (mobCount < 6 && mobDistance > 35 && state.gateways && state.gateways.length > 0 && mapsList && mapsList.length > 0) {
-                            // Find nearest gateway
-                            let nearestGateway = null;
-                            let nearestGwDist = Infinity;
+                        if (smartSkipEnabled && mobCount < 6 && mobDistance > 35 && state.gateways && state.gateways.length > 0 && mapsList && mapsList.length > 0) {
+                            // Find nearest gateway THAT LEADS TO A MAP IN OUR HUNTING LIST
+                            let nearestHuntGateway = null;
+                            let nearestHuntGwDist = Infinity;
+                            
+                            // Create lowercase map set for matching
+                            const mapsListLower = mapsList.map(m => m.toLowerCase());
                             
                             for (const gw of state.gateways) {
-                                const gwDist = Math.hypot(gw.x - state.hero.x, gw.y - state.hero.y);
-                                if (gwDist < nearestGwDist) {
-                                    nearestGwDist = gwDist;
-                                    nearestGateway = gw;
+                                // Check if this gateway leads to a map in our list
+                                const gwNameLower = (gw.name || '').toLowerCase();
+                                const leadsToHuntMap = mapsListLower.some(m => 
+                                    gwNameLower.includes(m) || m.includes(gwNameLower)
+                                );
+                                
+                                if (leadsToHuntMap) {
+                                    // Dead End Prevention: Don't Smart Skip into maps with only 1 connection (Cul-de-sacs)
+                                    // unless we are specifically targeting them? No, Smart Skip is for flow.
+                                    // Find exact map name to query graph
+                                    const targetMapName = mapsList.find(m => gwNameLower.includes(m.toLowerCase()) || m.toLowerCase().includes(gwNameLower));
+                                    if (targetMapName) {
+                                        const conns = mapNav.getConnections(targetMapName);
+                                        // If map has only 1 connection (the way back), treat as dead end and skip
+                                        if (conns && conns.length <= 1) continue;
+                                    }
+
+                                    const gwDist = Math.hypot(gw.x - state.hero.x, gw.y - state.hero.y);
+                                    if (gwDist < nearestHuntGwDist) {
+                                        nearestHuntGwDist = gwDist;
+                                        nearestHuntGateway = gw;
+                                    }
                                 }
                             }
                             
-                            // Check if gateway is within 50% of mob distance (much closer)
-                            if (nearestGateway && nearestGwDist < mobDistance * 0.5) {
-                                logger.log(`⏩ SMART SKIP: ${mobCount} mobs left, closest is ${mobDistance} steps away. Gateway is only ${Math.round(nearestGwDist)} tiles away. Skipping to next map...`);
+                            // Check if hunt-gateway is within 50% of mob distance (much closer)
+                            if (nearestHuntGateway && nearestHuntGwDist < mobDistance * 0.5) {
+                                logger.log(`⏩ SMART SKIP: ${mobCount} mobs left, closest is ${mobDistance} steps away. Gateway to [${nearestHuntGateway.name}] is only ${Math.round(nearestHuntGwDist)} tiles away. Skipping...`);
                                 
                                 // Set this gateway as escape target
-                                escapeTarget = { ...nearestGateway, escapeUntil: Date.now() + 15000 };
+                                escapeTarget = { ...nearestHuntGateway, escapeUntil: Date.now() + 15000 };
                                 finalTarget = escapeTarget;
                             } else {
                                 finalTarget = pathOptimalTarget;
@@ -1204,7 +1301,53 @@ async function main() {
                 } 
                 else {
                     // Start of Move
-                    await actions.move(page, state, finalTarget);
+                    const moveResult = await actions.move(page, state, finalTarget);
+                    
+                    // Handle unreachable gateway/target - try to find alternative
+                    if (moveResult === 'skip_target' && finalTarget.isGateway) {
+                        const gwName = finalTarget.name || finalTarget.nick || 'unknown';
+                        logger.warn(`🚧 Gateway [${gwName}] is unreachable! Looking for alternative...`);
+                        
+                        // Track failed gateway
+                        if (lastFailedGatewayName === gwName) {
+                            pathfindFailCount++;
+                        } else {
+                            lastFailedGatewayName = gwName;
+                            pathfindFailCount = 1;
+                        }
+                        
+                        // If we've failed too many times on the same gateway, force return
+                        if (pathfindFailCount >= 5) {
+                            logger.warn(`🚨 Gateway [${gwName}] failed ${pathfindFailCount} times! Forcing return to [${lastMapName || 'any exit'}]...`);
+                            
+                            // Find ANY OTHER gateway (not the failed one)
+                            const otherGateways = state.gateways.filter(g => 
+                                (g.name || '').toLowerCase() !== gwName.toLowerCase()
+                            );
+                            
+                            if (otherGateways.length > 0) {
+                                // Pick closest other gateway
+                                let closest = otherGateways[0];
+                                let closestDist = Math.hypot(closest.x - state.hero.x, closest.y - state.hero.y);
+                                for (const gw of otherGateways) {
+                                    const dist = Math.hypot(gw.x - state.hero.x, gw.y - state.hero.y);
+                                    if (dist < closestDist) {
+                                        closestDist = dist;
+                                        closest = gw;
+                                    }
+                                }
+                                logger.log(`↩️ Trying alternative gateway: [${closest.name}]`);
+                                escapeTarget = { ...closest, escapeUntil: Date.now() + 15000 };
+                            }
+                            
+                            pathfindFailCount = 0;
+                            lastFailedGatewayName = null;
+                        }
+                    } else if (moveResult !== 'skip_target') {
+                        // Reset counter on successful move
+                        pathfindFailCount = 0;
+                        lastFailedGatewayName = null;
+                    }
                     // End of Move logic handled by sleep below
                 }
             } else {
@@ -1216,12 +1359,60 @@ async function main() {
                 // 1. Gateway Scan (if nothing else to do)
                 // Logic: If (validMobs == 0 and not traversing) -> Switch Map Cyclically
                 
-                if (!isTraversing && state.validMobs.length === 0 && !resupplyTarget) {
+                // Enter if no mobs OR if we are on a banned map (so we must escape even if mobs exist)
+                if (!isTraversing && !resupplyTarget && (state.validMobs.length === 0 || !isOnHuntingMap)) {
                     
                     let nextMapTarget = null;
                     if (typeof mapsList !== 'undefined' && Array.isArray(mapsList) && mapsList.length > 0) {
                          let targetDestName = null;
                          const currentIdx = mapsList.findIndex(m => m === state.currentMapName);
+                         
+                         // CRITICAL: Check if we are on a NON-HUNTING map!
+                         const isOnHuntingMap = mapsList.some(m => m.toLowerCase() === state.currentMapName.toLowerCase());
+                         
+                         if (!isOnHuntingMap) {
+                             // We are LOST on a non-hunting map! Return to ANY hunting map immediately
+                             logger.warn(`🚨 ON NON-HUNTING MAP [${state.currentMapName}]! Returning to hunt area...`);
+                             
+                             // Find any gateway that leads to a hunting map
+                             const huntGateway = state.gateways.find(g => {
+                                 const gwNameLower = (g.name || '').toLowerCase();
+                                 return mapsList.some(m => 
+                                     gwNameLower.includes(m.toLowerCase()) || 
+                                     m.toLowerCase().includes(gwNameLower)
+                                 );
+                             });
+                             
+                             if (huntGateway) {
+                                 logger.log(`↩️ Found gateway to hunting map: [${huntGateway.name}]`);
+                                 nextMapTarget = huntGateway;
+                                 escapeTarget = { ...huntGateway, escapeUntil: Date.now() + 20000 };
+                             } else if (lastMapName) {
+                                 // Try to find gateway to last map
+                                 const lastMapGateway = state.gateways.find(g =>
+                                     (g.name || '').toLowerCase().includes(lastMapName.toLowerCase()) ||
+                                     lastMapName.toLowerCase().includes((g.name || '').toLowerCase())
+                                 );
+                                 if (lastMapGateway) {
+                                     logger.log(`↩️ Returning to last map: [${lastMapName}] via gateway [${lastMapGateway.name}]`);
+                                     nextMapTarget = lastMapGateway;
+                                     escapeTarget = { ...lastMapGateway, escapeUntil: Date.now() + 20000 };
+                                 } else {
+                                     // Pick any gateway and hope for the best
+                                     if (state.gateways.length > 0) {
+                                         const anyGateway = state.gateways[0];
+                                         logger.warn(`⚠️ No hunting gateway found. Using first available: [${anyGateway.name}]`);
+                                         nextMapTarget = anyGateway;
+                                         escapeTarget = { ...anyGateway, escapeUntil: Date.now() + 20000 };
+                                     }
+                                 }
+                             }
+                             
+                             if (nextMapTarget) {
+                                 // Skip the rest of cyclic logic - just escape
+                                 continue;
+                             }
+                         }
                          
                          // Determine FINAL destination
                          // Strategy: LRU (Least Recently Used)
@@ -1247,6 +1438,36 @@ async function main() {
                              pathData = mapNav.findPath(state.currentMapName, [targetDestName], state.hero.lvl);
                          } else {
                              pathData = mapNav.findPath(state.currentMapName, mapsList, state.hero.lvl);
+                         }
+                         
+                         // CRITICAL FIX: Validate that nextMap is within our hunting list
+                         // If the path goes through a non-hunting map, REJECT it
+                         if (pathData && pathData.nextMap) {
+                             const nextMapIsInList = mapsList.some(m => m.toLowerCase() === pathData.nextMap.toLowerCase());
+                             
+                             if (!nextMapIsInList) {
+                                 logger.warn(`🚫 Path to [${targetDestName}] goes through [${pathData.nextMap}] which is NOT in hunting list! Skipping...`);
+                                 
+                                 // Try to find a DIRECT gateway to any hunting map instead
+                                 const directHuntGateway = state.gateways.find(g => {
+                                     const gwNameLower = (g.name || '').toLowerCase();
+                                     return mapsList.some(m => 
+                                         gwNameLower.includes(m.toLowerCase()) || 
+                                         m.toLowerCase().includes(gwNameLower)
+                                     );
+                                 });
+                                 
+                                 if (directHuntGateway) {
+                                     logger.log(`↩️ Found direct gateway to hunting map: [${directHuntGateway.name}]`);
+                                     nextMapTarget = directHuntGateway;
+                                     escapeTarget = { ...directHuntGateway, escapeUntil: Date.now() + 15000 };
+                                     pathData = null; // Prevent overwriting by subsequent logic
+                                 } else {
+                                     // No direct gateway - stay on current map and wait for respawn
+                                     logger.warn(`⏳ No direct gateway to hunting maps found. Staying on current map...`);
+                                     pathData = null;
+                                 }
+                             }
                          }
                          
                          if (pathData && pathData.nextMap) {

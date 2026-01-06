@@ -301,7 +301,33 @@ const movement = {
             if (!path || path.length === 0) {
                 const isStartWalkable = grid.isWalkableAt(startX, startY);
                 const isEndWalkable = grid.isWalkableAt(targetX, targetY);
+                const dist = Math.hypot(targetX - startX, targetY - startY);
+                
                 logger.warn(`❌ Path Fail Diag: Start[${startX},${startY}] Walkable? ${isStartWalkable} | End[${targetX},${targetY}] Walkable? ${isEndWalkable} | Grid: ${gameState.map.w}x${gameState.map.h}`);
+
+                // FALLBACK: Blind Move if close to target (< 5 tiles)
+                // Handy for gateways that are slightly "in the wall" or bad collision data
+                if (dist < 5) {
+                    logger.warn(`⚠️ Path Fail near target (${dist.toFixed(1)}m). Attempting BLIND MOVE (Arrow Keys)...`);
+                    const dx = targetX - startX;
+                    const dy = targetY - startY;
+                    let key = null;
+                    
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        key = dx > 0 ? 'ArrowRight' : 'ArrowLeft';
+                    } else {
+                        key = dy > 0 ? 'ArrowDown' : 'ArrowUp';
+                    }
+                    
+                    if (key) {
+                        try {
+                            await page.keyboard.press(key, { delay: 150 });
+                            return 'move'; // Return success to keep loop logic happy
+                        } catch(err) { }
+                    }
+                }
+                
+                return 'skip_target'; // Explicitly return failure status for index.js handling
             }
 
         } catch(e) { }

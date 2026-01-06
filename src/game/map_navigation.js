@@ -161,4 +161,12 @@ function getMapNames() {
     return Object.keys(graph).sort();
 }
 
-module.exports = { loadMapConnections, findPath, getMapNames };
+module.exports = { 
+    loadMapConnections, 
+    findPath, 
+    getMapNames,
+    getConnections: (mapName) => {
+        const name = normalizeName(mapName);
+        return graph[name] || [];
+    }
+};
