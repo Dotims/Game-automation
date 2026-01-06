@@ -138,10 +138,8 @@ async function buyPotions(page, currentState, skipOpen = false) {
     const stackSize = bestItem.stackSize || 30; 
     const shopUnitSize = bestItem.shopUnitSize || 1;
 
-    // User Request: Fill first two rows.
-    // Standard Bag: 7 columns.
-    // 2 Rows = 14 Slots.
-    const TARGET_SLOTS = 14;
+    // Get target slots from UI setting (default 14 if not set)
+    const TARGET_SLOTS = await page.evaluate(() => window.BOT_POTION_SLOTS || 14);
     const targetPotions = TARGET_SLOTS * stackSize;
     
     const currentQty = currentState.potionsCount || 0;

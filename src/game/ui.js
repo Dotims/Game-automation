@@ -14,11 +14,16 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
         }
 
         // Restore UI State (Tab & Inputs)
-        let uiState = { tab: 'exp', transport: '', e2: '' };
+        let uiState = { tab: 'exp', transport: '', e2: '', potionSlots: 14 };
         try {
             const savedUI = localStorage.getItem('MARGO_UI_STATE');
             if (savedUI) uiState = JSON.parse(savedUI);
         } catch (e) {}
+        
+        // Initialize potion slots setting
+        if (typeof window.BOT_POTION_SLOTS === 'undefined') {
+            window.BOT_POTION_SLOTS = uiState.potionSlots || 14;
+        }
         
         // Cache spots for easy access
         window.HUNTING_SPOTS = spots || [];
@@ -190,6 +195,10 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
                                 <input type="checkbox" id="inp-heal" ${window.BOT_CONFIG.autoHeal ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: #2196F3;"> 
                                 Auto Heal
                              </label>
+                             <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
+                                <div class="mb-label" style="margin: 0;">Sloty Potek:</div>
+                                <input type="number" id="inp-potion-slots" class="mb-input" value="${window.BOT_POTION_SLOTS || 14}" min="1" max="50" style="width: 60px; padding: 4px 8px;">
+                             </div>
                         </div>
 
                         <div class="mb-col">
@@ -260,10 +269,17 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
              
              // FUNCTION TO SAVE STATE
              const saveUIState = () => {
+                 const potionSlotsInput = document.getElementById('inp-potion-slots');
+                 const potionSlots = potionSlotsInput ? parseInt(potionSlotsInput.value) || 14 : 14;
+                 
+                 // Update global variable immediately
+                 window.BOT_POTION_SLOTS = potionSlots;
+                 
                  const state = {
                      tab: currentTab,
                      transport: document.getElementById('inp-transport-map')?.value || '',
-                     e2: document.getElementById('inp-e2-monster')?.value || ''
+                     e2: document.getElementById('inp-e2-monster')?.value || '',
+                     potionSlots: potionSlots
                  };
                  localStorage.setItem('MARGO_UI_STATE', JSON.stringify(state));
              };
@@ -298,6 +314,9 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
              
              const e2Inp = document.getElementById('inp-e2-monster');
              if (e2Inp) e2Inp.oninput = saveUIState;
+             
+             const potionSlotsInp = document.getElementById('inp-potion-slots');
+             if (potionSlotsInp) potionSlotsInp.onchange = saveUIState;
              
              // 0. Force Visibility (Fix for "invisible" UI)
              const mainPanel = document.getElementById('margo-bot-panel');

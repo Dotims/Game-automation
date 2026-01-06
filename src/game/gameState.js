@@ -111,22 +111,27 @@ async function getGameState(page, config) {
             // --- Extract Potions Data ---
             const potionsData = (() => {
                  let count = 0;
-                 let stackSize = 30; // Default
+                 let stackSize = 15; // Default for potions (they stack to 15)
                  const bag = document.querySelector('#bag');
                  if (bag) {
                      const items = bag.querySelectorAll('.item');
                      for (const item of items) {
                          const tip = item.getAttribute('tip');
                          if (tip && tip.includes('Leczy') && !tip.includes('Pełne leczenie')) {
-                             // Quantity
-                             const qtyMatch = tip.match(/Ilość:.*?class="amount-text">(\d+)/) || tip.match(/Ilość:\s*(\d+)/);
+                             // Quantity - try multiple patterns
+                             // Pattern 1: "Ilość: <span...>X</span>" or "Ilość: X"
+                             // Pattern 2: "Użycia: X" or "Użycia: <span...>X</span>"
+                             const qtyMatch = tip.match(/Ilość:.*?class="amount-text"?>(\d+)/) || 
+                                              tip.match(/Ilość:\s*(\d+)/) ||
+                                              tip.match(/Użyci[ae]:.*?>(\d+)/) ||
+                                              tip.match(/Użyci[ae]:\s*(\d+)/);
                              const qty = qtyMatch ? parseInt(qtyMatch[1]) : 1;
                              count += qty;
                              
-                             // Stack Size
+                             // Stack Size - "Maksimum 15 sztuk"  
                              const stackMatch = tip.match(/Maksimum.*?class="damage">(\d+)/) || 
-                                                tip.match(/W jednej paczce:?\s*(\d+)/i) || 
-                                                tip.match(/Stack:?\s*(\d+)/i);
+                                                tip.match(/Maksimum[^0-9]*(\d+)/i) ||
+                                                tip.match(/W jednej paczce:?\s*(\d+)/i);
                              if (stackMatch) {
                                  stackSize = parseInt(stackMatch[1]);
                              }

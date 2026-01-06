@@ -1027,7 +1027,37 @@ async function main() {
                 if (!lockedTarget && (!finalTarget || finalTarget.dist > 1.5) && state.validMobs && state.validMobs.length > 0) {
                     const pathOptimalTarget = movement.findBestTarget(state);
                     if (pathOptimalTarget) {
-                        finalTarget = pathOptimalTarget;
+                        // --- SMART MAP SKIP LOGIC ---
+                        // If few mobs left (<6), they are far (>35 steps), and gateway is nearby (<50% of mob distance), skip to next map
+                        const mobCount = state.validMobs.length;
+                        const mobDistance = pathOptimalTarget.pathLength || Infinity;
+                        
+                        if (mobCount < 6 && mobDistance > 35 && state.gateways && state.gateways.length > 0 && mapsList && mapsList.length > 0) {
+                            // Find nearest gateway
+                            let nearestGateway = null;
+                            let nearestGwDist = Infinity;
+                            
+                            for (const gw of state.gateways) {
+                                const gwDist = Math.hypot(gw.x - state.hero.x, gw.y - state.hero.y);
+                                if (gwDist < nearestGwDist) {
+                                    nearestGwDist = gwDist;
+                                    nearestGateway = gw;
+                                }
+                            }
+                            
+                            // Check if gateway is within 50% of mob distance (much closer)
+                            if (nearestGateway && nearestGwDist < mobDistance * 0.5) {
+                                logger.log(`⏩ SMART SKIP: ${mobCount} mobs left, closest is ${mobDistance} steps away. Gateway is only ${Math.round(nearestGwDist)} tiles away. Skipping to next map...`);
+                                
+                                // Set this gateway as escape target
+                                escapeTarget = { ...nearestGateway, escapeUntil: Date.now() + 15000 };
+                                finalTarget = escapeTarget;
+                            } else {
+                                finalTarget = pathOptimalTarget;
+                            }
+                        } else {
+                            finalTarget = pathOptimalTarget;
+                        }
                     } else {
                         logger.warn(`🚫 All nearby mobs are unreachable! Force switching map...`);
                         
