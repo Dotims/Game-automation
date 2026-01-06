@@ -20,6 +20,7 @@ const POTION_SELLERS = require('./data/potion_sellers');
 const SHOPKEEPERS = require('./data/shopkeepers');
 const shopping = require('./game/shopping');
 const TRAVEL_OVERRIDES = require('./data/travel_overrides');
+const GATEWAY_OVERRIDES = require('./data/gateway_overrides');
 const MONSTERS = require('./data/monsters');
 const { sleep } = require('./utils/sleep');
 
@@ -911,18 +912,29 @@ async function main() {
 
             if (isTraversing && !resupplyTarget) {
                  // Try to find a path using graph
-                 const pathData = mapNav.findPath(state.currentMapName, mapsList);
+                 const pathData = mapNav.findPath(state.currentMapName, mapsList, state.hero.lvl);
                  
                  if (pathData && pathData.nextMap) {
                      // Find gateway to nextMap
                      // We need to match nextMap name to gateways. 
                      // normalizeName handles HTML tags, etc. match loosely
                      
-                     // 1. Exact/Partial Match in Gateways
-                     let gateway = state.gateways.find(g => 
-                         g.name.toLowerCase().includes(pathData.nextMap.toLowerCase()) || 
-                         pathData.nextMap.toLowerCase().includes(g.name.toLowerCase())
-                     );
+                     // 1. Check for OVERRIDE
+                     let gateway = null;
+                     
+                     if (GATEWAY_OVERRIDES[state.currentMapName] && GATEWAY_OVERRIDES[state.currentMapName][pathData.nextMap]) {
+                         const ov = GATEWAY_OVERRIDES[state.currentMapName][pathData.nextMap];
+                         logger.log(`⚠️ using GATEWAY OVERRIDE for ${pathData.nextMap}: [${ov.x}, ${ov.y}]`);
+                         gateway = { x: ov.x, y: ov.y, name: `Override -> ${pathData.nextMap}`, type: 'gateway', isGateway: true };
+                     }
+
+                     // 2. Standard Search (if no override)
+                     if (!gateway) {
+                         gateway = state.gateways.find(g => 
+                             g.name.toLowerCase().includes(pathData.nextMap.toLowerCase()) || 
+                             pathData.nextMap.toLowerCase().includes(g.name.toLowerCase())
+                         );
+                     }
                      
                      if (gateway) {
                          // logger.log(`🧭 Traversing: ${state.currentMapName} -> ${pathData.nextMap} (Target: ${mapsList[0]})`);
@@ -957,6 +969,7 @@ async function main() {
                          state.traversalTarget = gateway;
                      } else {
                          logger.warn(`⚠️ Traversing: Need to go to [${pathData.nextMap}], but no matching gateway found!`);
+                         logger.warn(`   Available Gateways: ${state.gateways.map(g => `[${g.name} at ${g.x},${g.y}]`).join(', ')}`);
                      }
                  } else {
                      // No graph path found?
@@ -1018,12 +1031,13 @@ async function main() {
                     } else {
                         logger.warn(`🚫 All nearby mobs are unreachable! Force switching map...`);
                         
-                        // Force cyclic map change
+                        // Force LRU map change (pick least recently visited)
                         if (mapsList && mapsList.length > 0) {
-                             const currentIdx = mapsList.indexOf(state.currentMapName);
-                             if (currentIdx !== -1) {
-                                 const nextMap = mapsList[(currentIdx + 1) % mapsList.length];
-                                 const pathData = mapNav.findPath(state.currentMapName, [nextMap]);
+                             const available = mapsList.filter(m => m !== state.currentMapName);
+                             available.sort((a, b) => (mapHistory.get(a) || 0) - (mapHistory.get(b) || 0));
+                             if (available.length > 0) {
+                                 const nextMap = available[0];
+                                 const pathData = mapNav.findPath(state.currentMapName, [nextMap], state.hero.lvl);
                                  if (pathData && pathData.nextMap) {
                                       const gw = state.gateways.find(g => 
                                           g.name.toLowerCase().includes(pathData.nextMap.toLowerCase()) || 
@@ -1166,6 +1180,9 @@ async function main() {
             } else {
                 // No Target
                 
+                // DEBUG: Log why we have no target (Uncomment if debugging)
+                // logger.log(`🔍 NO TARGET: isTraversing=${isTraversing}, validMobs=${state.validMobs?.length || 0}, resupply=${!!resupplyTarget}, mapsList=${mapsList?.length || 0}`);
+                
                 // 1. Gateway Scan (if nothing else to do)
                 // Logic: If (validMobs == 0 and not traversing) -> Switch Map Cyclically
                 
@@ -1197,18 +1214,35 @@ async function main() {
                          // Calculate Path to Destination
                          let pathData = null;
                          if (targetDestName) {
-                             pathData = mapNav.findPath(state.currentMapName, [targetDestName]);
+                             pathData = mapNav.findPath(state.currentMapName, [targetDestName], state.hero.lvl);
                          } else {
-                             pathData = mapNav.findPath(state.currentMapName, mapsList);
+                             pathData = mapNav.findPath(state.currentMapName, mapsList, state.hero.lvl);
                          }
                          
                          if (pathData && pathData.nextMap) {
                              const nextStepName = pathData.nextMap;
+                             logger.log(`🧭 Cyclic: Path found! Current: ${state.currentMapName} -> Next: ${nextStepName} -> Dest: ${targetDestName}`);
                              
-                             const gateway = state.gateways.find(g => 
-                                 g.name.toLowerCase().includes(nextStepName.toLowerCase()) || 
-                                 nextStepName.toLowerCase().includes(g.name.toLowerCase())
-                             );
+                             // 1. Check for OVERRIDE
+                             let gateway = null;
+                             if (GATEWAY_OVERRIDES[state.currentMapName] && GATEWAY_OVERRIDES[state.currentMapName][nextStepName]) {
+                                 const ov = GATEWAY_OVERRIDES[state.currentMapName][nextStepName];
+                                 logger.log(`⚠️ using GATEWAY OVERRIDE (Cyclic) for ${nextStepName}: [${ov.x}, ${ov.y}]`);
+                                 gateway = { x: ov.x, y: ov.y, name: `Override -> ${nextStepName}`, type: 'gateway', isGateway: true };
+                             }
+
+                             // 2. Standard Search
+                             if (!gateway) {
+                                 gateway = state.gateways.find(g => 
+                                     g.name.toLowerCase().includes(nextStepName.toLowerCase()) || 
+                                     nextStepName.toLowerCase().includes(g.name.toLowerCase())
+                                 );
+                             }
+
+                             if (!gateway) {
+                                  logger.warn(`⚠️ Cyclic Move: Need to go to [${nextStepName}], but no matching gateway found!`);
+                                  logger.warn(`   Available Gateways: ${state.gateways.map(g => `[${g.name} at ${g.x},${g.y}]`).join(', ')}`);
+                             }
                              
                              if (gateway) {
                                  nextMapTarget = { name: nextStepName, gateway };
@@ -1216,6 +1250,8 @@ async function main() {
                                   // Only log rarely to avoid spam
                                   if (Math.random() < 0.05) logger.warn(`⚠️ Path calculated to [${targetDestName || 'List'}], via [${nextStepName}], but gateway not found!`);
                              }
+                         } else {
+                              logger.warn(`⚠️ Cyclic: No path found from ${state.currentMapName} to ${targetDestName || 'any map in list'}`);
                          }
                     }
 
@@ -1224,6 +1260,8 @@ async function main() {
                          await actions.move(page, state, nextMapTarget.gateway);
                          escapeTarget = { ...nextMapTarget.gateway, escapeUntil: Date.now() + 10000 };
                          // Removed sleep(500) for fluidity
+                    } else {
+                         logger.warn(`⚠️ Cyclic Move FAILED: No nextMapTarget found. mapsList=${JSON.stringify(mapsList)}, currentMap=${state.currentMapName}`);
                     }
                 }
             }
