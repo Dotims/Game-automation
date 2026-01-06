@@ -10,7 +10,10 @@ const BLOCKED_MAPS = {
     "Złudny Trakt": { minLevel: 170 },
     
     // Ukwiecona Skarpa - unsafe for characters under 170
-    "Ukwiecona Skarpa": { minLevel: 170 }
+    "Ukwiecona Skarpa": { minLevel: 170 },
+
+    // Urwisko Zdrewniałych - unsafe for characters under 218
+    "Urwisko Zdrewniałych": { minLevel: 218 }
 };
 
 /**

@@ -342,8 +342,18 @@ async function main() {
                  const reloadThreshold = Math.floor(Math.random() * 6) + 10;
                  if (waitSeconds > reloadThreshold + 2) {
                      const timeToWait = waitSeconds - reloadThreshold;
-                     logger.warn(`💀 Unconscious. Respawn in ${waitSeconds}s. Waiting ${timeToWait}s to Auto-Reload...`);
-                     await sleep(timeToWait * 1000);
+                     logger.warn(`💀 Unconscious. Respawn in ${waitSeconds}s. Waiting ${timeToWait}s to Auto-Reload (monitoring Captcha)...`);
+                     
+                     // Wait with Captcha Check
+                     const wakeTime = Date.now() + (timeToWait * 1000);
+                     while (Date.now() < wakeTime) {
+                         try {
+                             if (await captcha.solve(page)) {
+                                 logger.info('🤖 CAPTCHA solved while waiting for respawn.');
+                             }
+                         } catch (e) {}
+                         await sleep(1000); // Check every second
+                     }
                      logger.log(`🔄 Auto-Reloading page (Respawn in ~${reloadThreshold}s)...`);
                      try {
                          await page.reload({ waitUntil: 'domcontentloaded' });
