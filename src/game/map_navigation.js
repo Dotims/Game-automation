@@ -1,17 +1,19 @@
 const fs = require('fs');
 const logger = require('../utils/logger');
+const { getBlockedMapsForLevel } = require('../data/blocked_maps');
 
 let graph = {}; // Structure: { "Ithan": ["Torneg", "Werbin"], ... }
 
 /**
  * Helper function to clean map names
- * Removes HTML tags, square brackets, and extra spaces.
+ * Removes HTML tags, square brackets, level restrictions, and extra spaces.
  */
 function normalizeName(name) {
     if (!name) return '';
     return name
         .replace(/<[^>]*>/g, '') // Remove anything in <...>
         .replace(/\[|\]/g, '') // Remove [ and ]
+        .replace(/Przejście dostępne.*/gi, '') // Remove level restriction text
         .trim();
 }
 
@@ -78,9 +80,10 @@ function loadMapConnections(filePath) {
  * BFS algorithm finding the shortest path
  * @param {string} startMap - Map name where the character is standing
  * @param {string[]} targetMaps - Array of target map names (e.g. entire hunting spot)
+ * @param {number} heroLevel - Character level (used to filter blocked maps)
  * @returns {object|null} - { nextMap, fullPath, distance } or null
  */
-function findPath(startMap, targetMaps) {
+function findPath(startMap, targetMaps, heroLevel = 999) {
     // 1. Validate data
     if (!graph || Object.keys(graph).length === 0) {
         logger.error("Graph is empty! Run loadMapConnections first.");
@@ -90,6 +93,9 @@ function findPath(startMap, targetMaps) {
     if (!startMap) return null;
 
     const start = normalizeName(startMap);
+    
+    // Get blocked maps for this level
+    const blockedMaps = getBlockedMapsForLevel(heroLevel);
 
     // Create a set of targets for quick O(1) lookup
     // Normalize target names too
@@ -131,6 +137,11 @@ function findPath(startMap, targetMaps) {
         const neighbors = graph[currentMap] || [];
 
         for (const neighbor of neighbors) {
+            // Skip blocked maps
+            if (blockedMaps.has(neighbor)) {
+                continue;
+            }
+            
             if (!visited.has(neighbor)) {
                 visited.add(neighbor);
                 // Create new path and add to queue
@@ -143,4 +154,19 @@ function findPath(startMap, targetMaps) {
     return null; // Path not found
 }
 
-module.exports = { loadMapConnections, findPath };
+/**
+ * Returns a list of all known map names from the graph
+ */
+function getMapNames() {
+    return Object.keys(graph).sort();
+}
+
+module.exports = { 
+    loadMapConnections, 
+    findPath, 
+    getMapNames,
+    getConnections: (mapName) => {
+        const name = normalizeName(mapName);
+        return graph[name] || [];
+    }
+};

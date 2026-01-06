@@ -3,10 +3,11 @@ const logger = require('../utils/logger');
 async function getGameState(page, config) {
     return await page.evaluate((cfg) => {
         if (typeof g === 'undefined' || !g.npc || !hero || !map) return null;
-        if (g.battle) return { battle: true };
+        // if (g.battle) return { battle: true }; // REMOVED: We need full state to check for Death/Logs
 
         const obstacles = []; 
         const validMobs = []; // ALL valid mobs for path-based selection
+        const allMobs = [];   // NEW: ALL visible mobs (ignoring level/blacklist)
         let allMobsCount = 0;
         let deniedCount = 0;
         
@@ -14,11 +15,16 @@ async function getGameState(page, config) {
         let ping = 50; // Default safe value
         const lagMeter = document.getElementById('lagmeter');
         if (lagMeter) {
-            const tip = lagMeter.getAttribute('tip'); // e.g. "198ms"
+            const tip = lagMeter.getAttribute('tip'); // e.g. "198ms" or "Server time: ..."
             if (tip) {
                  const match = tip.match(/(\d+)ms/);
                  if (match && match[1]) {
-                     ping = parseInt(match[1], 10);
+                     const parsedPing = parseInt(match[1], 10);
+                     // Fix: Sometimes 'tip' contains server timestamp (huge number)
+                     // Cap ping at 5000ms to prevent TimeoutOverflowWarning in movement.js
+                     if (parsedPing < 5000) {
+                         ping = parsedPing;
+                     }
                  }
             }
         }
@@ -28,10 +34,19 @@ async function getGameState(page, config) {
             const n = g.npc[id];
             
             // Obstacles for pathfinding (dynamic)
-            obstacles.push({ x: n.x, y: n.y, id: n.id });
+            // Fix: Exclude Type 4 (Gateways/Info) as they are handled via DOM gateways or shouldn't block
+            if (n.type !== 4) {
+                obstacles.push({ x: n.x, y: n.y, id: n.id });
+            }
 
             const isMob = (n.type === 2 || n.type === 3);
-            if (isMob) allMobsCount++;
+            if (isMob) {
+                allMobsCount++;
+                allMobs.push({
+                     x: n.x, y: n.y, id: n.id, nick: n.nick, lvl: n.lvl, 
+                     type: 'mob', isGateway: false
+                });
+            }
 
             // SKIP BLACKLISTED MOBS
             if (cfg.skippedMobIds && cfg.skippedMobIds.includes(n.id)) {
@@ -101,22 +116,27 @@ async function getGameState(page, config) {
             // --- Extract Potions Data ---
             const potionsData = (() => {
                  let count = 0;
-                 let stackSize = 30; // Default
+                 let stackSize = 15; // Default for potions (they stack to 15)
                  const bag = document.querySelector('#bag');
                  if (bag) {
                      const items = bag.querySelectorAll('.item');
                      for (const item of items) {
                          const tip = item.getAttribute('tip');
                          if (tip && tip.includes('Leczy') && !tip.includes('Pełne leczenie')) {
-                             // Quantity
-                             const qtyMatch = tip.match(/Ilość:.*?class="amount-text">(\d+)/) || tip.match(/Ilość:\s*(\d+)/);
+                             // Quantity - try multiple patterns
+                             // Pattern 1: "Ilość: <span...>X</span>" or "Ilość: X"
+                             // Pattern 2: "Użycia: X" or "Użycia: <span...>X</span>"
+                             const qtyMatch = tip.match(/Ilość:.*?class="amount-text"?>(\d+)/) || 
+                                              tip.match(/Ilość:\s*(\d+)/) ||
+                                              tip.match(/Użyci[ae]:.*?>(\d+)/) ||
+                                              tip.match(/Użyci[ae]:\s*(\d+)/);
                              const qty = qtyMatch ? parseInt(qtyMatch[1]) : 1;
                              count += qty;
                              
-                             // Stack Size
+                             // Stack Size - "Maksimum 15 sztuk"  
                              const stackMatch = tip.match(/Maksimum.*?class="damage">(\d+)/) || 
-                                                tip.match(/W jednej paczce:?\s*(\d+)/i) || 
-                                                tip.match(/Stack:?\s*(\d+)/i);
+                                                tip.match(/Maksimum[^0-9]*(\d+)/i) ||
+                                                tip.match(/W jednej paczce:?\s*(\d+)/i);
                              if (stackMatch) {
                                  stackSize = parseInt(stackMatch[1]);
                              }
@@ -127,11 +147,12 @@ async function getGameState(page, config) {
             })();
 
         return {
-            hero: { x: hero.x, y: hero.y, hp: hero.hp, maxhp: hero.maxhp },
+            hero: { x: hero.x, y: hero.y, hp: hero.hp, maxhp: hero.maxhp, lvl: hero.lvl },
             map: { id: map.id, w: map.x, h: map.y, col: map.col }, 
-            battle: false,
+            battle: !!g.battle,
             target: validMobs.length > 0 ? validMobs[0] : null, // Fallback: nearest by geometry
-            validMobs: validMobs, // NEW: All mobs for path-based selection
+            validMobs: validMobs, // ALL valid mobs for path-based selection
+            allMobs: allMobs,     // NEW: ALL visible mobs
             gateways: gateways,
             obstacles: obstacles,
             debugInfo: { allMobsCount, deniedCount, validMobsCount: validMobs.length },
@@ -140,7 +161,113 @@ async function getGameState(page, config) {
             ping: ping, // Expose dynamic ping
             dazed: dazedState,
             potionsCount: potionsData.count,
-            potionStackSize: potionsData.stackSize
+            potionStackSize: potionsData.stackSize,
+            
+            // --- Inventory Analysis (Detailed - REFURBISHED) ---
+            inventory: (() => {
+                 let totalFree = 0;
+                 let totalCapacity = 0;
+                 
+                 // 1. Find BAGS (Containers) - They have 'bag' attribute and are usually outside #bag
+                 // We search globally because they are siblings of #bag, not children.
+                 const bagElements = Array.from(document.querySelectorAll('.item[bag]'));
+                 
+                 // Calculate Capacity & Free Slots from Bags
+                 for (const item of bagElements) {
+                     // SKIP KEY POUCH (bag="6") - it only holds keys, not regular items
+                     if (item.getAttribute('bag') === '6') continue;
+                     
+                     // 1. FREE SLOTS form <small> (Visual Number)
+                     // User confirmed: "16 10 and 10 means 36 free slots"
+                     const small = item.querySelector('small');
+                     if (small) {
+                          const num = parseInt(small.innerText);
+                          if (!isNaN(num)) {
+                              totalFree += num;
+                          }
+                     }
+                     
+                     // 2. TOTAL CAPACITY from Tooltip
+                     // Example: "Mieści 42 przedmioty"
+                     const tip = item.getAttribute('tip') || "";
+                     const capMatch = tip.match(/Mieści\D*(\d+)/);
+                     if (capMatch) {
+                         totalCapacity += parseInt(capMatch[1]);
+                     }
+                 }
+                 
+                 // Fallback if no bags found (e.g. game not fully loaded or no bags equipped)
+                 if (totalCapacity === 0 && bagElements.length === 0) {
+                      // Try header fallback
+                      const bagDiv = document.querySelector('#bag');
+                      if (bagDiv) {
+                          const header = bagDiv.querySelector('.bag-header') || bagDiv.querySelector('.title');
+                          if (header) {
+                              // "Used / Capacity"
+                             const match = header.innerText.match(/(\d+)\s*\/\s*(\d+)/);
+                             if (match) {
+                                  totalCapacity = parseInt(match[2]);
+                                  const usedHeader = parseInt(match[1]);
+                                  totalFree = totalCapacity - usedHeader;
+                             }
+                          }
+                      }
+                      // Default safe fallback
+                      if (totalCapacity === 0) totalCapacity = 20; 
+                 }
+                 
+                 const used = Math.max(0, totalCapacity - totalFree);
+                 
+                 // Find Teleport Scroll to Kwieciste Przejście (for lvl 70+ respawn)
+                 let teleportScrollId = null;
+                 let teleportScrollCount = 0;
+                 const allItems = document.querySelectorAll('#bag .item');
+                 for (const item of allItems) {
+                     const tip = item.getAttribute('tip') || '';
+                     if (tip.includes('Zwój teleportacji na Kwieciste Przejście')) {
+                         teleportScrollId = item.id?.replace('item', '');
+                         // Extract quantity: "Ilość: <span...>5</span>" or "Ilość: 5"
+                         const qtyMatch = tip.match(/Ilość:.*?class="amount-text">(\d+)/) || tip.match(/Ilość:\s*(\d+)/);
+                         if (qtyMatch) {
+                             teleportScrollCount = parseInt(qtyMatch[1], 10);
+                         }
+                         break;
+                     }
+                 }
+                 
+                 return { 
+                     used, 
+                     capacity: totalCapacity, 
+                     isFull: used >= totalCapacity,
+                     free: totalFree,
+                     teleportScrollId,
+                     teleportScrollCount,
+                     _debug: { 
+                         bagCount: bagElements.filter(b => b.getAttribute('bag') !== '6').length, 
+                         bagSmalls: bagElements.filter(b => b.getAttribute('bag') !== '6').map(b => b.querySelector('small')?.innerText)
+                     }
+                 };
+            })(),
+
+            isDead: (() => {
+                // Strict check: Only 0 HP is Dead.
+                // We trust the game object data more than the text log which might contain old messages.
+                return hero.hp === 0;
+            })(),
+            battleFinished: (() => {
+                 const timer = document.getElementById('battletimer');
+                 // Check for "Walka zakończona" or similar end states
+                 return timer && (timer.innerText.includes('zakończona') || timer.innerText.includes('przerwana'));
+            })(),
+            battleCloseVisible: (() => {
+                const el = document.getElementById('battleclose');
+                // Check if button exists and has some visibility (offsetParent)
+                return el && el.offsetParent !== null; 
+            })(),
+            blockingWindow: (() => {
+                const el = document.getElementById('centerbox2');
+                return el && el.style.display !== 'none' && el.offsetParent !== null;
+            })()
         };
     }, config);
 }

@@ -1,10 +1,16 @@
 const logger = require('../utils/logger');
+const { sleep } = require('../utils/sleep');
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+async function checkActive(page) {
+    const active = await page.evaluate(() => window.BOT_ACTIVE !== false);
+    if (!active) {
+        logger.warn("🛑 Action interrupted by user request.");
+    }
+    return active;
 }
 
 async function performHeal(page) {
+    if (!await checkActive(page)) return;
     logger.log(" ❤️ Interaction: Healer (Heal Sequence)");
     
     // Sequence: Q -> 1 -> 1
@@ -26,6 +32,7 @@ async function performHeal(page) {
    
     await page.keyboard.press('q');
     await sleep(800);
+    if (!await checkActive(page)) return;
     
     // Check if dialog appeared? (We assume yes for now)
     
@@ -38,14 +45,19 @@ async function performHeal(page) {
     logger.log("   ✅ Heated to full.");
 }
 
-async function buyPotions(page, currentState) {
+async function buyPotions(page, currentState, skipOpen = false) {
+    if (!await checkActive(page)) return;
     logger.log(" 🛒 Interaction: Healer (Shop Sequence)");
     
-    // 1. Open Shop: Q -> 2
-    await page.keyboard.press('q');
-    await sleep(800);
-    await page.keyboard.press('2');
-    await sleep(1500); // Wait for shop to open
+    // 1. Open Shop: Q -> 2 (Unless skipped)
+    if (!skipOpen) {
+        await page.keyboard.press('q');
+        await sleep(800);
+        await page.keyboard.press('2');
+        await sleep(1500); // Wait for shop to open
+    }
+    
+    if (!await checkActive(page)) return;
     
     // 2. Analyze Shop via Page Evaluation
     // We need to find the best potion and its element selector
@@ -71,7 +83,7 @@ async function buyPotions(page, currentState) {
                                tip.match(/Stack:?\s*(\d+)/i);
             
             const stackSize = stackMatch ? parseInt(stackMatch[1]) : 30; // Default 30
-
+            
             // Extract Shop Unit Size (Amount sold per click)
             // Matches "Ilość: 5", "Ilość: <span...>5</span>", etc.
             // Using a greedy skip of non-digits after "Ilość:"
@@ -126,10 +138,8 @@ async function buyPotions(page, currentState) {
     const stackSize = bestItem.stackSize || 30; 
     const shopUnitSize = bestItem.shopUnitSize || 1;
 
-    // User Request: Fill first two rows.
-    // Standard Bag: 7 columns.
-    // 2 Rows = 14 Slots.
-    const TARGET_SLOTS = 14;
+    // Get target slots from UI setting (default 14 if not set)
+    const TARGET_SLOTS = await page.evaluate(() => window.BOT_POTION_SLOTS || 14);
     const targetPotions = TARGET_SLOTS * stackSize;
     
     const currentQty = currentState.potionsCount || 0;
@@ -148,6 +158,8 @@ async function buyPotions(page, currentState) {
     } else {
         // Shift+Click = 15 UNITS (not potions)
         while (unitsToBuy >= 15) {
+            if (!await checkActive(page)) return; // STOP CHECK
+
             await page.keyboard.down('Shift');
             await page.click(`#${bestItem.id}`);
             await page.keyboard.up('Shift');
@@ -160,6 +172,8 @@ async function buyPotions(page, currentState) {
         
         // Singles
         while (unitsToBuy > 0) {
+             if (!await checkActive(page)) return; // STOP CHECK
+
              await page.click(`#${bestItem.id}`);
              await sleep(150);
              unitsToBuy--;
@@ -185,7 +199,8 @@ async function buyPotions(page, currentState) {
     logger.log("   ✅ Shopping complete.");
 }
 
-async function performSell(page) {
+async function performSell(page, leaveOpen = false) {
+    if (!await checkActive(page)) return;
     logger.log(" 💰 Interaction: Shopkeeper (Selling Sequence)");
 
     // 1. Open Shop: Q -> 1 (User said Q -> 1 for selling at these NPCs)
@@ -202,9 +217,13 @@ async function performSell(page) {
     const categories = ['1', '2', '3'];
     
     for (const cat of categories) {
+        if (!await checkActive(page)) return; // STOP CHECK
+
         logger.log(`      Selling Category [${cat}]...`);
         // Repeat 3 times to ensure all pages/items are sold? User said "3 powtórzenia"
         for (let i = 0; i < 3; i++) {
+            if (!await checkActive(page)) return; // STOP CHECK
+            
             // Find and Click Category Button
             const clicked = await page.evaluate((btnText) => {
                 // Find button in .gargonem-quick-sell-wrapper with text btnText
@@ -225,20 +244,79 @@ async function performSell(page) {
             }
             await sleep(400);
 
-            // Click Accept
+            // Click Accept (with timeout protection)
             const acceptSelector = '#shop_accept';
-            if (await page.$(acceptSelector)) {
-                await page.click(acceptSelector);
-                // logger.log(`         Sell iteration ${i+1}/3 accepted.`);
+            try {
+                const acceptBtn = await page.$(acceptSelector);
+                if (acceptBtn) {
+                    // Use short timeout to avoid hanging
+                    await page.click(acceptSelector, { timeout: 5000 });
+                }
+            } catch (e) {
+                // Timeout or click failed - shop might be frozen
+                logger.warn(`   ⚠️ Shop accept button failed: ${e.message}. Reloading page...`);
+                try {
+                    await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 });
+                } catch (reloadErr) {
+                    logger.error(`   ❌ Reload failed: ${reloadErr.message}`);
+                }
+                await sleep(3000);
+                return; // Exit sell function - let main loop retry
             }
             await sleep(400); // Wait for transaction
         }
     }
     
-    // 3. Close Shop
-    await page.evaluate(() => window.shop_close && window.shop_close());
-    await sleep(500);
+    // 3. Close Shop (Unless leaveOpen is true)
+    if (!leaveOpen) {
+        await page.evaluate(() => window.shop_close && window.shop_close());
+        await sleep(500);
+    }
     logger.log("   ✅ Selling complete.");
 }
 
-module.exports = { performHeal, buyPotions, performSell };
+async function buyTeleportScrolls(page) {
+    if (!await checkActive(page)) return;
+    logger.log(" 📜 Interaction: Buying Teleport Scrolls");
+    
+    // Shop should already be open (called after performSell with leaveOpen=true)
+    // Find the teleport scroll item in the shop
+    const scrollResult = await page.evaluate(() => {
+        const shop = document.getElementById('shop');
+        if (!shop || shop.style.display === 'none') return { success: false, reason: "Shop not open" };
+        
+        const items = Array.from(shop.querySelectorAll('.item'));
+        for (const item of items) {
+            const tip = item.getAttribute('tip') || "";
+            if (tip.includes('Zwój teleportacji na Kwieciste Przejście')) {
+                return { success: true, itemId: item.id };
+            }
+        }
+        return { success: false, reason: "Teleport scroll not found in shop" };
+    });
+
+    if (!scrollResult.success) {
+        logger.warn(`   ⚠️ ${scrollResult.reason}`);
+        return;
+    }
+
+    // Buy 2 units (2 clicks = 10 teleport uses)
+    logger.log(`   🛒 Found scroll: ${scrollResult.itemId}. Buying 2 units...`);
+    for (let i = 0; i < 2; i++) {
+        if (!await checkActive(page)) return;
+        await page.click(`#${scrollResult.itemId}`);
+        await sleep(300);
+    }
+
+    // Accept transaction
+    const acceptSelector = '#shop_accept';
+    if (await page.$(acceptSelector) !== null) {
+        await page.click(acceptSelector);
+        logger.log("   ✅ Teleport scrolls purchased.");
+        await sleep(500);
+    } else {
+        logger.warn("   ⚠️ Could not find Accept button!");
+    }
+}
+
+module.exports = { performHeal, buyPotions, performSell, buyTeleportScrolls };
