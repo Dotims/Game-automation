@@ -28,6 +28,7 @@ const TRAVEL_OVERRIDES = require('./data/travel_overrides');
 const GATEWAY_OVERRIDES = require('./data/gateway_overrides');
 const MONSTERS = require('./data/monsters');
 const { sleep } = require('./utils/sleep');
+const license = require('./license');
 
 // Global Flags
 // Global Flags
@@ -197,7 +198,24 @@ async function main() {
     while (true) {
         try {
             // Inject UI (returns current config state)
-            const uiState = await ui.injectUI(page, config.DEFAULT_CONFIG, HUNTING_SPOTS, allMapNames, MONSTERS); // Cleaned
+            // Validate license from stored key
+            let licenseInfo = null;
+            const storedKey = await page.evaluate(() => localStorage.getItem('MARGO_LICENSE_KEY'));
+            
+            if (storedKey) {
+                licenseInfo = await license.validateLicense(storedKey);
+                
+                // Log only on status changes
+                if (!licenseInfo.valid && !global.lastLicenseWarn) {
+                    logger.warn(`🔐 License: ${licenseInfo.reason}`);
+                    global.lastLicenseWarn = true;
+                } else if (licenseInfo.valid && global.lastLicenseWarn) {
+                    logger.success(`✅ License activated! Days remaining: ${licenseInfo.info.daysRemaining}`);
+                    global.lastLicenseWarn = false;
+                }
+            }
+            
+            const uiState = await ui.injectUI(page, config.DEFAULT_CONFIG, HUNTING_SPOTS, allMapNames, MONSTERS, licenseInfo);
             
             const mode = uiState.mode || 'exp';
             const transportTarget = uiState.transportMap;
@@ -206,6 +224,17 @@ async function main() {
                 logger.error('🛑 FATAL SECURITY WARNING: Bot inputs detected as UNTRUSTED/FAKE!');
                 logger.error('   The game or browser is flagging our inputs. Stopping for safety.');
                 await sleep(5000);
+                continue;
+            }
+
+            // LICENSE CHECK - Block bot if no valid license
+            if (!uiState.licenseValid) {
+                // Only log occasionally to avoid spam
+                if (!global.lastLicenseLog || Date.now() - global.lastLicenseLog > 30000) {
+                    logger.warn('🔐 Bot locked. Waiting for valid license activation...');
+                    global.lastLicenseLog = Date.now();
+                }
+                await sleep(1000);
                 continue;
             }
 

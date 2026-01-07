@@ -1,8 +1,12 @@
 const logger = require('../utils/logger');
 
-async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonsters) {
-    return await page.evaluate(({ cfg, spots, allMaps, monsters }) => {
-        if (!document.body) return { active: false, config: cfg }; // Safety check
+async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonsters, licenseInfo = null) {
+    return await page.evaluate(({ cfg, spots, allMaps, monsters, license }) => {
+        if (!document.body) return { active: false, config: cfg, licenseValid: false }; // Safety check
+
+        // --- LICENSE STATE ---
+        // License info is passed from Node.js side (validated externally)
+        window.BOT_LICENSE = license;
 
         if (!window.BOT_CONFIG) {
             const saved = localStorage.getItem('MARGO_BOT_CFG');
@@ -124,11 +128,101 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
                 ::-webkit-scrollbar-track { background: #222; }
                 ::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
                 ::-webkit-scrollbar-thumb:hover { background: #777; }
+
+                /* License Activation Screen */
+                .mb-license-screen {
+                    padding: 25px 20px;
+                    text-align: center;
+                }
+                .mb-license-icon {
+                    font-size: 48px;
+                    margin-bottom: 15px;
+                }
+                .mb-license-title {
+                    font-size: 16px;
+                    font-weight: 700;
+                    color: #fff;
+                    margin-bottom: 8px;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                }
+                .mb-license-subtitle {
+                    font-size: 11px;
+                    color: #888;
+                    margin-bottom: 20px;
+                }
+                .mb-license-input {
+                    width: 100%;
+                    box-sizing: border-box;
+                    padding: 12px 15px;
+                    background: #2a2a30;
+                    border: 2px solid #444;
+                    color: #fff;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    font-family: 'Courier New', monospace;
+                    text-align: center;
+                    letter-spacing: 2px;
+                    margin-bottom: 15px;
+                    transition: all 0.3s;
+                }
+                .mb-license-input:focus {
+                    border-color: #2196F3;
+                    background: #333;
+                    outline: none;
+                    box-shadow: 0 0 15px rgba(33, 150, 243, 0.2);
+                }
+                .mb-license-input.error {
+                    border-color: #f44336;
+                    animation: shake 0.4s;
+                }
+                .mb-license-input.success {
+                    border-color: #4CAF50;
+                }
+                .mb-license-error {
+                    color: #f44336;
+                    font-size: 12px;
+                    font-weight: 600;
+                    margin-bottom: 15px;
+                    min-height: 18px;
+                }
+                .mb-license-info {
+                    font-size: 10px;
+                    color: #666;
+                    margin-top: 15px;
+                    line-height: 1.5;
+                }
+                .mb-license-valid {
+                    background: rgba(76, 175, 80, 0.1);
+                    border: 1px solid rgba(76, 175, 80, 0.3);
+                    border-radius: 6px;
+                    padding: 8px 12px;
+                    margin-bottom: 10px;
+                    font-size: 11px;
+                    color: #81C784;
+                }
+                @keyframes shake {
+                    0%, 100% { transform: translateX(0); }
+                    25% { transform: translateX(-5px); }
+                    75% { transform: translateX(5px); }
+                }
              `;
              if(document.head) document.head.appendChild(style);
         }
 
         // --- HTML ---
+        // Check if license status changed - if so, force panel recreation
+        const currentLicenseStatus = license && license.valid;
+        if (document.getElementById('margo-bot-panel') && window.LAST_LICENSE_STATUS !== currentLicenseStatus) {
+            // License status changed! Remove old panel to force recreation
+            const oldPanel = document.getElementById('margo-bot-panel');
+            if (oldPanel) {
+                oldPanel.remove();
+                console.log('🔄 License status changed, refreshing UI panel');
+            }
+        }
+        window.LAST_LICENSE_STATUS = currentLicenseStatus;
+
         if (document.body && !document.getElementById('margo-bot-panel')) {
              const div = document.createElement('div');
              div.id = 'margo-bot-panel';
@@ -153,22 +247,64 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
                  monsterDataList = window.ALL_MONSTERS.map(m => `<option value="${m.name} (Lvl ${m.lvl}) [${m.map}]">`).join('');
              }
 
+             // Check license status
+             const isLicensed = license && license.valid;
+             const licenseExpiry = license && license.info ? license.info.expiresAt : null;
+             const licenseDays = license && license.info ? license.info.daysRemaining : 0;
+             const licenseHours = license && license.info ? license.info.hoursRemaining : 0;
+             
+             // Format expiry display - show hours if <48h, otherwise days
+             let expiryDisplay = '';
+             if (isLicensed) {
+                 if (licenseHours <= 48) {
+                     expiryDisplay = `${licenseHours}h`;
+                 } else {
+                     expiryDisplay = `${licenseDays}d`;
+                 }
+             }
+
              div.innerHTML = `
                 <div class="mb-header">
                     <div class="mb-title">😼 MargoSzpont</div>
-                    <div id="bot-status" class="mb-status" style="color: #f44336">OFF</div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        ${isLicensed ? `<div class="mb-status" style="color: ${licenseHours <= 48 ? '#ff9800' : '#81C784'}; background: ${licenseHours <= 48 ? 'rgba(255, 152, 0, 0.1)' : 'rgba(76, 175, 80, 0.1)'};">⏱️ ${expiryDisplay}</div>` : ''}
+                        <div id="bot-status" class="mb-status" style="color: ${isLicensed ? '#4CAF50' : '#ff9800'}">${isLicensed ? 'OFF' : '🔒'}</div>
+                    </div>
                 </div>
                 
-                <div class="mb-tabs">
-                    <div class="mb-tab active" data-tab="exp">EXP</div>
-                    <div class="mb-tab" data-tab="transport">TRANSPORT</div>
-                    <div class="mb-tab" data-tab="e2">E2</div>
-                </div>
-
-                <div class="mb-content">
-                    <div class="mb-row">
-                        <button id="btn-toggle" class="mb-btn" style="background: linear-gradient(135deg, #4CAF50, #45a049); color: white; box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);">START BOT</button>
+                <!-- LICENSE ACTIVATION SCREEN (shown when no license) -->
+                <div id="license-screen" class="mb-license-screen" style="display: ${isLicensed ? 'none' : 'block'}">
+                    <div class="mb-license-icon">🔐</div>
+                    <div class="mb-license-title">Wprowadź Klucz Aktywacji</div>
+                    <div class="mb-license-subtitle">Aby korzystać z bota, wprowadź prawidłowy klucz licencji</div>
+                    <input type="text" id="license-key-input" class="mb-license-input" placeholder="MARGO-XXXXXXXX" autocomplete="off" spellcheck="false">
+                    <div id="license-error" class="mb-license-error"></div>
+                    <button id="btn-activate" class="mb-btn" style="background: linear-gradient(135deg, #FF9800, #F57C00); color: white; box-shadow: 0 4px 15px rgba(255, 152, 0, 0.3);">
+                        🔑 AKTYWUJ LICENCJĘ
+                    </button>
+                    <div class="mb-license-info">
+                        Nie masz klucza? Skontaktuj się z właścicielem bota.
                     </div>
+                </div>
+                
+                <!-- MAIN BOT UI (shown when licensed) -->
+                <div id="bot-main-ui" style="display: ${isLicensed ? 'block' : 'none'}">
+                    ${isLicensed && licenseDays <= 7 ? `
+                    <div class="mb-license-valid" style="margin: 10px 15px; background: rgba(255, 152, 0, 0.1); border-color: rgba(255, 152, 0, 0.3); color: #FFB74D;">
+                        ⚠️ Licencja wygasa za ${licenseDays} dni (${licenseExpiry ? new Date(licenseExpiry).toLocaleDateString('pl-PL') : '?'})
+                    </div>
+                    ` : ''}
+                    
+                    <div class="mb-tabs">
+                        <div class="mb-tab active" data-tab="exp">EXP</div>
+                        <div class="mb-tab" data-tab="transport">TRANSPORT</div>
+                        <div class="mb-tab" data-tab="e2">E2</div>
+                    </div>
+
+                    <div class="mb-content">
+                        <div class="mb-row">
+                            <button id="btn-toggle" class="mb-btn" style="background: linear-gradient(135deg, #4CAF50, #45a049); color: white; box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);">START BOT</button>
+                        </div>
 
                     <!-- EXP PANEL -->
                     <div id="panel-exp" class="mb-tab-content">
@@ -243,8 +379,46 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
                         <button id="btn-save" class="mb-btn" style="background: linear-gradient(135deg, #2196F3, #1976D2); color: white; box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);">Zapisz Konfigurację</button>
                     </div>
                 </div>
+                </div> <!-- Close bot-main-ui -->
              `;
              document.body.appendChild(div);
+
+             // --- LICENSE ACTIVATION LOGIC ---
+             const activateBtn = document.getElementById('btn-activate');
+             const licenseInput = document.getElementById('license-key-input');
+             const licenseError = document.getElementById('license-error');
+             
+             if (activateBtn && licenseInput) {
+                 // Store entered key in localStorage for validation on next loop
+                 activateBtn.onclick = () => {
+                     const key = licenseInput.value.trim();
+                     if (!key) {
+                         licenseError.textContent = '⚠️ Wprowadź klucz licencji';
+                         licenseInput.classList.add('error');
+                         setTimeout(() => licenseInput.classList.remove('error'), 400);
+                         return;
+                     }
+                     // Store key for external validation
+                     localStorage.setItem('MARGO_LICENSE_KEY', key);
+                     window.PENDING_LICENSE_KEY = key;
+                     
+                     // Visual feedback
+                     activateBtn.textContent = '⏳ WERYFIKACJA...';
+                     activateBtn.disabled = true;
+                 };
+                 
+                 // Restore pending key if exists
+                 const savedKey = localStorage.getItem('MARGO_LICENSE_KEY');
+                 if (savedKey && !license?.valid) {
+                     licenseInput.value = savedKey;
+                 }
+                 
+                 // Show error if passed from previous validation
+                 if (license && !license.valid && license.reason) {
+                     licenseError.textContent = '❌ ' + license.reason;
+                     licenseInput.classList.add('error');
+                 }
+             }
 
              // --- Logic ---
              
@@ -502,9 +676,11 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
             securityAlert: window.BOT_SECURITY_FLAG,
             mode: mode,
             transportMap: transportMap,
-            monsterTarget: monsterTarget
+            monsterTarget: monsterTarget,
+            licenseValid: license && license.valid,
+            pendingLicenseKey: window.PENDING_LICENSE_KEY || localStorage.getItem('MARGO_LICENSE_KEY') || null
         };
-    }, { cfg: defaultConfig, spots: huntingSpots, allMaps: allMapNames, monsters: allMonsters });
+    }, { cfg: defaultConfig, spots: huntingSpots, allMaps: allMapNames, monsters: allMonsters, license: licenseInfo });
 }
 
 module.exports = { injectUI };
