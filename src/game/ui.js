@@ -267,7 +267,7 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
                 <div class="mb-header">
                     <div class="mb-title">😼 MargoSzpont</div>
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        ${isLicensed ? `<div class="mb-status" style="color: ${licenseHours <= 48 ? '#ff9800' : '#81C784'}; background: ${licenseHours <= 48 ? 'rgba(255, 152, 0, 0.1)' : 'rgba(76, 175, 80, 0.1)'};">⏱️ ${expiryDisplay}</div>` : ''}
+                        ${isLicensed ? `<div class="mb-status" title="Wygasa: ${licenseExpiry ? new Date(licenseExpiry).toLocaleString('pl-PL') : '?'}" style="cursor: help; color: ${licenseHours <= 48 ? '#ff9800' : '#81C784'}; background: ${licenseHours <= 48 ? 'rgba(255, 152, 0, 0.1)' : 'rgba(76, 175, 80, 0.1)'};">⏱️ ${expiryDisplay}</div>` : ''}
                         <div id="bot-status" class="mb-status" style="color: ${isLicensed ? '#4CAF50' : '#ff9800'}">${isLicensed ? 'OFF' : '🔒'}</div>
                     </div>
                 </div>
@@ -289,11 +289,7 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
                 
                 <!-- MAIN BOT UI (shown when licensed) -->
                 <div id="bot-main-ui" style="display: ${isLicensed ? 'block' : 'none'}">
-                    ${isLicensed && licenseDays <= 7 ? `
-                    <div class="mb-license-valid" style="margin: 10px 15px; background: rgba(255, 152, 0, 0.1); border-color: rgba(255, 152, 0, 0.3); color: #FFB74D;">
-                        ⚠️ Licencja wygasa za ${licenseDays} dni (${licenseExpiry ? new Date(licenseExpiry).toLocaleDateString('pl-PL') : '?'})
-                    </div>
-                    ` : ''}
+
                     
                     <div class="mb-tabs">
                         <div class="mb-tab active" data-tab="exp">EXP</div>
