@@ -1,16 +1,35 @@
 /**
- * License Validation API Endpoint
+ * License Validation API Endpoint with Response Signing
  * POST /api/validate
  * 
  * Body: { key: "MARGO-XXXXX" }
- * Returns: { valid: boolean, reason?: string, info?: {...} }
+ * Returns: { valid: boolean, reason?: string, info?: {...}, signature: string, timestamp: number }
+ * 
+ * The response is signed with HMAC-SHA256 to prevent fake server attacks
  */
 
 const { createClient } = require('@supabase/supabase-js');
+const crypto = require('crypto');
 
 // Supabase config (use environment variables in production)
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://uxvbousvsrupyhnwdiim.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_KEY; // Secret key from Vercel env vars
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
+
+// Response signing secret - MUST match the one in bot's license.js
+// This is the key that prevents fake API servers
+const RESPONSE_SECRET = process.env.RESPONSE_SECRET || 'MARGO-SIGN-KEY-2026';
+
+/**
+ * Signs the response data with HMAC-SHA256
+ */
+function signResponse(data, timestamp) {
+    const payload = JSON.stringify(data) + timestamp.toString();
+    const signature = crypto
+        .createHmac('sha256', RESPONSE_SECRET)
+        .update(payload)
+        .digest('hex');
+    return signature;
+}
 
 module.exports = async (req, res) => {
     // CORS headers
@@ -23,14 +42,17 @@ module.exports = async (req, res) => {
     }
     
     if (req.method !== 'POST') {
-        return res.status(405).json({ valid: false, reason: 'Method not allowed' });
+        return res.status(405).json({ valid: false, reason: 'Method not allowed', signature: '', timestamp: 0 });
     }
     
     try {
         const { key } = req.body;
         
         if (!key || typeof key !== 'string') {
-            return res.status(400).json({ valid: false, reason: 'Nie podano klucza licencji' });
+            const responseData = { valid: false, reason: 'Nie podano klucza licencji' };
+            const timestamp = Date.now();
+            const signature = signResponse(responseData, timestamp);
+            return res.status(400).json({ ...responseData, signature, timestamp });
         }
         
         // Initialize Supabase
@@ -53,12 +75,18 @@ module.exports = async (req, res) => {
             .single();
         
         if (error || !license) {
-            return res.status(200).json({ valid: false, reason: 'Nieprawidłowy klucz licencji' });
+            const responseData = { valid: false, reason: 'Nieprawidłowy klucz licencji' };
+            const timestamp = Date.now();
+            const signature = signResponse(responseData, timestamp);
+            return res.status(200).json({ ...responseData, signature, timestamp });
         }
         
         // Check if active
         if (!license.active) {
-            return res.status(200).json({ valid: false, reason: 'Licencja została dezaktywowana' });
+            const responseData = { valid: false, reason: 'Licencja została dezaktywowana' };
+            const timestamp = Date.now();
+            const signature = signResponse(responseData, timestamp);
+            return res.status(200).json({ ...responseData, signature, timestamp });
         }
         
         // Check expiration
@@ -66,10 +94,10 @@ module.exports = async (req, res) => {
         const expiresAt = new Date(license.expires_at);
         
         if (now > expiresAt) {
-            return res.status(200).json({ 
-                valid: false, 
-                reason: `Licencja wygasła ${expiresAt.toLocaleDateString('pl-PL')}` 
-            });
+            const responseData = { valid: false, reason: `Licencja wygasła ${expiresAt.toLocaleDateString('pl-PL')}` };
+            const timestamp = Date.now();
+            const signature = signResponse(responseData, timestamp);
+            return res.status(200).json({ ...responseData, signature, timestamp });
         }
         
         // Calculate time remaining
@@ -92,8 +120,8 @@ module.exports = async (req, res) => {
             })
             .eq('key', normalizedKey);
         
-        // Return success
-        return res.status(200).json({
+        // Build and sign successful response
+        const responseData = {
             valid: true,
             info: {
                 user: license.user_name,
@@ -101,10 +129,17 @@ module.exports = async (req, res) => {
                 daysRemaining,
                 hoursRemaining
             }
-        });
+        };
+        const timestamp = Date.now();
+        const signature = signResponse(responseData, timestamp);
+        
+        return res.status(200).json({ ...responseData, signature, timestamp });
         
     } catch (err) {
         console.error('License validation error:', err);
-        return res.status(500).json({ valid: false, reason: 'Błąd serwera walidacji' });
+        const responseData = { valid: false, reason: 'Błąd serwera walidacji' };
+        const timestamp = Date.now();
+        const signature = signResponse(responseData, timestamp);
+        return res.status(500).json({ ...responseData, signature, timestamp });
     }
 };

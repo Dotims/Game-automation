@@ -1,12 +1,58 @@
 /**
  * License Management Module - MargoBot
  * Online validation via Vercel API + Supabase
+ * With response signature verification (anti-fake-server protection)
  */
 
 const https = require('https');
+const crypto = require('crypto');
 
 // API Configuration
 const LICENSE_API_URL = 'margobot-api.vercel.app';
+
+// Response signing secret - MUST match the one on server
+// This prevents fake API servers from working
+const RESPONSE_SECRET = 'MARGO-SIGN-KEY-2026';
+
+// Maximum age of response (5 minutes) - prevents replay attacks
+const MAX_RESPONSE_AGE = 5 * 60 * 1000;
+
+/**
+ * Verifies the signature of an API response
+ * @param {Object} response - Full response from API
+ * @returns {boolean} True if signature is valid
+ */
+function verifyResponseSignature(response) {
+    const { signature, timestamp, ...data } = response;
+    
+    // Check if signature and timestamp exist
+    if (!signature || !timestamp) {
+        console.error('License API: Missing signature or timestamp');
+        return false;
+    }
+    
+    // Check if response is not too old (prevent replay attacks)
+    const age = Date.now() - timestamp;
+    if (age > MAX_RESPONSE_AGE || age < -60000) { // Allow 1 min clock skew
+        console.error('License API: Response too old or from future');
+        return false;
+    }
+    
+    // Recalculate signature
+    const payload = JSON.stringify(data) + timestamp.toString();
+    const expectedSignature = crypto
+        .createHmac('sha256', RESPONSE_SECRET)
+        .update(payload)
+        .digest('hex');
+    
+    // Compare signatures
+    if (signature !== expectedSignature) {
+        console.error('License API: Invalid signature - possible fake server!');
+        return false;
+    }
+    
+    return true;
+}
 
 /**
  * Validates a license key via online API
@@ -38,7 +84,19 @@ async function validateLicense(key) {
             res.on('end', () => {
                 try {
                     const result = JSON.parse(data);
-                    resolve(result);
+                    
+                    // VERIFY SIGNATURE - reject if invalid
+                    if (!verifyResponseSignature(result)) {
+                        resolve({ 
+                            valid: false, 
+                            reason: 'Błąd weryfikacji serwera licencji (nieprawidłowy podpis)' 
+                        });
+                        return;
+                    }
+                    
+                    // Remove signature fields before returning
+                    const { signature, timestamp, ...cleanResult } = result;
+                    resolve(cleanResult);
                 } catch (e) {
                     console.error('License API parse error:', e.message);
                     resolve({ valid: false, reason: 'Błąd odpowiedzi serwera licencji' });
@@ -66,7 +124,7 @@ async function validateLicense(key) {
 
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
+// crypto already imported at top of file
 const LICENSES_FILE = path.join(__dirname, '..', 'licenses.json');
 
 function loadLicenses() {

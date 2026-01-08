@@ -29,6 +29,24 @@ const GATEWAY_OVERRIDES = require('./data/gateway_overrides');
 const MONSTERS = require('./data/monsters');
 const { sleep } = require('./utils/sleep');
 const license = require('./license');
+const security = require('./security');
+
+// ============================================
+// SECURITY: Start anti-debugging protection
+// ============================================
+security.startAntiDebug();
+
+// Verify binary integrity (only works when packaged with pkg)
+const integrityCheck = security.verifyBinaryIntegrity();
+if (!integrityCheck.valid) {
+    console.error('\n⛔ SECURITY VIOLATION: Binary has been modified!');
+    console.error('   The executable file appears to be tampered with.');
+    console.error('   Please download the original version.\n');
+    process.exit(1);
+}
+if (integrityCheck.hash) {
+    console.log(`🔒 Binary Hash: ${integrityCheck.hash.substring(0, 16)}...`);
+}
 
 // Global Flags
 // Global Flags
