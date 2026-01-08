@@ -1,7 +1,19 @@
 {
-  "name": "margo-bot-stealth",
-  "version": "1.0.0",
-  "main": "index.js",
+  "name": "margoszpont",
+  "version": "2.1.0",
+  "main": "start.js",
+  "bin": "start.js",
+  "scripts": {
+    "start": "node start.js",
+    "dev": "node index.js",
+    "build": "pkg . --targets node18-win-x64 --output dist/MargoSzpont.exe"
+  },
+  "pkg": {
+    "assets": [
+      "src/**/*"
+    ],
+    "outputPath": "dist"
+  },
   "dependencies": {
     "ghost-cursor": "^1.4.1",
     "pathfinding": "^0.4.18",

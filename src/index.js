@@ -222,6 +222,19 @@ async function main() {
     };
 
     while (true) {
+        // Check Global Stop Flag (from config panel)
+        if (global.BOT_SHOULD_STOP) {
+            // Only log once
+            if (!global.stopLogged) {
+                logger.log('🛑 Bot stopped by user request.');
+                global.stopLogged = true;
+            }
+            await sleep(1000);
+            continue; // Spin wait
+        } else {
+            global.stopLogged = false;
+        }
+
         try {
             // Inject UI (returns current config state)
             // Validate license from stored key
@@ -1693,14 +1706,27 @@ async function main() {
             // Loop delay - RESTORED for stability
             
         } catch (error) {
-            logger.error('❌ Main loop error:', error);
-            // logger.error(error.stack);
-            
-            if (error.message && error.message.includes('Target closed')) {
-                logger.error('❌ Browser closed. Exiting...');
-                process.exit(1);
+            // Handle browser disconnect/closed gracefully
+            const errMsg = error.message || '';
+            if (errMsg.includes('Target page, context or browser has been closed') || 
+                errMsg.includes('Session closed') || 
+                errMsg.includes('Navigating frame was detached')) {
+                
+                if (!global.disconnectLogged) {
+                    logger.warn('🔌 Browser connection lost (Page/Context closed). Stopping bot loop.');
+                    global.disconnectLogged = true;
+                }
+                
+                // Break the loop to stop the bot cleanly
+                break;
             }
-            
+
+            logger.error(`❌ Main loop error: ${errMsg}`);
+            // Log stack only if it's NOT a known trivial error
+            if (!errMsg.includes('Target page')) {
+                console.error(error);
+            }
+            // Prevent rapid fail loop
             await sleep(2000);
         }
     }
