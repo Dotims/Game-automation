@@ -195,6 +195,14 @@ async function main() {
     let mapChangeTimestamps = []; // Track last N map changes with timestamps
     let smartSkipDisabledUntil = 0; // Timestamp when Smart Skip can be re-enabled
 
+    // Gateway stuck loop detection (game loading/reloading issue)
+    let gatewayStuckTracker = {
+        lastGateway: null,        // Name of last targeted gateway
+        lastDistance: null,       // Distance to gateway on last attempt
+        sameCount: 0,             // Count of identical (gateway+distance) situations
+        waitingUntil: 0           // Timestamp when waiting period ends (if triggered)
+    };
+
     while (true) {
         try {
             // Inject UI (returns current config state)
@@ -373,16 +381,31 @@ async function main() {
                      const timeToWait = waitSeconds - reloadThreshold;
                      logger.warn(`💀 Unconscious. Respawn in ${waitSeconds}s. Waiting ${timeToWait}s to Auto-Reload (monitoring Captcha)...`);
                      
-                     // Wait with Captcha Check
+                     // Wait with Captcha Check AND UI State Check (STOP button)
                      const wakeTime = Date.now() + (timeToWait * 1000);
+                     let userStopped = false;
                      while (Date.now() < wakeTime) {
                          try {
+                             // Check if user clicked STOP
+                             const currentUIState = await ui.injectUI(page, config.DEFAULT_CONFIG, HUNTING_SPOTS, allMapNames, MONSTERS, licenseInfo);
+                             if (!currentUIState.active) {
+                                 logger.info('⏹️ User clicked STOP during respawn wait. Pausing...');
+                                 userStopped = true;
+                                 break;
+                             }
+                             
                              if (await captcha.solve(page)) {
                                  logger.info('🤖 CAPTCHA solved while waiting for respawn.');
                              }
                          } catch (e) {}
                          await sleep(1000); // Check every second
                      }
+                     
+                     // If user stopped, skip reload and let main loop handle pause
+                     if (userStopped) {
+                         continue;
+                     }
+                     
                      logger.log(`🔄 Auto-Reloading page (Respawn in ~${reloadThreshold}s)...`);
                      try {
                          await page.reload({ waitUntil: 'domcontentloaded' });
@@ -392,9 +415,18 @@ async function main() {
                      await sleep(5000); 
                      continue; 
                  } else {
-                     logger.warn(`💀 Unconscious. Respawn in ${waitSeconds}s. Waiting...`);
-                     const sleepTime = Math.min(waitSeconds * 1000 + 1000, 5000); 
-                     await sleep(sleepTime); 
+                     // Short wait - still check UI state
+                     const shortWaitEnd = Date.now() + Math.min(waitSeconds * 1000 + 1000, 5000);
+                     while (Date.now() < shortWaitEnd) {
+                         try {
+                             const currentUIState = await ui.injectUI(page, config.DEFAULT_CONFIG, HUNTING_SPOTS, allMapNames, MONSTERS, licenseInfo);
+                             if (!currentUIState.active) {
+                                 logger.info('⏹️ User clicked STOP during respawn wait. Pausing...');
+                                 break;
+                             }
+                         } catch (e) {}
+                         await sleep(500);
+                     }
                      continue;
                  }
             }
@@ -524,13 +556,14 @@ async function main() {
                      // --- MOB FOUND! ---
                      // Log only if it's a new mob ID or enough time passed (optional, but ID check is better for unique mobs)
                      if (lastEngagedMobId !== targetMob.id) {
-                         logger.log(`👹 E2 DETECTED: [${targetMob.nick}] at (${targetMob.x}, ${targetMob.y})! Engaging...`);
+                         logger.log(`👹 E2 DETECTED: [${targetMob.nick}] at (${targetMob.x}, ${targetMob.y})!${uiState.e2Attack ? ' Engaging...' : ' (Attack OFF - Idle mode)'}`);
                          lastEngagedMobId = targetMob.id;
                      }
                      
                      const distToMob = Math.hypot(targetMob.x - state.hero.x, targetMob.y - state.hero.y);
                      
-                     if (distToMob <= 1.5) {
+                     // Only attack if e2Attack is enabled
+                     if (uiState.e2Attack && distToMob <= 1.5) {
                          // ATTACK
                          await sleep(Math.floor(Math.random() * 150) + 50); // 50-200ms human delay
                          const result = await actions.attack(page, targetMob, lastAttackTime);
@@ -538,11 +571,19 @@ async function main() {
                          lastActionTime = Date.now(); // Reset AFK timer
                          await sleep(Math.floor(Math.random() * 400) + 800); // 800-1200ms throttle
                          continue;
-                     } else {
-                         // APPROACH
+                     } else if (uiState.e2Attack && distToMob > 1.5) {
+                         // APPROACH (only when attack is enabled)
                          await actions.move(page, state, { x: targetMob.x, y: targetMob.y, nick: targetMob.nick });
-                         // Removed sleep(400) for fluid movement
                          continue;
+                     } else {
+                         // E2Attack OFF - just stay near the mob (idle mode)
+                         // Anti-AFK will be handled by the standard anti-AFK logic below
+                         if (distToMob > 3.0) {
+                             // Get closer to the mob but don't attack
+                             await actions.move(page, state, { x: targetMob.x, y: targetMob.y, nick: targetMob.nick });
+                             continue;
+                         }
+                         // Otherwise just idle near mob - fall through to anti-AFK logic
                      }
                  } else {
                      // --- MOB NOT FOUND ---
@@ -971,6 +1012,12 @@ async function main() {
                 noAttackCounter = 0;
                 positionHistory = [];
                 
+                // Reset gateway stuck tracker on map change
+                gatewayStuckTracker.lastGateway = null;
+                gatewayStuckTracker.lastDistance = null;
+                gatewayStuckTracker.sameCount = 0;
+                gatewayStuckTracker.waitingUntil = 0;
+                
                 // Set cooldown - wait 2.5s before making gateway decisions
                 mapChangedAt = Date.now();
                 logger.log('⏳ Waiting 2.5s for map data to load...');
@@ -1096,6 +1143,17 @@ async function main() {
             if (mapCooldownActive && !state.target) {
                 await sleep(500);
                 continue; // Wait for mobs to load
+            }
+            
+            // --- GATEWAY STUCK LOOP DETECTION ---
+            // If we're currently in a recovery wait period, just wait
+            if (gatewayStuckTracker.waitingUntil > Date.now()) {
+                const remaining = Math.round((gatewayStuckTracker.waitingUntil - Date.now()) / 1000);
+                if (remaining % 10 === 0 || remaining <= 5) { // Log every 10s or last 5s
+                    logger.log(`⏳ Gateway stuck recovery: Waiting ${remaining}s for game to stabilize...`);
+                }
+                await sleep(1000);
+                continue;
             }
             
             let finalTarget = resupplyTarget || state.traversalTarget || state.target;
@@ -1346,6 +1404,50 @@ async function main() {
                      await sleep(Math.floor(Math.random() * 400) + 800); // 800-1200ms throttle
                 } 
                 else {
+                    // --- GATEWAY STUCK PATTERN DETECTION ---
+                    // Track if we're repeatedly trying to go to the same gateway without distance change
+                    if (finalTarget.isGateway || state.traversalTarget) {
+                        const gwName = finalTarget.name || finalTarget.nick || 'gateway';
+                        const currentDist = Math.hypot(finalTarget.x - state.hero.x, finalTarget.y - state.hero.y);
+                        
+                        // Check if same gateway with same distance (within 0.5 tolerance)
+                        const isSameGateway = (gatewayStuckTracker.lastGateway === gwName);
+                        const isSameDistance = gatewayStuckTracker.lastDistance !== null && 
+                            Math.abs(gatewayStuckTracker.lastDistance - currentDist) < 0.5;
+                        
+                        if (isSameGateway && isSameDistance) {
+                            gatewayStuckTracker.sameCount++;
+                            
+                            // After 3 identical attempts, trigger recovery wait
+                            if (gatewayStuckTracker.sameCount >= 3) {
+                                const waitTime = 30000 + Math.floor(Math.random() * 20001); // 30-50s
+                                logger.warn(`🔄 GATEWAY STUCK DETECTED! Same gateway [${gwName}] at ${currentDist.toFixed(1)}m for ${gatewayStuckTracker.sameCount} times.`);
+                                logger.warn(`⏳ Waiting ${Math.round(waitTime/1000)}s for game to reload/stabilize...`);
+                                
+                                gatewayStuckTracker.waitingUntil = Date.now() + waitTime;
+                                gatewayStuckTracker.sameCount = 0; // Reset for next cycle
+                                
+                                // Clear escape target to prevent immediate re-engagement
+                                escapeTarget = null;
+                                
+                                await sleep(1000);
+                                continue;
+                            }
+                        } else {
+                            // Different gateway or significant distance change - reset tracker
+                            gatewayStuckTracker.sameCount = 1;
+                        }
+                        
+                        // Update tracker state
+                        gatewayStuckTracker.lastGateway = gwName;
+                        gatewayStuckTracker.lastDistance = currentDist;
+                    } else {
+                        // Not targeting a gateway - reset tracker
+                        gatewayStuckTracker.sameCount = 0;
+                        gatewayStuckTracker.lastGateway = null;
+                        gatewayStuckTracker.lastDistance = null;
+                    }
+                    
                     // Start of Move
                     const moveResult = await actions.move(page, state, finalTarget);
                     

@@ -18,7 +18,7 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
         }
 
         // Restore UI State (Tab & Inputs)
-        let uiState = { tab: 'exp', transport: '', e2: '', potionSlots: 14 };
+        let uiState = { tab: 'exp', transport: '', e2: '', potionSlots: 14, e2Attack: true };
         try {
             const savedUI = localStorage.getItem('MARGO_UI_STATE');
             if (savedUI) uiState = JSON.parse(savedUI);
@@ -120,7 +120,7 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
                     width: 100%; height: 80px; background: #2a2a30; border: 1px solid #444;
                     color: #ddd; border-radius: 6px; padding: 8px; font-size: 11px;
                     resize: vertical; font-family: monospace; white-space: pre;
-                    outline: none;
+                    outline: none; box-sizing: border-box;
                 }
 
                 /* Scrollbar */
@@ -313,11 +313,11 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
 
                         <div class="mb-row" style="gap: 10px;">
                             <div style="flex: 1;">
-                                <div class="mb-label">Min Lvl</div>
+                                <div class="mb-label" style="margin-bottom: 5px;">Min Lvl</div>
                                 <input type="number" id="inp-min" class="mb-input" value="${window.BOT_CONFIG.minLvl}">
                             </div>
                             <div style="flex: 1;">
-                                 <div class="mb-label">Max Lvl</div>
+                                 <div class="mb-label" style="margin-bottom: 5px;">Max Lvl</div>
                                 <input type="number" id="inp-max" class="mb-input" value="${window.BOT_CONFIG.maxLvl}">
                             </div>
                         </div>
@@ -365,8 +365,14 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
                             </datalist>
                          </div>
                          <div class="mb-row">
+                             <label style="cursor:pointer; display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600;">
+                                <input type="checkbox" id="inp-e2-attack" ${uiState.e2Attack !== false ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: #FF5722;">
+                                ⚔️ Atakuj E2
+                             </label>
+                         </div>
+                         <div class="mb-row">
                              <div class="mb-label" style="font-size: 10px; color: #888; line-height: 1.4;">
-                                ℹ️ Tryb E2: Bot przejdzie do mapy i koordynatów wybranego potwora.
+                                ℹ️ Tryb E2: Bot przejdzie do mapy potwora. Gdy "Atakuj E2" jest wyłączone, bot tylko stoi przy E2 (dla grupowego farmu).
                              </div>
                          </div>
                     </div>
@@ -441,6 +447,8 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
              const saveUIState = () => {
                  const potionSlotsInput = document.getElementById('inp-potion-slots');
                  const potionSlots = potionSlotsInput ? parseInt(potionSlotsInput.value) || 14 : 14;
+                 const e2AttackCheckbox = document.getElementById('inp-e2-attack');
+                 const e2Attack = e2AttackCheckbox ? e2AttackCheckbox.checked : true;
                  
                  // Update global variable immediately
                  window.BOT_POTION_SLOTS = potionSlots;
@@ -449,7 +457,8 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
                      tab: currentTab,
                      transport: document.getElementById('inp-transport-map')?.value || '',
                      e2: document.getElementById('inp-e2-monster')?.value || '',
-                     potionSlots: potionSlots
+                     potionSlots: potionSlots,
+                     e2Attack: e2Attack
                  };
                  localStorage.setItem('MARGO_UI_STATE', JSON.stringify(state));
              };
@@ -484,6 +493,9 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
              
              const e2Inp = document.getElementById('inp-e2-monster');
              if (e2Inp) e2Inp.oninput = saveUIState;
+             
+             const e2AttackInp = document.getElementById('inp-e2-attack');
+             if (e2AttackInp) e2AttackInp.onchange = saveUIState;
              
              const potionSlotsInp = document.getElementById('inp-potion-slots');
              if (potionSlotsInp) potionSlotsInp.onchange = saveUIState;
@@ -666,6 +678,10 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
             }
         }
 
+        // Get e2Attack checkbox state
+        const e2AttackCheckbox = document.getElementById('inp-e2-attack');
+        const e2Attack = e2AttackCheckbox ? e2AttackCheckbox.checked : true;
+
         return { 
             active: window.BOT_ACTIVE, 
             config: window.BOT_CONFIG,
@@ -673,6 +689,7 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
             mode: mode,
             transportMap: transportMap,
             monsterTarget: monsterTarget,
+            e2Attack: e2Attack,
             licenseValid: license && license.valid,
             pendingLicenseKey: window.PENDING_LICENSE_KEY || localStorage.getItem('MARGO_LICENSE_KEY') || null
         };
