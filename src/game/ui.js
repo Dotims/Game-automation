@@ -211,17 +211,25 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
         }
 
         // --- HTML ---
-        // Check if license status changed - if so, force panel recreation
+        // Check if license status changed or new validation happened - if so, force panel recreation
         const currentLicenseStatus = license && license.valid;
-        if (document.getElementById('margo-bot-panel') && window.LAST_LICENSE_STATUS !== currentLicenseStatus) {
-            // License status changed! Remove old panel to force recreation
+        const currentLicenseReason = license && license.reason ? license.reason : '';
+        const hasPendingKey = !!window.PENDING_LICENSE_KEY;
+        
+        const statusChanged = window.LAST_LICENSE_STATUS !== currentLicenseStatus;
+        const reasonChanged = window.LAST_LICENSE_REASON !== currentLicenseReason;
+        
+        // Force refresh if: status changed, reason changed, or there was a pending key (just validated)
+        if (document.getElementById('margo-bot-panel') && (statusChanged || reasonChanged || hasPendingKey)) {
             const oldPanel = document.getElementById('margo-bot-panel');
             if (oldPanel) {
                 oldPanel.remove();
-                console.log('🔄 License status changed, refreshing UI panel');
+                console.log('🔄 License validation updated, refreshing UI panel');
             }
         }
         window.LAST_LICENSE_STATUS = currentLicenseStatus;
+        window.LAST_LICENSE_REASON = currentLicenseReason;
+        window.PENDING_LICENSE_KEY = null; // Clear pending flag after handling
 
         if (document.body && !document.getElementById('margo-bot-panel')) {
              const div = document.createElement('div');
@@ -407,6 +415,8 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
                      // Visual feedback
                      activateBtn.textContent = '⏳ WERYFIKACJA...';
                      activateBtn.disabled = true;
+                     licenseError.textContent = '';
+                     licenseInput.classList.remove('error');
                  };
                  
                  // Restore pending key if exists
@@ -415,10 +425,13 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
                      licenseInput.value = savedKey;
                  }
                  
-                 // Show error if passed from previous validation
+                 // Show error if passed from previous validation and reset button
                  if (license && !license.valid && license.reason) {
                      licenseError.textContent = '❌ ' + license.reason;
                      licenseInput.classList.add('error');
+                     // Reset button so user can try again
+                     activateBtn.textContent = '🔑 AKTYWUJ LICENCJĘ';
+                     activateBtn.disabled = false;
                  }
              }
 
