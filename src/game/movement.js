@@ -341,7 +341,7 @@ const movement = {
 
              // Optimized Burst Mode
              // Unlimited steps for smooth movement (User Request)
-             const stepsToTake = path.length - 1; 
+             let stepsToTake = path.length - 1; 
              let currentX = startX;
              let currentY = startY;
 
@@ -398,17 +398,63 @@ const movement = {
                      currentY = nextStep[1];
 
                      // 🛡️ ACTIVE POSITION VERIFICATION (Every 3 steps)
-                     // Prevents "plowing" into walls/mobs if desynced
                      if (i % 3 === 0) {
                          try {
-                             const realPos = await page.evaluate(() => ({ x: Math.round(hero.x), y: Math.round(hero.y) }));
+                             // Fetch Position AND Fresh Obstacles (Mobs can move!)
+                             const scanData = await page.evaluate(() => {
+                                 const obs = [];
+                                 if (typeof g !== 'undefined' && g.npc) {
+                                     for (let key in g.npc) {
+                                         const n = g.npc[key];
+                                          // Type 4 = Gateways/Info (Walkable)
+                                         if (n.type !== 4) obs.push({x: n.x, y: n.y});
+                                     }
+                                 }
+                                 return { 
+                                     x: Math.round(hero.x), 
+                                     y: Math.round(hero.y),
+                                     obstacles: obs
+                                 };
+                             });
                              
-                             // Allow 1 tile tolerance (lag)
+                             const realPos = { x: scanData.x, y: scanData.y };
                              const distSync = Math.abs(realPos.x - currentX) + Math.abs(realPos.y - currentY);
+                             
                              if (distSync > 1) {
-                                 if (activeKey) await page.keyboard.up(activeKey);
-                                 logger.warn(`⚠️ DESYNC DETECTED! Expected: [${currentX},${currentY}], Real: [${realPos.x},${realPos.y}]. Aborting path.`);
-                                 return 'fail'; // Trigger re-pathing
+                                 logger.warn(`⚠️ Desync (${distSync} tiles). Refreshing map & re-routing from [${realPos.x},${realPos.y}]...`);
+                                 
+                                 // 1. Rebuild Grid from Static Map (fresh state)
+                                 const correctionGrid = ensureGrid(gameState).clone();
+                                 
+                                 // 2. Apply FRESH Obstacles (The mob that blocked us!)
+                                 if (scanData.obstacles) {
+                                     for (const o of scanData.obstacles) {
+                                         if (correctionGrid.isWalkableAt(o.x, o.y)) {
+                                             correctionGrid.setWalkableAt(o.x, o.y, false);
+                                         }
+                                     }
+                                 }
+                                 
+                                 // 3. Ensure Target/Start are Unlock (Standard Logic)
+                                 if (finalTarget.isGateway) correctionGrid.setWalkableAt(endX, endY, true);
+                                 correctionGrid.setWalkableAt(realPos.x, realPos.y, true); 
+                                 
+                                 // 4. Find Path
+                                 const newPath = finder.findPath(realPos.x, realPos.y, endX, endY, correctionGrid);
+                                 
+                                 if (newPath && newPath.length > 0) {
+                                     logger.success(`   ✅ Found detour around obstacle! (${newPath.length} steps)`);
+                                     path = newPath;
+                                     stepsToTake = path.length - 1; 
+                                     i = 0; 
+                                     currentX = realPos.x;
+                                     currentY = realPos.y;
+                                     continue;
+                                 } else {
+                                     logger.warn(`🛑 Blocked by mob/wall! No path found. Aborting.`);
+                                     if (activeKey) await page.keyboard.up(activeKey);
+                                     return 'fail'; // Let main loop handle it (maybe attack?)
+                                 }
                              }
                          } catch (e) { /* Ignore evaluate errors */ }
                      }
