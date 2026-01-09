@@ -1436,23 +1436,26 @@ async function main() {
                          continue;
                      }
                      
-                     // ATTACK!
-                     await sleep(Math.floor(Math.random() * 100) + 30); // 30-130ms human delay (faster)
+                     // ATTACK! (EXP Mode - Ultra Fast)
+                     await sleep(Math.floor(Math.random() * 30)); // 0-30ms minimal delay
                      const res = await actions.attack(page, finalTarget, lastAttackTime);
                      lastAttackTime = res;
                      lastActionTime = Date.now(); // Reset AFK timer
                      
-                     // ========== FAST PATH OPTIMIZATION ==========
-                     // If we have a precomputed next target, use it immediately!
+                     // ========== BLIND MOVE OPTIMIZATION ==========
+                     // Start moving to next target IMMEDIATELY after pressing E
+                     // Don't wait to confirm kill - if mob didn't die, main loop will handle it
                      if (precomputedNextTarget && precomputedNextTarget.id !== finalTarget.id) {
-                         // logger.success(`⚡ Fast Path: Using precomputed target [${precomputedNextTarget.nick}]`);
-                         await actions.move(page, state, precomputedNextTarget);
-                         precomputedNextTarget = null; // Clear after using
-                         continue; // Skip the slow main loop iteration
+                         // logger.success(`⚡ Blind Move: Rushing to [${precomputedNextTarget.nick}]`);
+                         // Don't await fully - just fire and continue
+                         actions.move(page, state, precomputedNextTarget).catch(() => {});
+                         precomputedNextTarget = null;
+                         await sleep(Math.floor(Math.random() * 50) + 30); // 30-80ms micro-pause
+                         continue;
                      }
                      
-                     // No precomputed target - use standard throttle
-                     await sleep(Math.floor(Math.random() * 300) + 400); // 400-700ms (reduced from 800-1200ms)
+                     // No precomputed target - minimal throttle
+                     await sleep(Math.floor(Math.random() * 200) + 100); // 100-300ms (very fast)
                 } 
                 else {
                     // --- GATEWAY STUCK PATTERN DETECTION ---
