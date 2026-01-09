@@ -434,6 +434,14 @@ const movement = {
                                   return 'captcha'; // Main loop handles CAPTCHA
                              }
                              
+                             // STOP BUTTON CHECK - Abort if user clicked ZATRZYMAJ
+                             const botStopped = await page.evaluate(() => window.BOT_ACTIVE === false);
+                             if (botStopped) {
+                                  if (activeKey) await page.keyboard.up(activeKey);
+                                  logger.info(`⏹️ STOP detected during movement. Aborting...`);
+                                  return 'stopped'; // Main loop handles pause
+                             }
+                             
                              // 0. CRITICAL: Check if map changed (Teleport/TP Scroll)
                              if (scanData.mapId !== gameState.map.id) {
                                   if (activeKey) await page.keyboard.up(activeKey);

@@ -182,6 +182,7 @@ async function main() {
     let positionHistory = [];
     let sameTargetAttackCount = 0; // NEW: Counter for consecutive attacks on same target
     let lastAttackTargetId = null;
+    let precomputedNextTarget = null; // Fast Path: Next mob calculated during movement
 
     // --- Cached Map Data ---
     let cachedMapId = null;
@@ -1049,6 +1050,7 @@ async function main() {
                 targetSwitchCount = 0;
                 noAttackCounter = 0;
                 positionHistory = [];
+                precomputedNextTarget = null; // Clear fast path target
                 
                 // Reset gateway stuck tracker on map change
                 gatewayStuckTracker.lastGateway = null;
@@ -1435,11 +1437,22 @@ async function main() {
                      }
                      
                      // ATTACK!
-                     await sleep(Math.floor(Math.random() * 150) + 50); // 50-200ms human delay
+                     await sleep(Math.floor(Math.random() * 100) + 30); // 30-130ms human delay (faster)
                      const res = await actions.attack(page, finalTarget, lastAttackTime);
                      lastAttackTime = res;
                      lastActionTime = Date.now(); // Reset AFK timer
-                     await sleep(Math.floor(Math.random() * 400) + 800); // 800-1200ms throttle
+                     
+                     // ========== FAST PATH OPTIMIZATION ==========
+                     // If we have a precomputed next target, use it immediately!
+                     if (precomputedNextTarget && precomputedNextTarget.id !== finalTarget.id) {
+                         // logger.success(`⚡ Fast Path: Using precomputed target [${precomputedNextTarget.nick}]`);
+                         await actions.move(page, state, precomputedNextTarget);
+                         precomputedNextTarget = null; // Clear after using
+                         continue; // Skip the slow main loop iteration
+                     }
+                     
+                     // No precomputed target - use standard throttle
+                     await sleep(Math.floor(Math.random() * 300) + 400); // 400-700ms (reduced from 800-1200ms)
                 } 
                 else {
                     // --- GATEWAY STUCK PATTERN DETECTION ---
@@ -1484,6 +1497,38 @@ async function main() {
                         gatewayStuckTracker.sameCount = 0;
                         gatewayStuckTracker.lastGateway = null;
                         gatewayStuckTracker.lastDistance = null;
+                    }
+                    
+                    // ========== PRE-COMPUTE NEXT TARGET (during movement) ==========
+                    // If we're moving to a mob, pre-calculate the next mob so we can
+                    // use it immediately after attacking (Fast Path optimization)
+                    if (finalTarget.type === 'mob' && finalTarget.dist > 1.5) {
+                        // Don't await - let this run while we move
+                        page.evaluate(({ currentTargetId, heroX, heroY, minLvl, maxLvl }) => {
+                            const allMobs = [];
+                            if (typeof g !== 'undefined' && g.npc) {
+                                for (let id in g.npc) {
+                                    const n = g.npc[id];
+                                    // Filter: attackable, right level, alive, NOT current target
+                                    if (n.type === 2 && n.lvl >= minLvl && n.lvl <= maxLvl && n.wt > 0 && n.id !== currentTargetId) {
+                                        const dist = Math.hypot(n.x - heroX, n.y - heroY);
+                                        allMobs.push({ id: n.id, x: n.x, y: n.y, nick: n.nick, dist: dist, type: 'mob' });
+                                    }
+                                }
+                            }
+                            allMobs.sort((a, b) => a.dist - b.dist);
+                            return allMobs.length > 0 ? allMobs[0] : null;
+                        }, { 
+                            currentTargetId: finalTarget.id, 
+                            heroX: finalTarget.x, // Use target position (where hero will be after moving)
+                            heroY: finalTarget.y,
+                            minLvl: currentConfig.minLvl || 1,
+                            maxLvl: currentConfig.maxLvl || 999
+                        }).then(nextMob => {
+                            if (nextMob) {
+                                precomputedNextTarget = nextMob;
+                            }
+                        }).catch(() => {}); // Ignore errors
                     }
                     
                     // Start of Move
