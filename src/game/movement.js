@@ -413,10 +413,18 @@ const movement = {
                                  return { 
                                      x: Math.round(hero.x), 
                                      y: Math.round(hero.y),
+                                     mapId: map.id,
                                      obstacles: obs
                                  };
                              });
                              
+                             // 0. CRITICAL: Check if map changed (Teleport/TP Scroll)
+                             if (scanData.mapId !== gameState.map.id) {
+                                  if (activeKey) await page.keyboard.up(activeKey);
+                                  logger.warn(`🌍 Map changed manually! (${gameState.map.id} -> ${scanData.mapId}). Aborting path.`);
+                                  return 'fail'; // Main loop will pick up new map
+                             }
+
                              const realPos = { x: scanData.x, y: scanData.y };
                              const distSync = Math.abs(realPos.x - currentX) + Math.abs(realPos.y - currentY);
                              
@@ -449,6 +457,8 @@ const movement = {
                                      i = 0; 
                                      currentX = realPos.x;
                                      currentY = realPos.y;
+                                     
+                                     // If direction changed, we might need to toggle keys, but the next loop iter handles it.
                                      continue;
                                  } else {
                                      logger.warn(`🛑 Blocked by mob/wall! No path found. Aborting.`);
