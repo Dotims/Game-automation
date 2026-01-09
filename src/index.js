@@ -1571,6 +1571,19 @@ async function main() {
                     // Start of Move
                     const moveResult = await actions.move(page, state, finalTarget);
                     
+                    // Handle DESYNC LOOP - bot stuck at same position, needs page refresh
+                    if (moveResult === 'desync_loop') {
+                        logger.error('🔄 Performing Ctrl+F5 page refresh to recover from desync loop...');
+                        try {
+                            await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+                            logger.success('✅ Page reloaded successfully. Resuming in 5s...');
+                            await sleep(2000);
+                        } catch (reloadErr) {
+                            logger.error(`❌ Reload failed: ${reloadErr.message}`);
+                        }
+                        continue;
+                    }
+                    
                     // Handle unreachable gateway/target - try to find alternative
                     if (moveResult === 'skip_target' && finalTarget.isGateway) {
                         const gwName = finalTarget.name || finalTarget.nick || 'unknown';

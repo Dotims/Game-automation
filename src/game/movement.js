@@ -338,6 +338,10 @@ const movement = {
              
              pathfindFailCounter = 0;
              lastFailedTargetId = null;
+             
+             // Desync loop detection
+             let desyncLoopCount = 0;
+             let lastDesyncPos = null;
 
              // Optimized Burst Mode
              // Unlimited steps for smooth movement (User Request)
@@ -455,6 +459,21 @@ const movement = {
                              if (distSync > 1) {
                                  logger.warn(`⚠️ Desync (${distSync} tiles). Refreshing map & re-routing from [${realPos.x},${realPos.y}]...`);
                                  
+                                 // DESYNC LOOP DETECTION
+                                 // If we desync at the same position repeatedly, we're stuck - need page refresh
+                                 const posKey = `${realPos.x},${realPos.y}`;
+                                 if (lastDesyncPos && Math.abs(realPos.x - lastDesyncPos.x) <= 2 && Math.abs(realPos.y - lastDesyncPos.y) <= 2) {
+                                     desyncLoopCount++;
+                                     if (desyncLoopCount >= 6) {
+                                         logger.error(`🔄 DESYNC LOOP DETECTED! Stuck at [${realPos.x},${realPos.y}] for ${desyncLoopCount} re-routes. Requesting page refresh...`);
+                                         if (activeKey) await page.keyboard.up(activeKey);
+                                         return 'desync_loop'; // Signal main loop to refresh page
+                                     }
+                                 } else {
+                                     desyncLoopCount = 1;
+                                 }
+                                 lastDesyncPos = realPos;
+                                 
                                  // 1. Rebuild Grid from Static Map (fresh state)
                                  const correctionGrid = ensureGrid(gameState).clone();
                                  
@@ -491,6 +510,63 @@ const movement = {
                                  }
                              }
                          } catch (e) { /* Ignore evaluate errors */ }
+                     }
+                     
+                     // 🔍 PROACTIVE PATH SCAN (Every 12 steps)
+                     // Check if mobs appeared on our remaining path and recalculate before we hit them
+                     if (i > 0 && i % 12 === 0 && i < stepsToTake - 2) {
+                         try {
+                             const pathScan = await page.evaluate(() => {
+                                 const obs = [];
+                                 if (typeof g !== 'undefined' && g.npc) {
+                                     for (let key in g.npc) {
+                                         const n = g.npc[key];
+                                         if (n.type !== 4) obs.push({x: n.x, y: n.y});
+                                     }
+                                 }
+                                 return { 
+                                     heroX: Math.round(hero.x), 
+                                     heroY: Math.round(hero.y),
+                                     obstacles: obs 
+                                 };
+                             });
+                             
+                             // Check if any mob is on our remaining path (next 10 steps)
+                             const remainingPath = path.slice(i + 1, Math.min(i + 11, path.length));
+                             let mobOnPath = false;
+                             
+                             for (const step of remainingPath) {
+                                 for (const obs of pathScan.obstacles) {
+                                     if (obs.x === step[0] && obs.y === step[1]) {
+                                         mobOnPath = true;
+                                         break;
+                                     }
+                                 }
+                                 if (mobOnPath) break;
+                             }
+                             
+                             if (mobOnPath) {
+                                 // logger.log(`🔍 Mob detected ahead! Recalculating path...`);
+                                 const scanGrid = ensureGrid(gameState).clone();
+                                 for (const o of pathScan.obstacles) {
+                                     if (scanGrid.isWalkableAt(o.x, o.y)) {
+                                         scanGrid.setWalkableAt(o.x, o.y, false);
+                                     }
+                                 }
+                                 if (finalTarget.isGateway) scanGrid.setWalkableAt(endX, endY, true);
+                                 scanGrid.setWalkableAt(pathScan.heroX, pathScan.heroY, true);
+                                 
+                                 const betterPath = finder.findPath(pathScan.heroX, pathScan.heroY, endX, endY, scanGrid);
+                                 if (betterPath && betterPath.length > 0) {
+                                     path = betterPath;
+                                     stepsToTake = path.length - 1;
+                                     i = 0;
+                                     currentX = pathScan.heroX;
+                                     currentY = pathScan.heroY;
+                                     continue;
+                                 }
+                             }
+                         } catch (e) { /* Ignore */ }
                      }
                  }
              }

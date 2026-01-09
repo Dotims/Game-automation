@@ -51,6 +51,12 @@ async function solveCaptcha(page) {
 
     logger.success(`✅ Found ${correctButtons.length} correct answers.`);
 
+    // Shuffle correct answers to click in random order (more human-like)
+    for (let i = correctButtons.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [correctButtons[i], correctButtons[j]] = [correctButtons[j], correctButtons[i]];
+    }
+
     for (const btn of correctButtons) {
         if (btn.isActive) {
             logger.log(`⏭️ Skipping "${btn.text}" (Already Selected)`);
