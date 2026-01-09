@@ -340,13 +340,12 @@ const movement = {
              lastFailedTargetId = null;
 
              // Optimized Burst Mode
-             // Reduced to 7 to ensure we check for combat/mobs more frequently
-             const stepsToTake = Math.min(path.length - 1, 7); 
+             // Unlimited steps for smooth movement (User Request)
+             const stepsToTake = path.length - 1; 
              let currentX = startX;
              let currentY = startY;
 
              // Dynamic Key Press Duration
-             // Fix for "Turning instead of moving":
              // The FIRST step in a direction needs a longer hold (~250ms) to register as a move.
              // Subsequent steps (holding) can be faster (~170ms).
              const currentPing = Math.min(gameState.ping || 50, 1000); // safety cap

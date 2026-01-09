@@ -235,6 +235,8 @@ async function main() {
             global.stopLogged = false;
         }
 
+        const loopStart = Date.now(); // ⏱️ TIMING DIAGNOSTIC
+
         try {
             // Inject UI (returns current config state)
             // Validate license from stored key
@@ -329,7 +331,12 @@ async function main() {
                 skippedMobIds: Array.from(skippedMobs.keys()) 
             };
             
+            // ⏱️ TIMING DIAGNOSTIC
+            const stateStart = Date.now();
             const state = await gameState.getGameState(page, currentConfig);
+            const stateTime = Date.now() - stateStart;
+            if (stateTime > 200) logger.warn(`⚠️ SLOW GameState Read: ${stateTime}ms`);
+
             if (!state) {
                  await sleep(500);
                  continue; // Loading...
