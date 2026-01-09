@@ -183,6 +183,9 @@ async function main() {
     let sameTargetAttackCount = 0; // NEW: Counter for consecutive attacks on same target
     let lastAttackTargetId = null;
     let precomputedNextTarget = null; // Fast Path: Next mob calculated during movement
+    let blindMoveFailCount = 0; // Track consecutive blind move failures (desync after attack)
+    let blindMoveCooldownUntil = 0; // Timestamp when blind move can be re-enabled
+    let lastBlindMoveTargetId = null; // Track which mob we blind-moved from
 
     // --- Cached Map Data ---
     let cachedMapId = null;
@@ -1436,17 +1439,41 @@ async function main() {
                          continue;
                      }
                      
-                     // ATTACK! (EXP Mode - Ultra Fast)
-                     await sleep(Math.floor(Math.random() * 30)); // 0-30ms minimal delay
+                     // ========== BLIND MOVE FAILURE DETECTION ==========
+                     // If we're attacking the same mob we just blind-moved from, it means kill failed
+                     if (lastBlindMoveTargetId && finalTarget.id === lastBlindMoveTargetId) {
+                         blindMoveFailCount++;
+                         if (blindMoveFailCount >= 2) {
+                             // Too many failures - disable blind move for 10 seconds
+                             blindMoveCooldownUntil = Date.now() + 10000;
+                             logger.warn(`⚠️ Blind Move disabled for 10s (mob didn't die ${blindMoveFailCount}x)`);
+                             blindMoveFailCount = 0;
+                         }
+                     } else {
+                         // Different mob - reset counter
+                         blindMoveFailCount = 0;
+                     }
+                     lastBlindMoveTargetId = null; // Reset after check
+                     
+                     // Check if blind move is in cooldown
+                     const blindMoveEnabled = Date.now() > blindMoveCooldownUntil;
+                     
+                     // ATTACK! (EXP Mode)
+                     if (blindMoveEnabled) {
+                         await sleep(Math.floor(Math.random() * 30)); // 0-30ms (fast)
+                     } else {
+                         await sleep(Math.floor(Math.random() * 100) + 50); // 50-150ms (careful)
+                     }
+                     
                      const res = await actions.attack(page, finalTarget, lastAttackTime);
                      lastAttackTime = res;
                      lastActionTime = Date.now(); // Reset AFK timer
                      
                      // ========== BLIND MOVE OPTIMIZATION ==========
-                     // Start moving to next target IMMEDIATELY after pressing E
-                     // Don't wait to confirm kill - if mob didn't die, main loop will handle it
-                     if (precomputedNextTarget && precomputedNextTarget.id !== finalTarget.id) {
-                         // logger.success(`⚡ Blind Move: Rushing to [${precomputedNextTarget.nick}]`);
+                     // Only use blind move if enabled and we have precomputed target
+                     if (blindMoveEnabled && precomputedNextTarget && precomputedNextTarget.id !== finalTarget.id) {
+                         // Remember which mob we're leaving (to detect failure later)
+                         lastBlindMoveTargetId = finalTarget.id;
                          // Don't await fully - just fire and continue
                          actions.move(page, state, precomputedNextTarget).catch(() => {});
                          precomputedNextTarget = null;
@@ -1454,8 +1481,12 @@ async function main() {
                          continue;
                      }
                      
-                     // No precomputed target - minimal throttle
-                     await sleep(Math.floor(Math.random() * 200) + 100); // 100-300ms (very fast)
+                     // No blind move - use throttle (slower when in cooldown)
+                     if (blindMoveEnabled) {
+                         await sleep(Math.floor(Math.random() * 200) + 100); // 100-300ms
+                     } else {
+                         await sleep(Math.floor(Math.random() * 400) + 400); // 400-800ms (careful mode)
+                     }
                 } 
                 else {
                     // --- GATEWAY STUCK PATTERN DETECTION ---
@@ -1473,6 +1504,8 @@ async function main() {
                             gatewayStuckTracker.sameCount++;
                             
                             // After 3 identical attempts, trigger recovery wait
+                            // DISABLED: User requested to disable this waiting logic
+                            /*
                             if (gatewayStuckTracker.sameCount >= 3) {
                                 const waitTime = 30000 + Math.floor(Math.random() * 20001); // 30-50s
                                 logger.warn(`🔄 GATEWAY STUCK DETECTED! Same gateway [${gwName}] at ${currentDist.toFixed(1)}m for ${gatewayStuckTracker.sameCount} times.`);
@@ -1487,6 +1520,7 @@ async function main() {
                                 await sleep(1000);
                                 continue;
                             }
+                            */
                         } else {
                             // Different gateway or significant distance change - reset tracker
                             gatewayStuckTracker.sameCount = 1;

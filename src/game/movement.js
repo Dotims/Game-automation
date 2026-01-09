@@ -397,8 +397,8 @@ const movement = {
                      currentX = nextStep[0];
                      currentY = nextStep[1];
 
-                     // 🛡️ ACTIVE POSITION VERIFICATION (Every 3 steps)
-                     if (i % 3 === 0) {
+                     // 🛡️ ACTIVE POSITION VERIFICATION (Every 3 steps, skip step 0)
+                     if (i > 0 && i % 3 === 0) {
                          try {
                              // Fetch Position AND Fresh Obstacles (Mobs can move!)
                              const scanData = await page.evaluate(() => {
