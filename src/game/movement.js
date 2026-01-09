@@ -396,6 +396,22 @@ const movement = {
                      
                      currentX = nextStep[0];
                      currentY = nextStep[1];
+
+                     // 🛡️ ACTIVE POSITION VERIFICATION (Every 3 steps)
+                     // Prevents "plowing" into walls/mobs if desynced
+                     if (i % 3 === 0) {
+                         try {
+                             const realPos = await page.evaluate(() => ({ x: Math.round(hero.x), y: Math.round(hero.y) }));
+                             
+                             // Allow 1 tile tolerance (lag)
+                             const distSync = Math.abs(realPos.x - currentX) + Math.abs(realPos.y - currentY);
+                             if (distSync > 1) {
+                                 if (activeKey) await page.keyboard.up(activeKey);
+                                 logger.warn(`⚠️ DESYNC DETECTED! Expected: [${currentX},${currentY}], Real: [${realPos.x},${realPos.y}]. Aborting path.`);
+                                 return 'fail'; // Trigger re-pathing
+                             }
+                         } catch (e) { /* Ignore evaluate errors */ }
+                     }
                  }
              }
              
