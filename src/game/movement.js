@@ -410,13 +410,29 @@ const movement = {
                                          if (n.type !== 4) obs.push({x: n.x, y: n.y});
                                      }
                                  }
+                                 
+                                 // CAPTCHA Check (Priority!)
+                                 let hasCaptcha = false;
+                                 const captchaEl = document.getElementById('captcha');
+                                 if (captchaEl && captchaEl.style.display !== 'none' && captchaEl.offsetParent !== null) {
+                                     hasCaptcha = true;
+                                 }
+                                 
                                  return { 
                                      x: Math.round(hero.x), 
                                      y: Math.round(hero.y),
                                      mapId: map.id,
-                                     obstacles: obs
+                                     obstacles: obs,
+                                     captcha: hasCaptcha
                                  };
                              });
+                             
+                             // CAPTCHA PRIORITY CHECK - Abort immediately if detected!
+                             if (scanData.captcha) {
+                                  if (activeKey) await page.keyboard.up(activeKey);
+                                  logger.warn(`🤖 CAPTCHA detected during movement! Aborting to main loop...`);
+                                  return 'captcha'; // Main loop handles CAPTCHA
+                             }
                              
                              // 0. CRITICAL: Check if map changed (Teleport/TP Scroll)
                              if (scanData.mapId !== gameState.map.id) {
