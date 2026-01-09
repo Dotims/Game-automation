@@ -494,6 +494,11 @@ async function injectUI(page, defaultConfig, huntingSpots, allMapNames, allMonst
 
              tabs.forEach(tab => {
                  tab.onclick = () => {
+                     // Stop bot when switching tabs (require explicit START in new mode)
+                     if (currentTab !== tab.dataset.tab && window.BOT_ACTIVE) {
+                         window.BOT_ACTIVE = false;
+                         localStorage.setItem('MARGO_BOT_ACTIVE', 'false');
+                     }
                      currentTab = tab.dataset.tab;
                      updateTabs();
                      saveUIState();
