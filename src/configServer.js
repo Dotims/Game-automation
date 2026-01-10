@@ -117,7 +117,7 @@ function getConfigHTML(config) {
                     <input type="text" class="profile-input small" value="${profile.profileDir || 'Default'}" 
                            onchange="updateProfile('${profile.id}', 'profileDir', this.value)"
                            placeholder="Default lub Profile 1">
-                    <span class="port-badge">Port: ${cdpPort}</span>
+
                 </div>
             </div>
         </div>`;
@@ -284,7 +284,7 @@ function getConfigHTML(config) {
             <button class="btn btn-stop-all" onclick="stopAllBots()">⏹️ Stop wszystkich</button>
         </div>
         
-        <div class="footer">MargoSzpont v2.2 Multi-Bot • Każdy bot = osobny User Data folder</div>
+        <div class="footer">MargoSzpont - wersja testowa, miłego użytkowania! ;)</div>
     </div>
     
     <script>

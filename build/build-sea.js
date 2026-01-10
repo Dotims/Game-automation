@@ -1,25 +1,55 @@
 /**
- * Build Script - Node SEA + Bytenode + esbuild
+ * Build Script - Node SEA + Bytenode + Obfuscator + esbuild
  * 
  * Flow:
- * 1. esbuild bundles all files into one bundle.js
- * 2. bytenode compiles to bundle.jsc (optional - can cause issues)
- * 3. Node SEA creates single executable
- * 4. (Manual) Enigma Virtual Box for extra protection
+ * 1. esbuild bundles all files into one bundle.js (for SEA bootstrapping)
+ * 2. Obfuscate source files (String Encryption)
+ * 3. Bytenode compiles obfuscated sources to .jsc
+ * 4. Node SEA creates single executable
  */
 
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const bytenode = require('bytenode');
+const JavaScriptObfuscator = require('javascript-obfuscator');
 
-// Files to SKIP compilation (browser context use)
+// Files to SKIP compilation AND Obfuscation (if any necessary)
+// browser_evals.js MUST be skipped from Bytenode (browser context)
+// BUT we will Obfuscate it (Text -> Obfuscated Text)
 const SKIP_COMPILATION = [
-    'browser_evals.js' // MUST be excluded: Contains source code sent to browser
+    'browser_evals.js' 
 ];
 
 const BUILD_DIR = path.join(__dirname, '..', 'build-sea');
 const DIST_DIR = path.join(__dirname, '..', 'dist');
+
+const OBFUSCATION_OPTIONS = {
+    compact: true,
+    controlFlowFlattening: false,
+    deadCodeInjection: false,
+    debugProtection: false,
+    disableConsoleOutput: false,
+    identifierNamesGenerator: 'hexadecimal',
+    log: false,
+    numbersToExpressions: true,
+    renameGlobals: false,
+    selfDefending: false,
+    simplify: true,
+    splitStrings: true,
+    stringArray: true,
+    stringArrayCallsTransform: true,
+    stringArrayEncoding: ['rc4'],
+    stringArrayIndexShift: true,
+    stringArrayRotate: true,
+    stringArrayShuffle: true,
+    stringArrayWrappersCount: 1,
+    stringArrayWrappersChainedCalls: true,
+    stringArrayWrappersParametersMaxCount: 2,
+    stringArrayWrappersType: 'variable',
+    stringArrayThreshold: 0.75,
+    unicodeEscapeSequence: false
+};
 
 function run(cmd, options = {}) {
     console.log(`$ ${cmd}`);
@@ -43,9 +73,18 @@ function ensureDir(dir) {
     fs.mkdirSync(dir, { recursive: true });
 }
 
+function obfuscateContent(code) {
+    try {
+        return JavaScriptObfuscator.obfuscate(code, OBFUSCATION_OPTIONS).getObfuscatedCode();
+    } catch (e) {
+        console.warn('   ⚠️ Obfuscation warning:', e.message);
+        return code; // Fallback to original
+    }
+}
+
 async function main() {
     console.log('\n╔══════════════════════════════════════════════════════════════╗');
-    console.log('║     🔒 MargoSzpont Node SEA Build                            ║');
+    console.log('║     🔒 MargoSzpont Ultimate Build (SEA + Bytecode + Obf)     ║');
     console.log('╚══════════════════════════════════════════════════════════════╝\n');
     
     const startTime = Date.now();
@@ -56,23 +95,23 @@ async function main() {
     ensureDir(DIST_DIR);
     console.log('   ✅ Directories ready\n');
     
-    // Step 2: Bundle with esbuild
+    // Step 2: Bundle with esbuild (Bootstrapper)
+    // We bundle start.js to create the EXE entry point.
+    // NOTE: start.js will spawn 'node src/index.js'.
+    // Since src/index.js will be compiled, this works.
     console.log('📦 Step 2: Bundling with esbuild...');
     const entryPoint = path.join(__dirname, '..', 'start.js');
     const bundlePath = path.join(BUILD_DIR, 'bundle.js');
     
-    // esbuild bundles everything into one file
     if (!run(`npx esbuild "${entryPoint}" --bundle --platform=node --outfile="${bundlePath}" --external:playwright --external:playwright-core`)) {
         console.error('❌ esbuild failed');
         process.exit(1);
     }
     
-    const bundleSize = (fs.statSync(bundlePath).size / 1024).toFixed(1);
-    console.log(`   ✅ Bundle created: ${bundleSize} KB\n`);
+    console.log(`   ✅ Bundle created\n`);
     
     // Step 3: Create SEA config
     console.log('📦 Step 3: Creating SEA configuration...');
-    
     const seaConfig = {
         main: 'bundle.js',
         output: 'sea-prep.blob',
@@ -80,56 +119,37 @@ async function main() {
         useSnapshot: false,
         useCodeCache: true
     };
-    
-    fs.writeFileSync(
-        path.join(BUILD_DIR, 'sea-config.json'),
-        JSON.stringify(seaConfig, null, 2)
-    );
+    fs.writeFileSync(path.join(BUILD_DIR, 'sea-config.json'), JSON.stringify(seaConfig, null, 2));
     console.log('   ✅ SEA config created\n');
     
     // Step 4: Generate SEA blob
     console.log('📦 Step 4: Generating SEA blob...');
     if (!run(`node --experimental-sea-config sea-config.json`, { cwd: BUILD_DIR })) {
-        console.error('❌ Failed to generate SEA blob');
         process.exit(1);
     }
-    
-    const blobPath = path.join(BUILD_DIR, 'sea-prep.blob');
-    const blobSize = (fs.statSync(blobPath).size / 1024).toFixed(1);
-    console.log(`   ✅ SEA blob created: ${blobSize} KB\n`);
+    console.log(`   ✅ SEA blob created\n`);
     
     // Step 5: Copy Node.js executable
     console.log('📦 Step 5: Copying Node.js executable...');
     const nodeExe = process.execPath;
     const outputExe = path.join(DIST_DIR, 'MargoSzpont.exe');
-    
     fs.copyFileSync(nodeExe, outputExe);
-    console.log(`   ✅ Copied: ${outputExe}\n`);
+    console.log(`   ✅ Copied executable\n`);
     
-    // Step 6: Inject SEA blob using postject
+    // Step 6: Inject SEA blob
     console.log('📦 Step 6: Injecting SEA blob...');
-    
-    // First, try to remove signature (Windows) - suppress error if missing
-    try {
-        execSync(`npx signtool remove /s "${outputExe}"`, { stdio: 'ignore' });
-    } catch (e) {
-        // Ignore signtool error - injection works anyway (invalidates signature)
-    }
-    
-    if (!run(`npx postject "${outputExe}" NODE_SEA_BLOB "${blobPath}" --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2`)) {
-        console.log('   ⚠️ postject failed, trying with --overwrite...');
-        if (!run(`npx postject "${outputExe}" NODE_SEA_BLOB "${blobPath}" --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 --overwrite`)) {
-            console.error('❌ Failed to inject SEA blob');
-            process.exit(1);
-        }
+    try { execSync(`npx signtool remove /s "${outputExe}"`, { stdio: 'ignore' }); } catch (e) {}
+    if (!run(`npx postject "${outputExe}" NODE_SEA_BLOB "${path.join(BUILD_DIR, 'sea-prep.blob')}" --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 --overwrite`)) {
+        process.exit(1);
     }
     console.log('   ✅ SEA blob injected\n');
     
-    // Step 7: Copy required files to dist
-    console.log('📦 Step 7: Copying required files...');
+    // Step 7: Copy and Protect Source Files
+    console.log('📦 Step 7: Protecting Source Files (Obfuscation + Bytenode)...');
+    
     const rootDir = path.join(__dirname, '..');
     
-    // Copy src folder
+    // Copy clean src first
     function copyDirRecursive(src, dest) {
         fs.mkdirSync(dest, { recursive: true });
         const entries = fs.readdirSync(src, { withFileTypes: true });
@@ -144,67 +164,51 @@ async function main() {
             }
         }
     }
-    
     copyDirRecursive(path.join(rootDir, 'src'), path.join(DIST_DIR, 'src'));
-    console.log('   ✅ src/ copied');
     
-    // Copy data files
-    const dataFiles = ['przejscia_na_mapach.txt', 'licenses.json'];
-    for (const file of dataFiles) {
-        const srcPath = path.join(rootDir, file);
-        if (fs.existsSync(srcPath)) {
-            fs.copyFileSync(srcPath, path.join(DIST_DIR, file));
-            console.log(`   ✅ ${file} copied`);
-        }
-    }
-    
-    // Copy playwright-core
-    const playwrightSrc = path.join(rootDir, 'node_modules', 'playwright-core');
-    const playwrightDest = path.join(DIST_DIR, 'node_modules', 'playwright-core');
-    if (fs.existsSync(playwrightSrc) && !fs.existsSync(playwrightDest)) {
-        console.log('   📦 Copying playwright-core (this may take a moment)...');
-        copyDirRecursive(playwrightSrc, playwrightDest);
-        console.log('   ✅ playwright-core copied');
-    }
-    console.log('');
-
-    // Step 8: Apply Bytenode protection
-    console.log('🔒 Step 7.5: Applying Bytenode protection...');
-    
+    // Protect files in place
     async function protectDirectory(dir) {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
         for (const entry of entries) {
             const fullPath = path.join(dir, entry.name);
             if (entry.isDirectory()) {
-                if (entry.name === 'node_modules') continue;
                 await protectDirectory(fullPath);
             } else if (entry.name.endsWith('.js')) {
-                // Check skip list
-                if (SKIP_COMPILATION.includes(entry.name)) {
-                    console.log(`   ⏭️ Skipped (browser): ${entry.name}`);
-                    continue;
-                }
+                const isSkipped = SKIP_COMPILATION.includes(entry.name);
+                const originalCode = fs.readFileSync(fullPath, 'utf8');
                 
-                // Compile
-                try {
-                    const jscFile = fullPath.replace('.js', '.jsc');
-                    await bytenode.compileFile({ filename: fullPath, output: jscFile });
+                if (isSkipped) {
+                    // DO NOT OBFUSCATE browser_evals.js
+                    // The obfuscator places decoding functions in the global scope.
+                    // When page.evaluate sends code to browser, these functions are lost, causing ReferenceError.
+                    fs.writeFileSync(fullPath, originalCode);
+                    console.log(`   ⏭️ Skipped Obfuscation (Browser Context Safe): ${entry.name}`);
+                } else {
+                    // 1. OBFUSCATE (String Encryption)
+                    const obfuscatedCode = obfuscateContent(originalCode);
                     
-                    // Create loader
-                    const loaderCode = `require('bytenode');\nmodule.exports = require('./${entry.name.replace('.js', '.jsc')}');`;
-                    fs.writeFileSync(fullPath, loaderCode);
-                    console.log(`   ✅ Compiled: ${entry.name}`);
-                } catch (e) {
-                    // Fallback to simpler signature if object not supported
-                     try {
+                    // 2. COMPILE TO BYTENODE
+                    // Write temp obfuscated file
+                    const tempFile = fullPath + '.temp.js';
+                    fs.writeFileSync(tempFile, obfuscatedCode);
+                    
+                    try {
                         const jscFile = fullPath.replace('.js', '.jsc');
-                        await bytenode.compileFile(fullPath, jscFile);
-                        const loaderCode = `require('bytenode');\nmodule.exports = require('./${entry.name.replace('.js', '.jsc')}');`;
+                        await bytenode.compileFile({ filename: tempFile, output: jscFile });
+                        
+                        // Loader
+                        const relativeJsc = './' + entry.name.replace('.js', '.jsc');
+                        const loaderCode = `require('bytenode');\nmodule.exports = require('${relativeJsc}');`;
                         fs.writeFileSync(fullPath, loaderCode);
-                        console.log(`   ✅ Compiled (v2): ${entry.name}`);
-                     } catch (e2) {
-                        console.warn(`   ⚠️ Failed to compile ${entry.name}: ${e.message}`);
-                     }
+                        
+                        console.log(`   ✅ Compiled (Obfuscated -> Bytecode): ${entry.name}`);
+                    } catch(e) {
+                         console.error(`   ❌ Compilation failed for ${entry.name}:`, e.message);
+                         // Fallback: Leave as obfuscated js
+                         fs.writeFileSync(fullPath, obfuscatedCode);
+                    } finally {
+                        if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+                    }
                 }
             }
         }
@@ -212,39 +216,31 @@ async function main() {
     
     await protectDirectory(path.join(DIST_DIR, 'src'));
     
-    // Copy bytenode package
-    const bytenodeSrc = path.join(rootDir, 'node_modules', 'bytenode');
-    const bytenodeDest = path.join(DIST_DIR, 'node_modules', 'bytenode');
-    if (fs.existsSync(bytenodeSrc)) {
-        console.log('   📦 Copying bytenode runtime...');
-        copyDirRecursive(bytenodeSrc, bytenodeDest);
-    }
-
+    // Copy other assets
+    ['przejscia_na_mapach.txt', 'licenses.json'].forEach(f => {
+        if(fs.existsSync(path.join(rootDir, f))) fs.copyFileSync(path.join(rootDir, f), path.join(DIST_DIR, f));
+    });
     
-    // Done!
+    // Copy node_modules
+    console.log('   📦 Copying dependencies...');
+    const deps = ['playwright-core', 'bytenode'];
+    deps.forEach(dep => {
+        const src = path.join(rootDir, 'node_modules', dep);
+        const dest = path.join(DIST_DIR, 'node_modules', dep);
+        if(fs.existsSync(src)) copyDirRecursive(src, dest);
+    });
+    
+    // Done
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    const sizeMB = (fs.statSync(outputExe).size / (1024 * 1024)).toFixed(1);
     
-    if (fs.existsSync(outputExe)) {
-        const stats = fs.statSync(outputExe);
-        const sizeMB = (stats.size / (1024 * 1024)).toFixed(1);
-        
-        console.log('════════════════════════════════════════════════════════════════');
-        console.log(`✅ BUILD SUCCESSFUL!`);
-        console.log(`   📁 Output: ${outputExe}`);
-        console.log(`   📊 Size: ${sizeMB} MB`);
-        console.log(`   ⏱️ Time: ${elapsed}s`);
-        console.log(`   🔒 Protection: Node SEA (bundled)`);
-        console.log('');
-        console.log('   ⚠️ WAŻNE: SEA EXE wymaga node_modules obok siebie!');
-        console.log('      Skopiuj node_modules\\playwright-core do dist\\');
-        console.log('');
-        console.log('   💡 Opcjonalnie: Użyj Enigma Virtual Box do spakowania');
-        console.log('      wszystkiego w jeden plik EXE');
-        console.log('════════════════════════════════════════════════════════════════\n');
-    } else {
-        console.error('\n❌ EXE file not found!');
-        process.exit(1);
-    }
+    console.log('════════════════════════════════════════════════════════════════');
+    console.log(`✅ BUILD COMPLETE (WITH ENCRYPTION)!`);
+    console.log(`   📁 Output: ${outputExe}`);
+    console.log(`   📊 Size: ${sizeMB} MB`);
+    console.log(`   Time: ${elapsed}s`);
+    console.log(`   Protection: SEA + Obfuscator (Strings) + Bytenode (Logic)`);
+    console.log('════════════════════════════════════════════════════════════════\n');
 }
 
 main().catch(console.error);
