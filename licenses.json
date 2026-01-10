@@ -11,6 +11,12 @@
       "expiresAt": "2026-01-10T00:48:39.902Z",
       "active": true,
       "createdAt": "2026-01-08T00:48:39.902Z"
+    },
+    "MARGO-A0EEDDAE0503BB19": {
+      "user": "sprawdzam",
+      "expiresAt": "2026-01-11T01:03:27.057Z",
+      "active": true,
+      "createdAt": "2026-01-10T01:03:27.057Z"
     }
   }
 }
