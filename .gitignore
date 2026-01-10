@@ -1,7 +1,31 @@
-node_modules
-
+# Dependencies
+node_modules/
 license-api/node_modules/
 license-api/.vercel/
-licenses.json
 
-"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe" --remote-debugging-port=9222 --user-data-dir="C:\Users\rados\AppData\Local\BraveSoftware\Brave-Browser\User Data"
+# Build & Dist
+dist/
+build-sea/
+build-bytecode/
+dist-obfuscated/
+
+# Temporary Build Files
+*.exe
+*.jsc
+sea-config.json
+sea-prep.blob
+*.log
+npm-debug.log*
+
+# Secrets & Local Config
+licenses.json
+secret.txt
+temp_enc.txt
+user-config.json
+
+# Debug scripts
+test_crypto_debug.js
+
+# OS specific
+.DS_Store
+Thumbs.db

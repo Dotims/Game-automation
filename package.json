@@ -1,12 +1,15 @@
 {
   "name": "margoszpont",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "main": "start.js",
   "bin": "start.js",
   "scripts": {
     "start": "node start.js",
     "dev": "node index.js",
-    "build": "pkg . --targets node18-win-x64 --output dist/MargoSzpont.exe"
+    "obfuscate": "node build/obfuscate.js",
+    "build:protected": "node build/build-exe.js",
+    "build:sea": "node build/build-sea.js",
+    "build": "npm run obfuscate && pkg dist-obfuscated --targets node18-win-x64 --output dist/MargoSzpont.exe"
   },
   "pkg": {
     "assets": [
@@ -20,5 +23,11 @@
     "playwright": "^1.40.0",
     "playwright-extra": "^4.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2"
+  },
+  "devDependencies": {
+    "bytenode": "^1.5.7",
+    "esbuild": "^0.27.2",
+    "javascript-obfuscator": "^5.1.0",
+    "pkg": "^5.8.1"
   }
 }

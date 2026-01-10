@@ -14,7 +14,18 @@ function openBrowser(url) {
     });
 }
 
-const CONFIG_FILE = path.join(__dirname, '..', 'user-config.json');
+// Config file path - when running as pkg EXE, save next to the executable
+// When running as node script, save in project root
+const getConfigPath = () => {
+    if (process.pkg) {
+        // Running as packaged EXE - save config next to executable
+        return path.join(path.dirname(process.execPath), 'user-config.json');
+    }
+    // Running as node script - save in project root
+    return path.join(__dirname, '..', 'user-config.json');
+};
+
+const CONFIG_FILE = getConfigPath();
 const PORT = 34567;
 const BASE_CDP_PORT = 9222;
 

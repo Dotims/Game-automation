@@ -14,9 +14,24 @@ const config = require('./config');
 const logger = require('./utils/logger');
 const ui = require('./game/ui');
 const gameState = require('./game/gameState');
+const captcha = require('./game/captcha');
+// Security Utilities
+const { decrypt, getSelfHash } = require('./utils/crypto');
+
+// Encrypted Constants (AES-256)
+const MARGONEM_DOMAIN_ENC = '990cd8417f115b07982dbb9dd97915ed:74f97713fd8d5affb2bd91fbf0eb2df4';
+
+// --- SELF-INTEGRITY CHECK ---
+(function verifyIntegrity() {
+    const hash = getSelfHash();
+    if (hash) {
+        // In production, fetch this from secure server
+        // console.log(`[SECURITY] Binary Hash: ${hash}`);
+        // if (hash !== EXPECTED_HASH) process.exit(1);
+    }
+})();
 const actions = require('./game/actions');
 const movement = require('./game/movement');
-const captcha = require('./game/captcha');
 const HUNTING_SPOTS = require('./data/hunting_spots');
 const { CONSTANTS } = require('./config');
 const mapNav = require('./game/map_navigation');
@@ -72,7 +87,7 @@ async function main() {
     // --- WAIT FOR USER TO NAVIGATE TO GAME (Proxy/Login) ---
     logger.log('⏳ Waiting for Margonem game to be active in browser...');
     while (true) {
-        if (page.url().includes('margonem.pl') && !page.url().includes('login')) {
+        if (page.url().includes(decrypt(MARGONEM_DOMAIN_ENC)) && !page.url().includes('login')) {
             // Basic check if map is loaded (optional, but good)
             const mapLoaded = await page.evaluate(() => typeof map !== 'undefined' && map.id);
             if (mapLoaded) {
@@ -87,7 +102,7 @@ async function main() {
         for (const ctx of allContexts) {
             allPages = allPages.concat(ctx.pages());
         }
-        const detectedGamePages = allPages.filter(p => p.url().includes('margonem.pl') && !p.url().includes('login'));
+        const detectedGamePages = allPages.filter(p => p.url().includes(decrypt(MARGONEM_DOMAIN_ENC)) && !p.url().includes('login'));
 
         const targetNick = process.env.CHARACTER_NICK; // Optional: Specific nick to target
         let breakOuter = false;
