@@ -2,6 +2,7 @@ const PF = require('pathfinding');
 const logger = require('../utils/logger');
 const { CONSTANTS } = require('../config');
 const { sleep } = require('../utils/sleep');
+const browserEvals = require('../core/browser_evals');
 
 let stuckCounter = 0;
 let lastHeroPos = { x: 0, y: 0 };
@@ -405,31 +406,7 @@ const movement = {
                      if (i > 0 && i % 3 === 0) {
                          try {
                              // Fetch Position AND Fresh Obstacles (Mobs can move!)
-                             const scanData = await page.evaluate(() => {
-                                 const obs = [];
-                                 if (typeof g !== 'undefined' && g.npc) {
-                                     for (let key in g.npc) {
-                                         const n = g.npc[key];
-                                          // Type 4 = Gateways/Info (Walkable)
-                                         if (n.type !== 4) obs.push({x: n.x, y: n.y});
-                                     }
-                                 }
-                                 
-                                 // CAPTCHA Check (Priority!)
-                                 let hasCaptcha = false;
-                                 const captchaEl = document.getElementById('captcha');
-                                 if (captchaEl && captchaEl.style.display !== 'none' && captchaEl.offsetParent !== null) {
-                                     hasCaptcha = true;
-                                 }
-                                 
-                                 return { 
-                                     x: Math.round(hero.x), 
-                                     y: Math.round(hero.y),
-                                     mapId: map.id,
-                                     obstacles: obs,
-                                     captcha: hasCaptcha
-                                 };
-                             });
+                            const scanData = await browserEvals.getMovementScanData(page);
                              
                              // CAPTCHA PRIORITY CHECK - Abort immediately if detected!
                              if (scanData.captcha) {
@@ -439,7 +416,7 @@ const movement = {
                              }
                              
                              // STOP BUTTON CHECK - Abort if user clicked ZATRZYMAJ
-                             const botStopped = await page.evaluate(() => window.BOT_ACTIVE === false);
+                             const botStopped = await browserEvals.isBotStopped(page);
                              if (botStopped) {
                                   if (activeKey) await page.keyboard.up(activeKey);
                                   logger.info(`⏹️ STOP detected during movement. Aborting...`);
@@ -516,20 +493,7 @@ const movement = {
                      // Check if mobs appeared on our remaining path and recalculate before we hit them
                      if (i > 0 && i % 12 === 0 && i < stepsToTake - 2) {
                          try {
-                             const pathScan = await page.evaluate(() => {
-                                 const obs = [];
-                                 if (typeof g !== 'undefined' && g.npc) {
-                                     for (let key in g.npc) {
-                                         const n = g.npc[key];
-                                         if (n.type !== 4) obs.push({x: n.x, y: n.y});
-                                     }
-                                 }
-                                 return { 
-                                     heroX: Math.round(hero.x), 
-                                     heroY: Math.round(hero.y),
-                                     obstacles: obs 
-                                 };
-                             });
+                             const pathScan = await browserEvals.getPathScanData(page);
                              
                              // Check if any mob is on our remaining path (next 10 steps)
                              const remainingPath = path.slice(i + 1, Math.min(i + 11, path.length));

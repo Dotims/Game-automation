@@ -1,8 +1,9 @@
 const logger = require('../utils/logger');
 const { sleep } = require('../utils/sleep');
+const browserEvals = require('../core/browser_evals');
 
 async function checkActive(page) {
-    const active = await page.evaluate(() => window.BOT_ACTIVE !== false);
+    const active = !(await browserEvals.isBotStopped(page));
     if (!active) {
         logger.warn("🛑 Action interrupted by user request.");
     }
@@ -61,75 +62,13 @@ async function buyPotions(page, currentState, skipOpen = false) {
     
     // 2. Analyze Shop via Page Evaluation
     // We need to find the best potion and its element selector
-    const shopResult = await page.evaluate((maxHp) => {
-        const shop = document.getElementById('shop');
-        if (!shop || shop.style.display === 'none') return { success: false, reason: "Shop not open" };
-        
-        // Find potion items
-        const items = Array.from(shop.querySelectorAll('.item'));
-        const potions = [];
-        
-        for (const item of items) {
-            const tip = item.getAttribute('tip') || "";
-            // Regex to find "Leczy X punktów"
-            // "Leczy <span class="damage">100</span>"
-            const match = tip.match(/Leczy\s*(?:<[^>]+>)?\s*(\d+[\s\d]*)/);
-            
-            // Extract Stack Size
-            // 1. "Maksimum <span class="damage">15</span> sztuk razem" (Seen in logs)
-            // 2. "W jednej paczce: 50" (Standard)
-            const stackMatch = tip.match(/Maksimum.*?class="damage">(\d+)/) || 
-                               tip.match(/W jednej paczce:?\s*(\d+)/i) || 
-                               tip.match(/Stack:?\s*(\d+)/i);
-            
-            const stackSize = stackMatch ? parseInt(stackMatch[1]) : 30; // Default 30
-            
-            // Extract Shop Unit Size (Amount sold per click)
-            // Matches "Ilość: 5", "Ilość: <span...>5</span>", etc.
-            // Using a greedy skip of non-digits after "Ilość:"
-            const amountMatch = tip.match(/Ilość:[^0-9]*(\d+)/i);
-            const shopUnitSize = amountMatch ? parseInt(amountMatch[1]) : 1;
-            
-            if (match) {
-                // Remove spaces from number "1 000" -> "1000"
-                const healAmount = parseInt(match[1].replace(/\s/g, ''));
-                potions.push({
-                    id: item.id,
-                    heal: healAmount,
-                    stackSize: stackSize,
-                    shopUnitSize: shopUnitSize,
-                    rawTip: tip // For Debugging regex failures
-                });
-            }
-        }
-        
-        if (potions.length === 0) return { success: false, reason: "No potions found" };
-        
-        // --- SMART SELECTION LOGIC ---
-        // User Preference: Target ~25-30% of MaxHP to avoid waste and allows multiple uses.
-        // Example: 8531 HP -> Wants ~2000 HP potion. (2000/8531 = ~0.23)
-        // Previous logic (MaxHP target) selected 10000, which was too big.
-        
-        const idealHeal = Math.floor(maxHp * 0.30);
-        
-        // Sort by how close they are to idealHeal
-        potions.sort((a, b) => {
-            const diffA = Math.abs(a.heal - idealHeal);
-            const diffB = Math.abs(b.heal - idealHeal);
-            return diffA - diffB;
-        });
-        
-        // Pick the best match
-        const best = potions[0];
-        
-        return { success: true, item: best };
-        
-    }, currentState.hero.maxhp);
+    const shopResult = await browserEvals.analyzeShop(page, currentState.hero.maxhp);
     
     if (!shopResult.success) {
         logger.warn(`   ❌ Shop analysis failed: ${shopResult.reason}`);
         // Close shop just in case
-        await page.evaluate(() => window.shop_close && window.shop_close());
+        // Close shop just in case
+        await browserEvals.closeShop(page);
         return;
     }
     
@@ -139,7 +78,7 @@ async function buyPotions(page, currentState, skipOpen = false) {
     const shopUnitSize = bestItem.shopUnitSize || 1;
 
     // Get target slots from UI setting (default 14 if not set)
-    const TARGET_SLOTS = await page.evaluate(() => window.BOT_POTION_SLOTS || 14);
+    const TARGET_SLOTS = await browserEvals.getPotionSlots(page);
     const targetPotions = TARGET_SLOTS * stackSize;
     
     const currentQty = currentState.potionsCount || 0;
@@ -194,7 +133,8 @@ async function buyPotions(page, currentState, skipOpen = false) {
     }
 
     // 4. Close Shop
-    await page.evaluate(() => window.shop_close && window.shop_close());
+    // 4. Close Shop
+    await browserEvals.closeShop(page);
     await sleep(500);
     logger.log("   ✅ Shopping complete.");
 }
@@ -225,18 +165,8 @@ async function performSell(page, leaveOpen = false) {
             if (!await checkActive(page)) return; // STOP CHECK
             
             // Find and Click Category Button
-            const clicked = await page.evaluate((btnText) => {
-                // Find button in .gargonem-quick-sell-wrapper with text btnText
-                const wrapper = document.querySelector('.gargonem-quick-sell-wrapper');
-                if (!wrapper) return false;
-                const buttons = Array.from(wrapper.querySelectorAll('button'));
-                const btn = buttons.find(b => b.textContent.trim() === btnText);
-                if (btn) {
-                    btn.click();
-                    return true;
-                }
-                return false;
-            }, cat);
+            // Find and Click Category Button
+            const clicked = await browserEvals.clickQuickSellButton(page, cat);
             
             if (!clicked) {
                 logger.warn(`      ⚠️ Button [${cat}] not found!`);
@@ -269,7 +199,7 @@ async function performSell(page, leaveOpen = false) {
     
     // 3. Close Shop (Unless leaveOpen is true)
     if (!leaveOpen) {
-        await page.evaluate(() => window.shop_close && window.shop_close());
+        await browserEvals.closeShop(page);
         await sleep(500);
     }
     logger.log("   ✅ Selling complete.");
@@ -281,19 +211,9 @@ async function buyTeleportScrolls(page) {
     
     // Shop should already be open (called after performSell with leaveOpen=true)
     // Find the teleport scroll item in the shop
-    const scrollResult = await page.evaluate(() => {
-        const shop = document.getElementById('shop');
-        if (!shop || shop.style.display === 'none') return { success: false, reason: "Shop not open" };
-        
-        const items = Array.from(shop.querySelectorAll('.item'));
-        for (const item of items) {
-            const tip = item.getAttribute('tip') || "";
-            if (tip.includes('Zwój teleportacji na Kwieciste Przejście')) {
-                return { success: true, itemId: item.id };
-            }
-        }
-        return { success: false, reason: "Teleport scroll not found in shop" };
-    });
+    // Shop should already be open (called after performSell with leaveOpen=true)
+    // Find the teleport scroll item in the shop
+    const scrollResult = await browserEvals.findTeleportScroll(page);
 
     if (!scrollResult.success) {
         logger.warn(`   ⚠️ ${scrollResult.reason}`);

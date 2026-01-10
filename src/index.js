@@ -15,6 +15,7 @@ const logger = require('./utils/logger');
 const ui = require('./game/ui');
 const gameState = require('./game/gameState');
 const captcha = require('./game/captcha');
+const browserEvals = require('./core/browser_evals');
 // Security Utilities
 const { decrypt, getSelfHash } = require('./utils/crypto');
 
@@ -89,7 +90,7 @@ async function main() {
     while (true) {
         if (page.url().includes(decrypt(MARGONEM_DOMAIN_ENC)) && !page.url().includes('login')) {
             // Basic check if map is loaded (optional, but good)
-            const mapLoaded = await page.evaluate(() => typeof map !== 'undefined' && map.id);
+            const mapLoaded = await browserEvals.isMapLoaded(page);
             if (mapLoaded) {
                 logger.success('✅ Margonem game detected! Starting bot...');
                 break;
@@ -260,7 +261,7 @@ async function main() {
             // Inject UI (returns current config state)
             // Validate license from stored key
             let licenseInfo = null;
-            const storedKey = await page.evaluate(() => localStorage.getItem('MARGO_LICENSE_KEY'));
+            const storedKey = await browserEvals.getStoredLicenseKey(page);
             
             if (storedKey) {
                 licenseInfo = await license.validateLicense(storedKey);
@@ -552,16 +553,7 @@ async function main() {
                 let arrivalTarget = null;
                 
                 // 1. Search for Zakonnik
-                const zakonnik = await page.evaluate(() => {
-                     if (!g || !g.npc) return null;
-                     for (let id in g.npc) {
-                         const n = g.npc[id];
-                         if (n.nick && n.nick.includes('Zakonnik Planu Astralnego')) {
-                             return { x: n.x, y: n.y, nick: n.nick, id: n.id };
-                         }
-                     }
-                     return null;
-                });
+                const zakonnik = await browserEvals.findZakonnik(page);
 
                 if (zakonnik) {
                      arrivalTarget = { ...zakonnik, type: 'npc' };
@@ -860,12 +852,7 @@ async function main() {
                  if (domState.currentMapName === 'Dom Tunii') {
                       logger.success("✅ Entered Dom Tunii.");
                       
-                      const tunia = await page.evaluate(() => {
-                           for (let id in g.npc) { // Type 1 check handled by raw iteration
-                               if (g.npc[id].nick === 'Tunia Frupotius') return g.npc[id];
-                           }
-                           return null;
-                      });
+                      const tunia = await browserEvals.findTunia(page);
                       
                       if (tunia) {
                            logger.log("💰 Found Tunia Frupotius. Initiating Trade...");
@@ -1556,21 +1543,7 @@ async function main() {
                     // use it immediately after attacking (Fast Path optimization)
                     if (finalTarget.type === 'mob' && finalTarget.dist > 1.5) {
                         // Don't await - let this run while we move
-                        page.evaluate(({ currentTargetId, heroX, heroY, minLvl, maxLvl }) => {
-                            const allMobs = [];
-                            if (typeof g !== 'undefined' && g.npc) {
-                                for (let id in g.npc) {
-                                    const n = g.npc[id];
-                                    // Filter: attackable, right level, alive, NOT current target
-                                    if (n.type === 2 && n.lvl >= minLvl && n.lvl <= maxLvl && n.wt > 0 && n.id !== currentTargetId) {
-                                        const dist = Math.hypot(n.x - heroX, n.y - heroY);
-                                        allMobs.push({ id: n.id, x: n.x, y: n.y, nick: n.nick, dist: dist, type: 'mob' });
-                                    }
-                                }
-                            }
-                            allMobs.sort((a, b) => a.dist - b.dist);
-                            return allMobs.length > 0 ? allMobs[0] : null;
-                        }, { 
+                        browserEvals.findNextMob(page, { 
                             currentTargetId: finalTarget.id, 
                             heroX: finalTarget.x, // Use target position (where hero will be after moving)
                             heroY: finalTarget.y,

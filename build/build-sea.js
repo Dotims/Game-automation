@@ -15,14 +15,7 @@ const bytenode = require('bytenode');
 
 // Files to SKIP compilation (browser context use)
 const SKIP_COMPILATION = [
-    'index.js',
-    'actions.js',
-    'movement.js',
-    'gameState.js',
-    'shopping.js',
-    'ui.js',
-    'captcha.js',
-    'browser.js'
+    'browser_evals.js' // MUST be excluded: Contains source code sent to browser
 ];
 
 const BUILD_DIR = path.join(__dirname, '..', 'build-sea');
