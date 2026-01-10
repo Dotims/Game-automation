@@ -82,6 +82,16 @@ function saveConfig(config) {
 // Bot instance tracking
 const botInstances = new Map();
 
+// Log storage (last 15 entries)
+const MAX_LOGS = 15;
+const botLogs = [];
+
+function addLog(profileName, message, isError = false) {
+    const timestamp = new Date().toLocaleTimeString('pl-PL');
+    botLogs.push({ profileName, message, timestamp, isError });
+    if (botLogs.length > MAX_LOGS) botLogs.shift();
+}
+
 function getConfigHTML(config) {
     const profilesHTML = config.profiles.map((profile, index) => {
         const instance = botInstances.get(profile.id) || { running: false, status: 'Zatrzymany' };
@@ -207,6 +217,9 @@ function getConfigHTML(config) {
         .btn-start-all { flex: 1; background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; }
         .btn-stop-all { flex: 1; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; }
         
+        .btn-exit { width: 100%; margin-top: 20px; padding: 12px; background: rgba(100,100,100,0.3); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: var(--dim); font-size: 12px; cursor: pointer; }
+        .btn-exit:hover { background: rgba(239,68,68,0.3); color: #f87171; }
+        
         .message { padding: 12px; border-radius: 8px; margin-bottom: 14px; font-size: 12px; display: none; }
         .message.error { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #f87171; display: block; }
         
@@ -284,6 +297,8 @@ function getConfigHTML(config) {
             <button class="btn btn-stop-all" onclick="stopAllBots()">⏹️ Stop wszystkich</button>
         </div>
         
+        <button class="btn btn-exit" onclick="exitProgram()">❌ Zamknij program</button>
+        
         <div class="footer">MargoSzpont - wersja testowa, miłego użytkowania! ;)</div>
     </div>
     
@@ -332,6 +347,13 @@ function getConfigHTML(config) {
         
         function stopAllBots() {
             fetch('/api/bot/stop-all', { method: 'POST' }).then(() => setTimeout(() => location.reload(), 300));
+        }
+        
+        function exitProgram() {
+            if (!confirm('Czy na pewno chcesz zamknąć program?')) return;
+            fetch('/api/exit', { method: 'POST' }).then(() => {
+                document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#888;font-family:sans-serif;"><div style="text-align:center;"><h2>Program zamknięty</h2><p>Możesz zamknąć tę kartę.</p></div></div>';
+            });
         }
         
         // Auto-refresh
@@ -566,6 +588,17 @@ function startConfigServer(onAction) {
             return;
         }
         
+        if (url.pathname === '/api/exit' && req.method === 'POST') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true }));
+            // Stop all bots and exit
+            for (const [id, inst] of botInstances.entries()) {
+                if (inst.process) inst.process.kill();
+            }
+            setTimeout(() => process.exit(0), 500);
+            return;
+        }
+        
         res.writeHead(404);
         res.end('Not found');
     });
@@ -594,4 +627,4 @@ function setBotProcess(profileId, process) {
     if (inst) inst.process = process;
 }
 
-module.exports = { startConfigServer, loadConfig, saveConfig, setBotStatus, setBotRunning, setBotProcess, BASE_CDP_PORT };
+module.exports = { startConfigServer, loadConfig, saveConfig, setBotStatus, setBotRunning, setBotProcess, addLog, BASE_CDP_PORT };

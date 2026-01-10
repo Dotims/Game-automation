@@ -8,6 +8,13 @@ const { exec, spawn } = require('child_process');
 const http = require('http');
 const path = require('path');
 
+// Show Windows popup for critical errors (works even in silent mode)
+function showCriticalError(title, message) {
+    const escapedMsg = message.replace(/'/g, "''").substring(0, 500);
+    const escapedTitle = title.replace(/'/g, "''");
+    exec(`powershell -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('${escapedMsg}', '${escapedTitle}', 'OK', 'Error')"`, { windowsHide: true });
+}
+
 const BANNER = `
 ╔══════════════════════════════════════════════════════════════╗
 ║               😼 MargoSzpont v2.2 Multi-Bot                  ║
@@ -20,10 +27,23 @@ console.log(BANNER);
 const profileProcesses = new Map(); // profileId -> { browserProc, botProcess, cdpPort }
 
 process.on('uncaughtException', (err) => {
-    if (err.message.includes('target closed') || err.message.includes('closed')) {
-        console.log('\n❌ Przeglądarka/karta zamknięta');
+    const msg = err.message || '';
+    // Suppress common harmless errors (navigation, closed pages)
+    const harmlessErrors = [
+        'target closed',
+        'closed',
+        'Execution context was destroyed',
+        'navigation',
+        'Target page, context or browser has been closed'
+    ];
+    const isHarmless = harmlessErrors.some(e => msg.includes(e));
+    
+    if (isHarmless) {
+        console.log('\n⚠️ Błąd nawigacji (ignorowany):', msg.substring(0, 100));
     } else {
         console.error('\n❌ Błąd:', err.message);
+        // Show popup for critical errors when running silently
+        showCriticalError('MargoSzpont - Błąd', err.message);
     }
 });
 
@@ -107,6 +127,7 @@ async function startBot(profileId, config) {
         const lines = data.toString().split('\n').filter(l => l.trim());
         for (const line of lines) {
             console.log(`${prefix} ${line}`);
+            configServer.addLog(profileName, line, false); // Add to web panel logs
             if (line.includes('Bot ready') || line.includes('Starting main loop')) {
                 configServer.setBotStatus(profileId, 'Aktywny');
             } else if (line.includes('Bot paused') || line.includes('💤')) {
@@ -116,7 +137,9 @@ async function startBot(profileId, config) {
     });
     
     botProcess.stderr.on('data', (data) => {
-        console.error(`${prefix} ERR: ${data.toString()}`);
+        const msg = data.toString().trim();
+        console.error(`${prefix} ERR: ${msg}`);
+        configServer.addLog(profileName, msg.substring(0, 200), true); // Add error to web panel
     });
     
     botProcess.on('close', (code) => {
