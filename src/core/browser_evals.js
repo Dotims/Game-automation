@@ -691,7 +691,7 @@ module.exports = {
                             <div class="mb-tab" data-tab="e2">E2</div>
                         </div>
                         <div class="mb-content">
-                            <div class="mb-row"><button id="btn-toggle" class="mb-btn" style="background: linear-gradient(135deg, #4CAF50, #45a049); color: white; box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);">START BOT</button></div>
+                            <div class="mb-row"><button id="btn-toggle" class="mb-btn" style="background: linear-gradient(135deg, #4CAF50, #45a049); color: white;">START BOT</button></div>
                             <div id="panel-exp" class="mb-tab-content">
                                 <div class="mb-col"><div class="mb-label">Wybierz Expowisko</div><select id="inp-spot" class="mb-select">${optionsHtml}</select></div>
                                 <div class="mb-row" style="gap: 10px;">

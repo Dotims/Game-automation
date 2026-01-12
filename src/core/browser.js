@@ -1,15 +1,18 @@
 // Use plain playwright for pkg compatibility
 // Note: stealth plugin not needed when connecting via CDP (browser already running)
+// Use externalRequire for SEA compatibility (set in bot-worker.js)
+const extReq = global.externalRequire || require;
+
 let chromium;
 try {
     // Try playwright-extra first (dev mode)
-    const playwrightExtra = require('playwright-extra');
-    const stealth = require('puppeteer-extra-plugin-stealth')();
+    const playwrightExtra = extReq('playwright-extra');
+    const stealth = extReq('puppeteer-extra-plugin-stealth')();
     chromium = playwrightExtra.chromium;
     chromium.use(stealth);
 } catch (e) {
     // Fallback to plain playwright (pkg mode - stealth not needed for CDP)
-    chromium = require('playwright').chromium;
+    chromium = extReq('playwright').chromium;
 }
 const logger = require('../utils/logger');
 const { CONSTANTS } = require('../config');

@@ -9,7 +9,9 @@
     "obfuscate": "node build/obfuscate.js",
     "build:protected": "node build/build-exe.js",
     "build:sea": "node build/build-sea.js",
-    "build": "npm run obfuscate && pkg dist-obfuscated --targets node18-win-x64 --output dist/MargoSzpont.exe"
+    "build:winrar": "node build/build-winrar.js",
+    "build:launcher": "node build/build-launcher.js",
+    "build": "npm run build:sea && npm run build:launcher"
   },
   "pkg": {
     "assets": [
@@ -26,8 +28,10 @@
   },
   "devDependencies": {
     "bytenode": "^1.5.7",
+    "caxa": "^3.0.1",
     "esbuild": "^0.27.2",
     "javascript-obfuscator": "^5.1.0",
-    "pkg": "^5.8.1"
+    "pkg": "^5.8.1",
+    "tar": "^7.5.2"
   }
 }

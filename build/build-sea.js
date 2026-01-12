@@ -22,7 +22,7 @@ const SKIP_COMPILATION = [
 ];
 
 const BUILD_DIR = path.join(__dirname, '..', 'build-sea');
-const DIST_DIR = path.join(__dirname, '..', 'dist');
+const DIST_DIR = path.join(__dirname, '..', 'dist_new');
 
 const OBFUSCATION_OPTIONS = {
     compact: true,
@@ -184,31 +184,10 @@ async function main() {
                     fs.writeFileSync(fullPath, originalCode);
                     console.log(`   ⏭️ Skipped Obfuscation (Browser Context Safe): ${entry.name}`);
                 } else {
-                    // 1. OBFUSCATE (String Encryption)
+                    // OBFUSCATE ONLY (Bytenode disabled - caused issues with SEA module.exports)
                     const obfuscatedCode = obfuscateContent(originalCode);
-                    
-                    // 2. COMPILE TO BYTENODE
-                    // Write temp obfuscated file
-                    const tempFile = fullPath + '.temp.js';
-                    fs.writeFileSync(tempFile, obfuscatedCode);
-                    
-                    try {
-                        const jscFile = fullPath.replace('.js', '.jsc');
-                        await bytenode.compileFile({ filename: tempFile, output: jscFile });
-                        
-                        // Loader
-                        const relativeJsc = './' + entry.name.replace('.js', '.jsc');
-                        const loaderCode = `require('bytenode');\nmodule.exports = require('${relativeJsc}');`;
-                        fs.writeFileSync(fullPath, loaderCode);
-                        
-                        console.log(`   ✅ Compiled (Obfuscated -> Bytecode): ${entry.name}`);
-                    } catch(e) {
-                         console.error(`   ❌ Compilation failed for ${entry.name}:`, e.message);
-                         // Fallback: Leave as obfuscated js
-                         fs.writeFileSync(fullPath, obfuscatedCode);
-                    } finally {
-                        if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
-                    }
+                    fs.writeFileSync(fullPath, obfuscatedCode);
+                    console.log(`   ✅ Obfuscated: ${entry.name}`);
                 }
             }
         }
@@ -221,14 +200,27 @@ async function main() {
         if(fs.existsSync(path.join(rootDir, f))) fs.copyFileSync(path.join(rootDir, f), path.join(DIST_DIR, f));
     });
     
-    // Copy node_modules
-    console.log('   📦 Copying dependencies...');
-    const deps = ['playwright-core', 'bytenode'];
-    deps.forEach(dep => {
-        const src = path.join(rootDir, 'node_modules', dep);
-        const dest = path.join(DIST_DIR, 'node_modules', dep);
-        if(fs.existsSync(src)) copyDirRecursive(src, dest);
-    });
+    // Copy node_modules (FULL COPY to ensure no missing transitive deps)
+    console.log('   📦 Copying ALL dependencies (Safety First)...');
+    try {
+        const srcNM = path.join(rootDir, 'node_modules');
+        const destNM = path.join(DIST_DIR, 'node_modules');
+        
+        // Use fs.cpSync if available (Node 16.7+), fallback to recursive copy
+        if (fs.cpSync) {
+            fs.cpSync(srcNM, destNM, { recursive: true, dereference: true });
+        } else {
+            copyDirRecursive(srcNM, destNM);
+        }
+    } catch (e) {
+        console.error('   ⚠️ Error copying node_modules:', e.message);
+    }
+
+    // Vendorize bytenode
+    console.log('   📦 Vendorizing bytenode...');
+    const bnSrc = path.join(rootDir, 'node_modules', 'bytenode');
+    const bnDest = path.join(DIST_DIR, 'node_modules_vendor', 'bytenode');
+    if(fs.existsSync(bnSrc)) copyDirRecursive(bnSrc, bnDest);
     
     // Done
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);

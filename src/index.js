@@ -1800,15 +1800,45 @@ async function main() {
             const errMsg = error.message || '';
             if (errMsg.includes('Target page, context or browser has been closed') || 
                 errMsg.includes('Session closed') || 
-                errMsg.includes('Navigating frame was detached')) {
+                errMsg.includes('Navigating frame was detached') ||
+                errMsg.includes('Execution context was destroyed')) {
                 
                 if (!global.disconnectLogged) {
-                    logger.warn('🔌 Browser connection lost (Page/Context closed). Stopping bot loop.');
+                    logger.warn('🔌 Browser connection lost (Page/Context closed). Waiting for reconnect...');
                     global.disconnectLogged = true;
                 }
                 
-                // Break the loop to stop the bot cleanly
-                break;
+                // AUTO-RECONNECT: Wait 3 seconds and try to reconnect
+                logger.info('🔄 Attempting to reconnect in 3 seconds...');
+                await sleep(3000);
+                
+                try {
+                    // Try to reconnect to browser
+                    const extReq = global.externalRequire || require;
+                    const { chromium } = extReq('playwright');
+                    const cdpPort = process.env.CDP_PORT || '9222';
+                    const newBrowser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`);
+                    const contexts = newBrowser.contexts();
+                    const context = contexts.length > 0 ? contexts[0] : await newBrowser.newContext();
+                    const pages = context.pages();
+                    
+                    // Find Margonem page
+                    let newPage = pages.find(p => p.url().includes('margonem'));
+                    
+                    if (newPage) {
+                        logger.success('✅ Reconnected to Margonem page!');
+                        page = newPage; // Update page reference
+                        global.disconnectLogged = false;
+                        continue; // Continue the main loop
+                    } else {
+                        logger.info('⏳ Waiting for Margonem page...');
+                        continue; // Keep waiting
+                    }
+                } catch (reconnectError) {
+                    // Reconnect failed - keep trying
+                    logger.info('⏳ Browser not ready, retrying...');
+                    continue;
+                }
             }
 
             logger.error(`❌ Main loop error: ${errMsg}`);
@@ -1822,4 +1852,5 @@ async function main() {
     }
 }
 
-main();
+// Export main for worker to await (don't auto-run)
+module.exports = main;

@@ -5,8 +5,10 @@ license-api/.vercel/
 
 # Build & Dist
 dist/
+dist_new/
 build-sea/
 build-bytecode/
+build-launcher/
 dist-obfuscated/
 
 # Temporary Build Files

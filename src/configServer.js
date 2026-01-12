@@ -127,7 +127,6 @@ function getConfigHTML(config) {
                     <input type="text" class="profile-input small" value="${profile.profileDir || 'Default'}" 
                            onchange="updateProfile('${profile.id}', 'profileDir', this.value)"
                            placeholder="Default lub Profile 1">
-
                 </div>
             </div>
         </div>`;
@@ -250,7 +249,17 @@ function getConfigHTML(config) {
                     
                     <div class="section-title" style="margin-top: 16px;">📂 Tworzenie osobnego User Data dla drugiego bota:</div>
                     <div class="step"><div class="step-num">1</div><div>Otwórz Eksplorator plików (Win + E)</div></div>
-                    <div class="step"><div class="step-num">2</div><div>Wklej w pasek adresu: <code>%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser</code></div></div>
+                    <div class="step">
+                        <div class="step-num">2</div>
+                        <div>
+                            Wklej w pasek adresu:
+                            <div style="margin-top: 6px; font-size: 11px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px;">
+                                <div style="margin-bottom: 4px;">🦁 <b>Brave:</b> <code>%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser</code></div>
+                                <div style="margin-bottom: 4px;">🌐 <b>Chrome:</b> <code>%LOCALAPPDATA%\\Google\\Chrome</code></div>
+                                <div>🎮 <b>Opera GX:</b> <code>%APPDATA%\\Opera Software\\Opera GX Stable</code></div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="step"><div class="step-num">3</div><div>Prawy klik na <strong>User Data</strong> → Kopiuj → Wklej obok</div></div>
                     <div class="step"><div class="step-num">4</div><div>Zmień nazwę kopii na <code>User Data Bot2</code></div></div>
                     
@@ -450,7 +459,7 @@ function startConfigServer(onAction) {
                 }
                 // Stop if running
                 const inst = botInstances.get(data.id);
-                if (inst && inst.running && inst.process) inst.process.kill();
+                if (inst && inst.running && inst.process) try { inst.process.terminate(); } catch {}
                 botInstances.delete(data.id);
                 
                 config.profiles = config.profiles.filter(p => p.id !== data.id);
@@ -535,7 +544,7 @@ function startConfigServer(onAction) {
                 if (inst) {
                     inst.running = false;
                     inst.status = 'Zatrzymany';
-                    if (inst.process) inst.process.kill();
+                    if (inst.process) try { inst.process.terminate(); } catch {}
                 }
                 if (onActionCallback) onActionCallback('stop', { profileId: data.id });
                 res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -580,7 +589,7 @@ function startConfigServer(onAction) {
             for (const [id, inst] of botInstances.entries()) {
                 inst.running = false;
                 inst.status = 'Zatrzymany';
-                if (inst.process) inst.process.kill();
+                if (inst.process) try { inst.process.terminate(); } catch {}
                 if (onActionCallback) onActionCallback('stop', { profileId: id });
             }
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -593,7 +602,7 @@ function startConfigServer(onAction) {
             res.end(JSON.stringify({ success: true }));
             // Stop all bots and exit
             for (const [id, inst] of botInstances.entries()) {
-                if (inst.process) inst.process.kill();
+                if (inst.process) try { inst.process.terminate(); } catch {}
             }
             setTimeout(() => process.exit(0), 500);
             return;
