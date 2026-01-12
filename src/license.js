@@ -10,9 +10,10 @@ const crypto = require('crypto');
 // API Configuration
 const LICENSE_API_URL = 'margobot-api.vercel.app';
 
-// Response signing secret - MUST match the one on server
+// Response signing secret - encoded to prevent easy extraction
 // This prevents fake API servers from working
-const RESPONSE_SECRET = 'MARGO-SIGN-KEY-2026';
+const _k = [0x4d,0x41,0x52,0x47,0x4f,0x2d,0x53,0x49,0x47,0x4e,0x2d,0x4b,0x45,0x59,0x2d,0x32,0x30,0x32,0x36];
+const RESPONSE_SECRET = Buffer.from(_k).toString('utf8');
 
 // Maximum age of response (5 minutes) - prevents replay attacks
 const MAX_RESPONSE_AGE = 5 * 60 * 1000;
