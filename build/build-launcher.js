@@ -114,6 +114,9 @@ async function main() {
     }
     console.log('   ✅ Injected\n');
     
+    // Icon step removed - rcedit hangs on large files
+    // Use Resource Hacker manually to set icon
+    
     // Done
     const finalSize = (fs.statSync(outputExe).size / (1024 * 1024)).toFixed(1);
     console.log('════════════════════════════════════════════════════════════════');

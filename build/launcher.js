@@ -122,23 +122,36 @@ function extractTar(tarBuffer, destDir) {
 function launchApp(isFirstRun = false) {
     if (isFirstRun) {
         console.log('🚀 Uruchamianie MargoSzpont...\n');
+        // First run - keep console visible, user needs to see what's happening
+        const child = spawn(MAIN_EXE, [], {
+            cwd: CACHE_DIR,
+            stdio: 'inherit',
+            detached: false
+        });
+        
+        child.on('error', (err) => {
+            console.error('❌ Błąd uruchamiania:', err.message);
+            process.exit(1);
+        });
+        
+        child.on('exit', (code) => {
+            process.exit(code || 0);
+        });
+    } else {
+        // Subsequent runs - hide console, run silently
+        const child = spawn(MAIN_EXE, [], {
+            cwd: CACHE_DIR,
+            stdio: 'ignore',
+            detached: true,
+            windowsHide: true
+        });
+        
+        // Detach from parent - let it run independently
+        child.unref();
+        
+        // Exit launcher immediately - app runs in background
+        process.exit(0);
     }
-    
-    // Always launch with visible terminal - needed for HTTP server and workers
-    const child = spawn(MAIN_EXE, [], {
-        cwd: CACHE_DIR,
-        stdio: 'inherit',
-        detached: false
-    });
-    
-    child.on('error', (err) => {
-        console.error('❌ Błąd uruchamiania:', err.message);
-        process.exit(1);
-    });
-    
-    child.on('exit', (code) => {
-        process.exit(code || 0);
-    });
 }
 
 // Main
