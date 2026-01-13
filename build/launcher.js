@@ -31,10 +31,19 @@ function isCacheValid() {
 // Extract bundled data to cache
 function extractToCache() {
     console.log('📦 Pierwsza instalacja - wypakowywanie...');
+
     
     // Clean old cache
     if (fs.existsSync(CACHE_DIR)) {
-        fs.rmSync(CACHE_DIR, { recursive: true, force: true });
+        try {
+            fs.rmSync(CACHE_DIR, { recursive: true, force: true });
+        } catch (e) {
+            console.log('⚠️ Czyszczenie cache...');
+            // Try again after another delay
+            const waitMore = Date.now() + 2000;
+            while (Date.now() < waitMore) { /* busy wait */ }
+            fs.rmSync(CACHE_DIR, { recursive: true, force: true });
+        }
     }
     fs.mkdirSync(CACHE_DIR, { recursive: true });
     
@@ -118,8 +127,22 @@ function extractTar(tarBuffer, destDir) {
     console.log(`   Extracted ${extractedCount} files`);
 }
 
+// Kill any existing MargoSzpont.exe processes from CACHE only (not the launcher!)
+function killPreviousInstance() {
+    try {
+        // Use WMIC to find processes from cache path and kill them
+        const cacheExe = path.join(CACHE_DIR, 'MargoSzpont.exe').replace(/\\/g, '\\\\');
+        execSync(`wmic process where "ExecutablePath='${cacheExe}'" delete 2>nul`, { stdio: 'ignore' });
+    } catch {
+        // No previous instance running - that's fine
+    }
+}
+
 // Launch the main application
 function launchApp(isFirstRun = false) {
+    // Kill previous instance to ensure only one runs at a time
+    killPreviousInstance();
+    
     if (isFirstRun) {
         console.log('🚀 Uruchamianie MargoSzpont...\n');
         // First run - keep console visible, user needs to see what's happening
