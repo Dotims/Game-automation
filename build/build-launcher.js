@@ -21,6 +21,9 @@ const LAUNCHER_SRC = path.join(__dirname, 'launcher.js');
 const pkg = require('../package.json');
 const APP_VERSION = pkg.version;
 
+// Check for debug mode from command line: node build-launcher.js --debug
+const DEBUG_MODE = process.argv.includes('--debug');
+
 function run(cmd) {
     console.log(`$ ${cmd}`);
     try {
@@ -75,8 +78,10 @@ async function main() {
     let launcherCode = fs.readFileSync(LAUNCHER_SRC, 'utf8');
     // Inject version
     launcherCode = launcherCode.replace(/const APP_VERSION = ['"][^'"]+['"]/, `const APP_VERSION = '${APP_VERSION}'`);
+    // Inject DEBUG_MODE
+    launcherCode = launcherCode.replace(/const DEBUG_MODE = (true|false)/, `const DEBUG_MODE = ${DEBUG_MODE}`);
     fs.writeFileSync(path.join(BUILD_DIR, 'launcher.js'), launcherCode);
-    console.log('   ✅ Launcher ready\n');
+    console.log(`   ✅ Launcher ready (DEBUG_MODE: ${DEBUG_MODE})\n`);
     
     // Step 5: Create SEA config
     console.log('📦 Step 5: Creating SEA configuration...');

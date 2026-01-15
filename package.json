@@ -11,7 +11,10 @@
     "build:sea": "node build/build-sea.js",
     "build:winrar": "node build/build-winrar.js",
     "build:launcher": "node build/build-launcher.js",
-    "build": "npm run build:sea && npm run build:launcher"
+    "build:launcher:debug": "node build/build-launcher.js --debug",
+    "build": "npm run build:sea && npm run build:launcher",
+    "build:debug": "npm run build:sea && npm run build:launcher:debug",
+    "build:prod": "npm run build:sea && npm run build:launcher"
   },
   "pkg": {
     "assets": [

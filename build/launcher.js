@@ -15,6 +15,10 @@ const CACHE_DIR = path.join(process.env.APPDATA || process.env.HOME, APP_NAME);
 const VERSION_FILE = path.join(CACHE_DIR, '.version');
 const MAIN_EXE = path.join(CACHE_DIR, 'MargoSzpont.exe');
 
+// DEBUG_MODE: true = always show console, false = hide console after first run
+// This value is modified by build script (build:debug vs build:prod)
+const DEBUG_MODE = false;
+
 // Check if cache is valid
 function isCacheValid() {
     if (!fs.existsSync(VERSION_FILE)) return false;
@@ -143,9 +147,18 @@ function launchApp(isFirstRun = false) {
     // Kill previous instance to ensure only one runs at a time
     killPreviousInstance();
     
-    if (isFirstRun) {
-        console.log('🚀 Uruchamianie MargoSzpont...\n');
-        // First run - keep console visible, user needs to see what's happening
+    // In DEBUG_MODE: always show console
+    // In PROD mode: show console only on first run
+    const showConsole = DEBUG_MODE || isFirstRun;
+    
+    if (showConsole) {
+        if (isFirstRun) {
+            console.log('🚀 Uruchamianie MargoSzpont...\n');
+        }
+        if (DEBUG_MODE) {
+            console.log('🔧 DEBUG MODE - konsola widoczna\n');
+        }
+        
         const child = spawn(MAIN_EXE, [], {
             cwd: CACHE_DIR,
             stdio: 'inherit',
@@ -161,7 +174,7 @@ function launchApp(isFirstRun = false) {
             process.exit(code || 0);
         });
     } else {
-        // Subsequent runs - hide console, run silently
+        // Production subsequent runs - hide console, run silently
         const child = spawn(MAIN_EXE, [], {
             cwd: CACHE_DIR,
             stdio: 'ignore',
