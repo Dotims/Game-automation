@@ -35,7 +35,7 @@ function showCriticalError(title, message) {
 
 const BANNER = `
 ╔══════════════════════════════════════════════════════════════╗
-║               😼 MargoSzpont v2.2 Multi-Bot                  ║
+║               😼 MargoSzpont v2.2.1 Multi-Bot                ║
 ║              Bot do gry Margonem.pl                          ║
 ╚══════════════════════════════════════════════════════════════╝
 `;
@@ -126,11 +126,37 @@ async function launchBrowser(config) {
     console.log(`🌐 [Port ${cdpPort}] Uruchamianie przeglądarki...`);
     console.log(`   User Data: ${userDataPath}`);
     console.log(`   Profil: ${profileDir}`);
+    console.log(`   Ścieżka przeglądarki: ${browserPath}`);
+    
+    // VALIDATION: Check if browser executable exists
+    if (!fs.existsSync(browserPath)) {
+        console.error(`\n❌ BŁĄD: Przeglądarka nie została znaleziona!`);
+        console.error(`   Podana ścieżka: ${browserPath}`);
+        console.error(`\n📌 Sprawdź czy przeglądarka jest zainstalowana w jednej z tych lokalizacji:`);
+        console.error(`   • C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`);
+        console.error(`   • C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe`);
+        console.error(`   • C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe`);
+        console.error(`\n💡 W panelu konfiguracji (http://localhost:34567) ustaw poprawną ścieżkę do przeglądarki.`);
+        throw new Error(`Przeglądarka nie znaleziona: ${browserPath}`);
+    }
+    
+    // IMPORTANT: Kill existing browser if running (same User Data can only be used by one instance)
+    const exeName = path.basename(browserPath);
+    if (await isBrowserProcessRunning(browserPath)) {
+        console.log(`   ⚠️ Zamykam istniejącą przeglądarkę ${exeName} (wymagany restart z portem debugowania)...`);
+        await killBrowserProcess(browserPath);
+        await new Promise(r => setTimeout(r, 2000)); // Wait for process to fully close
+    }
     
     // Launch browser with specific user data dir and port
     const cmd = `"${browserPath}" --remote-debugging-port=${cdpPort} --user-data-dir="${userDataPath}" --profile-directory="${profileDir}" https://www.margonem.pl/`;
+    console.log(`   🚀 Uruchamiam: ${exeName} --remote-debugging-port=${cdpPort}`);
     
-    exec(cmd, { windowsHide: false });
+    exec(cmd, { windowsHide: false }, (error) => {
+        if (error) {
+            console.error(`❌ Błąd uruchamiania przeglądarki: ${error.message}`);
+        }
+    });
     
     // Wait for browser to be ready
     let attempts = 0;
@@ -143,6 +169,12 @@ async function launchBrowser(config) {
         }
     }
     
+    console.error(`\n❌ Timeout - przeglądarka nie odpowiada na porcie ${cdpPort}`);
+    console.error(`   Możliwe przyczyny:`);
+    console.error(`   • Przeglądarka nie jest zainstalowana poprawnie`);
+    console.error(`   • Inna instancja przeglądarki blokuje port ${cdpPort}`);
+    console.error(`   • Firewall blokuje połączenie na localhost`);
+    console.error(`   • User Data ścieżka jest niepoprawna: ${userDataPath}`);
     throw new Error(`Timeout - przeglądarka nie odpowiada na porcie ${cdpPort}`);
 }
 
