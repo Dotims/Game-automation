@@ -241,6 +241,13 @@ async function main() {
         waitingUntil: 0           // Timestamp when waiting period ends (if triggered)
     };
 
+    // Non-hunting map stuck detection (when bot gets lost outside configured maps)
+    let nonHuntingStuckTracker = {
+        stuckSince: null,         // Timestamp when first detected on non-hunting map
+        lastMapName: null,        // Name of the non-hunting map
+        attemptCount: 0           // Number of failed return attempts
+    };
+
     while (true) {
         // Check Global Stop Flag (from config panel)
         if (global.BOT_SHOULD_STOP) {
@@ -1640,8 +1647,34 @@ async function main() {
                          const isOnHuntingMap = mapsList.some(m => m.toLowerCase() === state.currentMapName.toLowerCase());
                          
                          if (!isOnHuntingMap) {
+                             // Track how long we've been stuck on non-hunting map
+                             if (nonHuntingStuckTracker.lastMapName !== state.currentMapName) {
+                                 // New non-hunting map - reset tracker
+                                 nonHuntingStuckTracker.stuckSince = Date.now();
+                                 nonHuntingStuckTracker.lastMapName = state.currentMapName;
+                                 nonHuntingStuckTracker.attemptCount = 0;
+                             }
+                             
+                             nonHuntingStuckTracker.attemptCount++;
+                             const stuckDuration = Date.now() - nonHuntingStuckTracker.stuckSince;
+                             
+                             // EMERGENCY RELOAD: If stuck on non-hunting map for 45+ seconds with 10+ attempts
+                             if (stuckDuration > 45000 && nonHuntingStuckTracker.attemptCount >= 10) {
+                                 logger.error(`🔄 EMERGENCY RELOAD: Stuck on [${state.currentMapName}] for ${Math.round(stuckDuration/1000)}s with ${nonHuntingStuckTracker.attemptCount} failed attempts. Reloading...`);
+                                 nonHuntingStuckTracker.stuckSince = null;
+                                 nonHuntingStuckTracker.attemptCount = 0;
+                                 nonHuntingStuckTracker.lastMapName = null;
+                                 try {
+                                     await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+                                     await sleep(5000); // Wait for page to stabilize
+                                 } catch (e) {
+                                     logger.warn(`Reload failed: ${e.message}`);
+                                 }
+                                 continue;
+                             }
+                             
                              // We are LOST on a non-hunting map! Return to ANY hunting map immediately
-                             logger.warn(`🚨 ON NON-HUNTING MAP [${state.currentMapName}]! Returning to hunt area...`);
+                             logger.warn(`🚨 ON NON-HUNTING MAP [${state.currentMapName}]! Returning to hunt area... (attempt ${nonHuntingStuckTracker.attemptCount})`);
                              
                              // Find any gateway that leads to a hunting map
                              const huntGateway = state.gateways.find(g => {
@@ -1681,6 +1714,11 @@ async function main() {
                                  // Skip the rest of cyclic logic - just escape
                                  continue;
                              }
+                         } else {
+                             // We're on a hunting map - reset the stuck tracker
+                             nonHuntingStuckTracker.stuckSince = null;
+                             nonHuntingStuckTracker.attemptCount = 0;
+                             nonHuntingStuckTracker.lastMapName = null;
                          }
                          
                          // Determine FINAL destination

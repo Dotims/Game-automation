@@ -106,9 +106,29 @@ module.exports = async (req, res) => {
         const daysRemaining = Math.ceil(msRemaining / (24 * 60 * 60 * 1000));
         
         // Update last_used, last_ip, and ip_history
+        // Format: "IP - DD.MM.YYYY - HH:MM" - only add new entry if IP is new
         const ipHistory = license.ip_history || [];
-        if (!ipHistory.includes(clientIP)) {
-            ipHistory.push(clientIP);
+        
+        // Check if this IP already exists in history (check only the IP part before " - ")
+        const ipAlreadyLogged = ipHistory.some(entry => {
+            const entryIP = entry.split(' - ')[0];
+            return entryIP === clientIP;
+        });
+        
+        if (!ipAlreadyLogged) {
+            // New IP detected - add entry with timestamp
+            const nowDate = now.toLocaleDateString('pl-PL', { 
+                day: '2-digit', 
+                month: '2-digit', 
+                year: 'numeric' 
+            });
+            const nowTime = now.toLocaleTimeString('pl-PL', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: false
+            });
+            const newEntry = `${clientIP} - ${nowDate} - ${nowTime}`;
+            ipHistory.push(newEntry);
         }
         
         await supabase
