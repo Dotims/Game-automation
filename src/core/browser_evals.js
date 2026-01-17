@@ -637,6 +637,13 @@ module.exports = {
                     .mb-license-info { font-size: 10px; color: #666; margin-top: 15px; line-height: 1.5; }
                     .mb-license-valid { background: rgba(76, 175, 80, 0.1); border: 1px solid rgba(76, 175, 80, 0.3); border-radius: 6px; padding: 8px 12px; margin-bottom: 10px; font-size: 11px; color: #81C784; }
                     @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+                    /* Block Premium Panel Button - prevent accidental clicks */
+                    #premiumbut, .premium-button, [onclick*="showPremiumPanel"], [onclick*="Premium"] {
+                        pointer-events: none !important;
+                        opacity: 0 !important;
+                        visibility: hidden !important;
+                        display: none !important;
+                    }
                  `;
                  if(document.head) document.head.appendChild(style);
             }

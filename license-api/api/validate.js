@@ -58,8 +58,8 @@ module.exports = async (req, res) => {
         // Initialize Supabase
         const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
         
-        // Normalize key
-        const normalizedKey = key.trim().toUpperCase();
+        // Normalize key (just trim, don't change case - allows any format)
+        const normalizedKey = key.trim();
         
         // Get client IP
         const clientIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim() 
@@ -110,8 +110,10 @@ module.exports = async (req, res) => {
         const ipHistory = license.ip_history || [];
         
         // Check if this IP already exists in history (check only the IP part before " - ")
+        // Handle both old format (just IP) and new format (IP - date - time)
         const ipAlreadyLogged = ipHistory.some(entry => {
-            const entryIP = entry.split(' - ')[0];
+            if (typeof entry !== 'string') return false;
+            const entryIP = entry.includes(' - ') ? entry.split(' - ')[0] : entry;
             return entryIP === clientIP;
         });
         
