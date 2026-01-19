@@ -926,12 +926,104 @@
 
     // ==================== INIT ====================
     function init() {
-        if (typeof g === 'undefined' || typeof hero === 'undefined') { 
+        // Check for NEW Margonem interface (window.Engine) or OLD interface (g, hero)
+        const hasNewEngine = window.Engine && window.Engine.hero && window.Engine.hero.d;
+        const hasOldEngine = typeof g !== 'undefined' && typeof hero !== 'undefined';
+        
+        if (!hasNewEngine && !hasOldEngine) { 
             log('Waiting for game...');
             setTimeout(init, 1000); 
             return; 
         }
-        log('Game detected! Hero: ' + hero.nick);
+        
+        // Create compatibility shims for new engine
+        if (hasNewEngine && !hasOldEngine) {
+            log('Detected NEW Margonem interface, creating compatibility shims...');
+            
+            // Shim for 'hero' - create a proxy that reads from Engine.hero.d
+            window.hero = new Proxy({}, {
+                get: function(target, prop) {
+                    if (window.Engine && window.Engine.hero) {
+                        if (prop === 'x') return window.Engine.hero.d?.x || 0;
+                        if (prop === 'y') return window.Engine.hero.d?.y || 0;
+                        if (prop === 'hp') return window.Engine.hero.d?.warrior_stats?.hp || window.Engine.hero.d?.hp || 0;
+                        if (prop === 'maxhp') return window.Engine.hero.d?.warrior_stats?.maxhp || window.Engine.hero.d?.maxhp || 0;
+                        if (prop === 'nick') return window.Engine.hero.d?.nick || 'Unknown';
+                        if (prop === 'lvl') return window.Engine.hero.d?.lvl || 1;
+                        return window.Engine.hero.d?.[prop];
+                    }
+                    return undefined;
+                }
+            });
+            
+            // Shim for 'map'
+            window.map = new Proxy({}, {
+                get: function(target, prop) {
+                    if (window.Engine && window.Engine.map) {
+                        if (prop === 'name') return window.Engine.map.d?.name || '';
+                        if (prop === 'id') return window.Engine.map.d?.id || 0;
+                        if (prop === 'x') return window.Engine.map.d?.x || 100;
+                        if (prop === 'y') return window.Engine.map.d?.y || 100;
+                        if (prop === 'col') {
+                            // Return collision string if available
+                            if (window.Engine.map.col && typeof window.Engine.map.col.check === 'function') {
+                                // Build collision string on demand
+                                const w = window.Engine.map.d?.x || 100;
+                                const h = window.Engine.map.d?.y || 100;
+                                let colStr = '';
+                                for (let yy = 0; yy < h; yy++) {
+                                    for (let xx = 0; xx < w; xx++) {
+                                        colStr += window.Engine.map.col.check(xx, yy) ? '1' : '0';
+                                    }
+                                }
+                                return colStr;
+                            }
+                            return '';
+                        }
+                        return window.Engine.map.d?.[prop];
+                    }
+                    return undefined;
+                }
+            });
+            
+            // Shim for 'g' (game data object) 
+            window.g = new Proxy({}, {
+                get: function(target, prop) {
+                    if (prop === 'npc') {
+                        // Return mobs from Engine
+                        if (window.Engine && window.Engine.npcs) {
+                            const npcs = {};
+                            const list = window.Engine.npcs.getList ? window.Engine.npcs.getList() : window.Engine.npcs;
+                            for (const id in list) {
+                                const npc = list[id];
+                                if (npc && npc.d) {
+                                    npcs[id] = {
+                                        id: npc.d.id,
+                                        nick: npc.d.nick || npc.d.name,
+                                        x: npc.d.x,
+                                        y: npc.d.y,
+                                        lvl: npc.d.lvl || 0,
+                                        type: npc.d.type || 0,
+                                        wt: npc.d.wt !== undefined ? npc.d.wt : 1 // wt = can attack
+                                    };
+                                }
+                            }
+                            return npcs;
+                        }
+                        return {};
+                    }
+                    if (prop === 'battle') {
+                        return window.Engine && window.Engine.battle && window.Engine.battle.active;
+                    }
+                    return undefined;
+                }
+            });
+            
+            log('Compatibility shims created!');
+        }
+        
+        const heroName = hasNewEngine ? (window.Engine.hero.d?.nick || 'Unknown') : hero.nick;
+        log('Game detected! Hero: ' + heroName);
         injectUI();
         
         // WATCHDOG: Check if UI is removed (e.g. by game engine clearing body) and re-inject

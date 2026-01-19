@@ -46,22 +46,41 @@ function injectBot() {
         });
     } catch(e) {}
 
-    // Inject Bot Script
-    const script = document.createElement('script');
-    script.src = chrome.runtime.getURL('content/bot.js');
-    script.type = 'text/javascript';
-    script.id = 'margobot-script-tag';
+    // Inject Bot Scripts (Logic -> UI)
+    // Inject Logic Script (Core Engine)
+    const logicScript = document.createElement('script');
+    logicScript.src = chrome.runtime.getURL('content/logic.js');
+    logicScript.type = 'text/javascript';
+    logicScript.id = 'margobot-logic-script';
     
-    script.onload = function() {
-        console.log('🤖 MargoSzpont: Bot script loaded successfully!');
+    logicScript.onload = function() {
+        console.log('🤖 MargoSzpont: Logic engine loaded. Starting UI...');
+        
+        // Inject Bot Script (UI)
+        const script = document.createElement('script');
+        script.src = chrome.runtime.getURL('content/bot.js');
+        script.type = 'text/javascript';
+        script.id = 'margobot-script-tag';
+        
+        script.onload = function() {
+            console.log('🤖 MargoSzpont: Bot UI loaded successfully!');
+            this.remove();
+        };
+        script.onerror = function(e) {
+            console.error('🤖 MargoSzpont: Failed to load bot.js!', e);
+            this.remove();
+        };
+        
+        (document.head || document.documentElement).appendChild(script);
         this.remove();
     };
-    script.onerror = function(e) {
-        console.error('🤖 MargoSzpont: Failed to load bot.js!', e);
-        this.remove();
+
+    logicScript.onerror = function(e) {
+        console.error('🤖 MargoSzpont: Failed to load logic.js! Bot will not start.', e);
+        this.remove(); 
     };
-    
-    (document.head || document.documentElement).appendChild(script);
+
+    (document.head || document.documentElement).appendChild(logicScript);
     return true;
 }
 
@@ -116,6 +135,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     
     return true;
+});
+
+// ========== PAGE TO EXTENSION BRIDGE ==========
+// Listen for messages from bot.js (runs in page context, can't access chrome.runtime)
+window.addEventListener('message', async (event) => {
+    // Only accept messages from our page
+    if (event.source !== window) return;
+    
+    if (event.data && event.data.type === 'MARGOBOT_TRUSTED_CLICK') {
+        const { x, y, requestId } = event.data;
+        console.log(`🔀 Relaying trusted click request: (${x}, ${y})`);
+        
+        try {
+            const response = await chrome.runtime.sendMessage({
+                action: 'trustedClick',
+                x: x,
+                y: y
+            });
+            
+            // Send result back to page
+            window.postMessage({
+                type: 'MARGOBOT_TRUSTED_CLICK_RESULT',
+                requestId: requestId,
+                success: response.success,
+                error: response.error
+            }, '*');
+        } catch (err) {
+            window.postMessage({
+                type: 'MARGOBOT_TRUSTED_CLICK_RESULT',
+                requestId: requestId,
+                success: false,
+                error: err.message
+            }, '*');
+        }
+    }
 });
 
 console.log('🤖 MargoSzpont: Content injector ready (v3 - immediate + watchdog)');

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MargoSzpont NI</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <span class="logo">😼</span>
+            <h1>MargoSzpont NI</h1>
+            <span class="version">v1.0</span>
+        </div>
+
+        <!-- License Section -->
+        <div id="license-section" class="section">
+            <div class="section-title">🔐 Licencja</div>
+            <input type="text" id="license-key" placeholder="Wprowadź klucz licencji...">
+            <button id="activate-btn" class="btn btn-primary">Aktywuj</button>
+            <div id="license-status" class="status"></div>
+        </div>
+
+        <!-- Bot Control Section (hidden until licensed) -->
+        <div id="bot-section" class="section hidden">
+            <div class="section-title">🤖 Bot</div>
+
+            <div class="status-row">
+                <span>Status:</span>
+                <span id="bot-status" class="status-badge status-off">Wyłączony</span>
+            </div>
+
+            <div class="status-row">
+                <span>Strona:</span>
+                <span id="page-status" class="status-badge">Sprawdzanie...</span>
+            </div>
+
+            <button id="inject-btn" class="btn btn-success" disabled>
+                🚀 Uruchom Bota
+            </button>
+
+            <button id="stop-btn" class="btn btn-danger hidden">
+                ⏹️ Zatrzymaj
+            </button>
+        </div>
+
+        <!-- Info Section -->
+        <div class="section info">
+            <small>Bot dla Nowego Interfejsu (NI) Margonem.</small>
+            <small>Panel konfiguracji pojawi się w grze.</small>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>

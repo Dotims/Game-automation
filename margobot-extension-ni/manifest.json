@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "MargoSzpont",
+    "name": "MargoSzpont NI",
     "version": "1.0.0",
-    "description": "Bot do gry Margonem.pl",
+    "description": "Bot do gry Margonem.pl - Nowy Interfejs (NI)",
     "permissions": [
         "storage",
         "activeTab",
@@ -42,6 +42,8 @@
         {
             "resources": [
                 "content/logic.js",
+                "content/map_data.js",
+                "content/movement.js",
                 "content/bot.js",
                 "lib/*"
             ],

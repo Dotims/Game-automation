@@ -1,6 +1,6 @@
 /**
- * MargoSzpont Extension - Background Service Worker
- * Handles storage and cross-tab communication
+ * MargoSzpont NI Extension - Background Service Worker
+ * Handles storage and cross-tab communication for New Interface
  */
 
 // Listen for messages from popup or content scripts
@@ -107,7 +107,7 @@ chrome.debugger.onDetach.addListener((source, reason) => {
 
 // When extension is installed or updated
 chrome.runtime.onInstalled.addListener(async (details) => {
-    console.log('MargoSzpont extension installed/updated!', details.reason);
+    console.log('MargoSzpont NI extension installed/updated!', details.reason);
     
     // Get existing data first - PRESERVE license key!
     const existingData = await chrome.storage.local.get(['licenseKey', 'licenseValid', 'licenseInfo', 'botConfig']);
