@@ -6,7 +6,8 @@
     "permissions": [
         "storage",
         "activeTab",
-        "scripting"
+        "scripting",
+        "debugger"
     ],
     "host_permissions": [
         "*://*.margonem.pl/*"
@@ -33,7 +34,8 @@
                 "*://*.margonem.pl/*"
             ],
             "js": [
-                "content/injector.js"
+                "content/injector.js",
+                "content/captcha_solver.js"
             ],
             "run_at": "document_idle"
         }
@@ -43,6 +45,7 @@
             "resources": [
                 "content/logic.js",
                 "content/map_data.js",
+                "content/e2_data.js",
                 "content/movement.js",
                 "content/bot.js",
                 "lib/*"

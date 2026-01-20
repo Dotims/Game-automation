@@ -31,3 +31,7 @@ test_crypto_debug.js
 # OS specific
 .DS_Store
 Thumbs.db
+
+# Support code (development assets)
+margobot-extension-ni/assets/support_code/
+margobot-extension-si/assets/support_code/
