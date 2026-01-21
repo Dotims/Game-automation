@@ -87,6 +87,7 @@ Object.assign(window.MargonemAPI, {
       last_map_clean_time: null,
       respawn_wait_time: 3000000,
       bag_check: null,
+      visitedMapsHistory: {}, // { "MapName": timestamp } - tracks when each map was last visited
       sublocation_data: {
         mapped: false,
         connections: new Map(),
@@ -1745,6 +1746,52 @@ Object.assign(window.MargonemAPI, {
         throw new Error("");
       }
     },
+    /**
+     * Wybiera następną najlepszą mapę do odwiedzenia.
+     * Priorytet: mapy nieodwiedzone > mapy najdawniej odwiedzone
+     * @param {Array} availableMaps - Lista dostępnych map
+     * @returns {string|null} - Nazwa następnej mapy lub null
+     */
+    getNextBestMap: function (availableMaps) {
+      if (!availableMaps || availableMaps.length === 0) return null;
+      
+      const history = window.MargonemAPI.state.exping_location.visitedMapsHistory || {};
+      const currentMap = window.MargonemAPI.navigation.getCurrentLocation();
+      
+      // Filter out current map
+      const candidates = availableMaps.filter(m => m !== currentMap);
+      if (candidates.length === 0) return availableMaps[0];
+      
+      // Find unvisited maps first
+      const unvisited = candidates.filter(m => !history[m]);
+      if (unvisited.length > 0) {
+        console.log("[Exping] Wybrano nieodwiedzoną mapę:", unvisited[0]);
+        return unvisited[0];
+      }
+      
+      // All maps visited - pick the least recently visited
+      let oldestMap = candidates[0];
+      let oldestTime = history[candidates[0]] || Infinity;
+      
+      for (const mapName of candidates) {
+        const visitTime = history[mapName] || 0;
+        if (visitTime < oldestTime) {
+          oldestTime = visitTime;
+          oldestMap = mapName;
+        }
+      }
+      
+      console.log("[Exping] Wszystkie mapy odwiedzone. Wybrano najdawniej odwiedzoną:", oldestMap);
+      return oldestMap;
+    },
+    /**
+     * Rejestruje odwiedzenie mapy
+     * @param {string} mapName - Nazwa mapy
+     */
+    recordMapVisit: function (mapName) {
+      if (!mapName) return;
+      window.MargonemAPI.state.exping_location.visitedMapsHistory[mapName] = Date.now();
+    },
     startExping: async function (_0x500f61, _0x5e122b, _0x2f1e11, _0x2fadaf = false, _0x46202f = false, _0x317959 = 0, _0x37958e = null) {
       window.MargonemAPI.state.exping_location.is_aborted = false;
       window.MargonemAPI.state.exping_location.selectedMaps = _0x37958e;
@@ -2367,26 +2414,42 @@ Object.assign(window.MargonemAPI, {
       const _0x20203a = window.MargonemAPI.state.exping_location;
       this.checkAborted();
       try {
-        let _0x1ef1e7 = selectedMaps.slice().reverse();
-        _0x1ef1e7.splice(0, 1);
-        const _0x375ff4 = [...selectedMaps, ..._0x1ef1e7];
-        if (_0x375ff4.length === 0) {
-          throw new Error("");
+        // Get available maps from selectedMaps
+        const availableMaps = selectedMaps || [];
+        if (availableMaps.length === 0) {
+          throw new Error("No maps selected for exping");
         }
+        
+        // Main exping loop - continues until aborted
         while (!_0x20203a.is_aborted) {
           this.checkAborted();
-          for (const _0x3f1c89 of _0x375ff4) {
-            this.checkAborted();
-            try {
-              await this.navigateToLocation(_0x3f1c89);
-              this.checkAborted();
-              const _0x55ea88 = await this.fightOnCurrentLocation(_0x2ab902, _0x1b6f35);
-              this.checkAborted();
-              if (_0x55ea88) {} else {}
-            } catch (_0x47a56d) {
-              continue;
-            }
+          
+          // Use getNextBestMap to pick the next map (prioritizes unvisited, then least recently visited)
+          const nextMap = this.getNextBestMap(availableMaps);
+          if (!nextMap) {
+            console.log("[Exping] Brak dostępnych map do odwiedzenia");
+            await new Promise(r => setTimeout(r, 5000));
+            continue;
           }
+          
+          try {
+            console.log("[Exping] Nawigacja do mapy:", nextMap);
+            await this.navigateToLocation(nextMap);
+            this.checkAborted();
+            
+            // Record that we visited this map
+            this.recordMapVisit(nextMap);
+            
+            const _0x55ea88 = await this.fightOnCurrentLocation(_0x2ab902, _0x1b6f35);
+            this.checkAborted();
+            if (_0x55ea88) {
+              console.log("[Exping] Mapa wyczyszczona:", nextMap);
+            }
+          } catch (_0x47a56d) {
+            console.log("[Exping] Błąd na mapie, kontynuuję:", nextMap);
+            continue;
+          }
+          
           _0x20203a.iteration.count++;
         }
       } catch (_0x24ef67) {
