@@ -43,11 +43,12 @@
     "web_accessible_resources": [
         {
             "resources": [
-                "content/logic.js",
-                "content/map_data.js",
-                "content/e2_data.js",
-                "content/movement.js",
-                "content/bot.js",
+                "src/logic.js",
+                "src/core/config.js",
+                "src/data/e2_data.js",
+                "src/data/map_data.js",
+                "src/navigation/movement.js",
+                "src/ui/bot.js",
                 "lib/*"
             ],
             "matches": [

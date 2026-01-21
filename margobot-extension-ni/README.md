@@ -1,59 +1,71 @@
-# MargoSzpont NI - Bot dla Nowego Interfejsu
+# MargoSzpont NI - Bot Extension
 
-Bot do gry Margonem.pl przeznaczony dla **Nowego Interfejsu (NI)**.
+Bot do gry Margonem.pl dla Nowego Interfejsu (NI).
 
-## Struktura rozszerzenia
+## 📁 Struktura Projektu
 
 ```
 margobot-extension-ni/
-├── manifest.json          # Manifest rozszerzenia Chrome
-├── assets/                # Ikony rozszerzenia
-│   ├── icon16.png
-│   ├── icon48.png
-│   └── icon128.png
+├── manifest.json           # Konfiguracja rozszerzenia Chrome MV3
 ├── background/
-│   └── service-worker.js  # Background script
+│   └── service-worker.js   # Service worker
+├── popup/
+│   ├── popup.html          # Popup rozszerzenia
+│   └── popup.js
 ├── content/
-│   ├── injector.js        # Wstrzykuje skrypty do strony
-│   ├── logic.js           # Logika bota (MargonemAPI)
-│   └── bot.js             # Panel UI w grze
-├── lib/                   # Biblioteki (opcjonalne)
-└── popup/
-    ├── popup.html         # Popup rozszerzenia
-    ├── popup.css          # Style popup
-    └── popup.js           # Logika popup (licencja, aktywacja)
+│   ├── injector.js         # Entry point - wstrzykuje src/ do gry
+│   └── captcha_solver.js   # Content script - solver captchy
+├── src/                    # Kod wstrzykiwany do gry (MAIN world)
+│   ├── logic.js            # Główna logika (walka, exp, healing, E2)
+│   ├── core/
+│   │   └── config.js       # Konfiguracja (BLOCKED_MAPS, ustawienia)
+│   ├── data/
+│   │   ├── e2_data.js      # Dane bossów E2 i expowisk
+│   │   └── map_data.js     # Graf map do pathfindingu
+│   ├── navigation/
+│   │   └── movement.js     # Nawigacja, pathfinding (BFS)
+│   └── ui/
+│       └── bot.js          # Interfejs użytkownika (panele EXP, E2)
+├── assets/
+│   └── icons/              # Ikony rozszerzenia
+└── lib/                    # Biblioteki zewnętrzne
 ```
 
-## Instalacja
+## 🔧 Kolejność Ładowania Skryptów
 
-1. Otwórz Chrome i przejdź do `chrome://extensions/`
-2. Włącz "Tryb programisty" (Developer mode)
-3. Kliknij "Załaduj rozpakowane" (Load unpacked)
-4. Wybierz folder `margobot-extension-ni`
+```
+1. src/data/e2_data.js      → Dane E2
+2. src/data/map_data.js     → Dane map
+3. src/core/config.js       → Konfiguracja
+4. src/logic.js             → Główna logika
+5. src/navigation/movement.js → Nawigacja
+6. src/ui/bot.js            → UI
+```
 
-## Różnice NI vs SI
+## 🎮 Tryby
 
-| Cecha | SI (Stary Interfejs) | NI (Nowy Interfejs) |
-|-------|---------------------|---------------------|
-| Główny obiekt | `g`, `hero`, `map` | `window.Engine` |
-| Dane bohatera | `hero.x`, `hero.hp` | `Engine.hero.d.x`, `Engine.hero.d.warrior_stats.hp` |
-| NPC | `g.npc` | `Engine.npcs.getList()` |
-| Mapa | `map.name` | `Engine.map.d.name` |
-| Walka | `g.battle` | `Engine.battle.active` |
+- **EXP Mode** - Automatyczne zdobywanie doświadczenia na expowiskach
+- **E2 Mode** - Polowanie na bossy E2
 
-## Użycie
+## ⚙️ Konfiguracja
 
-1. Zaloguj się do gry Margonem (nowy interfejs)
-2. Kliknij ikonę rozszerzenia w pasku Chrome
-3. Wprowadź klucz licencji i aktywuj
-4. Kliknij "Uruchom Bota"
-5. Panel konfiguracji pojawi się w grze
+### Blokowane Mapy (`src/core/config.js`)
+Mapy, przez które bot nie będzie przechodził jeśli postać ma za niski poziom:
+```javascript
+window.BotConfig.BLOCKED_MAPS = {
+    "Nazwa Mapy": { minLevel: 200 },
+    // ...
+};
+```
 
-## Funkcje
+## 🛠️ Rozwój
 
-- **EXP Mode** - automatyczne walki z mobami w wybranym zakresie poziomów
-- **Transport Mode** - automatyczne przechodzenie przez bramy
-- **E2 Mode** - polowanie na konkretne potwory (E2)
-- **Auto Heal** - automatyczne leczenie
-- **Captcha Solver** - automatyczne rozwiązywanie captcha
-- **Persistent State** - zapamiętywanie ustawień po odświeżeniu
+1. Edytuj odpowiedni plik w `src/`
+2. Przeładuj rozszerzenie w Chrome (chrome://extensions/ → 🔄)
+3. Odśwież stronę gry
+
+## 📝 Notatki
+
+- Rozszerzenie wymaga Chrome Manifest V3
+- Wszystkie pliki w `src/` są wstrzykiwane do kontekstu MAIN strony gry
+- `content/` zawiera content scripts działające w izolowanym kontekście

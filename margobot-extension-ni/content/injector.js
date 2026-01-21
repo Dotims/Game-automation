@@ -41,42 +41,51 @@ function injectBot() {
 
     // 2. Load E2 Data (Bosses + Expowiska)
     const e2DataScript = document.createElement('script');
-    e2DataScript.src = chrome.runtime.getURL('content/e2_data.js');
+    e2DataScript.src = chrome.runtime.getURL('src/data/e2_data.js');
     e2DataScript.onload = () => {
         console.log('🎯 E2 Data loaded.');
         
         // 3. Load Map Data
         const mapDataScript = document.createElement('script');
-        mapDataScript.src = chrome.runtime.getURL('content/map_data.js');
+        mapDataScript.src = chrome.runtime.getURL('src/data/map_data.js');
         mapDataScript.onload = () => {
             console.log('🗺️ Map Data loaded.');
 
-            // 4. Load Logic (Core)
-            const logicScript = document.createElement('script');
-            logicScript.src = chrome.runtime.getURL('content/logic.js');
-            logicScript.onload = () => {
-                console.log('🤖 Logic loaded.');
-                
-                // 5. Load Movement (Extension)
-                const moveScript = document.createElement('script');
-                moveScript.src = chrome.runtime.getURL('content/movement.js');
-                moveScript.onload = () => {
-                    console.log('🤖 Movement loaded.');
+            // 4. Load Config (BLOCKED_MAPS, settings)
+            const configScript = document.createElement('script');
+            configScript.src = chrome.runtime.getURL('src/core/config.js');
+            configScript.onload = () => {
+                console.log('⚙️ Config loaded.');
+
+                // 5. Load Logic (Core)
+                const logicScript = document.createElement('script');
+                logicScript.src = chrome.runtime.getURL('src/logic.js');
+                logicScript.onload = () => {
+                    console.log('🤖 Logic loaded.');
                     
-                    // 6. Load UI (Bot Panel)
-                    const script = document.createElement('script');
-                    script.src = chrome.runtime.getURL('content/bot.js');
-                    script.onload = () => {
-                        console.log('🤖 UI loaded successfully!');
-                        script.remove();
+                    // 6. Load Movement (Navigation)
+                    const moveScript = document.createElement('script');
+                    moveScript.src = chrome.runtime.getURL('src/navigation/movement.js');
+                    moveScript.onload = () => {
+                        console.log('🤖 Movement loaded.');
+                        
+                        // 7. Load UI (Bot Panel)
+                        const script = document.createElement('script');
+                        script.src = chrome.runtime.getURL('src/ui/bot.js');
+                        script.onload = () => {
+                            console.log('🤖 UI loaded successfully!');
+                            script.remove();
+                        };
+                        (document.head || document.documentElement).appendChild(script);
+                        moveScript.remove();
                     };
-                    (document.head || document.documentElement).appendChild(script);
-                    moveScript.remove();
+                    (document.head || document.documentElement).appendChild(moveScript);
+                    logicScript.remove();
                 };
-                (document.head || document.documentElement).appendChild(moveScript);
-                logicScript.remove();
+                (document.head || document.documentElement).appendChild(logicScript);
+                configScript.remove();
             };
-            (document.head || document.documentElement).appendChild(logicScript);
+            (document.head || document.documentElement).appendChild(configScript);
             mapDataScript.remove();
         };
         (document.head || document.documentElement).appendChild(mapDataScript);

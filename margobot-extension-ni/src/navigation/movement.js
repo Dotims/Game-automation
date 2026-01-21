@@ -6,30 +6,6 @@
 // - mapData (Map Graph for pathfinding - externally defined in the original file)
 
 const MovementBot = {
-    // --- Blocked Maps Logic ---
-    BlockedMaps: {
-        DATA: {
-            "Zawodzące Kaskady": { minLevel: 200 },
-            "Złudny Trakt": { minLevel: 170 },
-            "Ukwiecona Skarpa": { minLevel: 170 },
-            "Urwisko Zdrewniałych": { minLevel: 218 },
-            "Mglisty Las": { minLevel: 200 },
-            "Niecka Xiuh Atl": { minLevel: 200 }
-        },
-        isMapBlocked: function(mapName) {
-            if (!mapName) return false;
-            const config = this.DATA[mapName];
-            if (!config) return false;
-            
-            const heroLevel = window.Engine?.hero?.d?.lvl || 0;
-            if (heroLevel < config.minLevel) {
-                console.log(`[Movement] Mapa zablokowana: ${mapName} (Wymagany lvl: ${config.minLevel}, Twój lvl: ${heroLevel})`);
-                return true;
-            }
-            return false;
-        }
-    },
-
     // --- Navigation Logic ---
     Navigation: {
         findShortestPath: function (startMap, targetMap) {
@@ -105,8 +81,8 @@ const MovementBot = {
                      for (const gateway of mapInfo.gateways) {
                          const neighborName = gateway.name || gateway.targetMap || gateway.target_map || (gateway.d ? gateway.d.name : null);
                          if (neighborName && !visited.has(neighborName)) {
-                             // --- Blocked Maps Check ---
-                             if (MovementBot.BlockedMaps && MovementBot.BlockedMaps.isMapBlocked(neighborName)) {
+                             // --- Blocked Maps Check (uses src/core/config.js) ---
+                             if (window.BotConfig && window.BotConfig.isMapBlocked(neighborName)) {
                                  continue;
                              }
                              // --------------------------
