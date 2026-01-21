@@ -48,6 +48,8 @@
                 "src/data/e2_data.js",
                 "src/data/map_data.js",
                 "src/navigation/movement.js",
+                "src/e2/controller.js",
+                "src/utils/helpers.js",
                 "src/ui/bot.js",
                 "lib/*"
             ],

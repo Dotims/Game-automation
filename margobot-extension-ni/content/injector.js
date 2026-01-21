@@ -57,11 +57,17 @@ function injectBot() {
             configScript.onload = () => {
                 console.log('⚙️ Config loaded.');
 
-                // 5. Load Logic (Core)
-                const logicScript = document.createElement('script');
-                logicScript.src = chrome.runtime.getURL('src/logic.js');
-                logicScript.onload = () => {
-                    console.log('🤖 Logic loaded.');
+                // 5. Load Helpers (Utils)
+                const helpersScript = document.createElement('script');
+                helpersScript.src = chrome.runtime.getURL('src/utils/helpers.js');
+                helpersScript.onload = () => {
+                    console.log('🔧 Helpers loaded.');
+
+                    // 6. Load Logic (Core)
+                    const logicScript = document.createElement('script');
+                    logicScript.src = chrome.runtime.getURL('src/logic.js');
+                    logicScript.onload = () => {
+                        console.log('🤖 Logic loaded.');
                     
                     // 6. Load Movement (Navigation)
                     const moveScript = document.createElement('script');
@@ -69,20 +75,32 @@ function injectBot() {
                     moveScript.onload = () => {
                         console.log('🤖 Movement loaded.');
                         
-                        // 7. Load UI (Bot Panel)
-                        const script = document.createElement('script');
-                        script.src = chrome.runtime.getURL('src/ui/bot.js');
-                        script.onload = () => {
-                            console.log('🤖 UI loaded successfully!');
-                            script.remove();
+                        // 7. Load E2 Controller
+                        const e2Script = document.createElement('script');
+                        e2Script.src = chrome.runtime.getURL('src/e2/controller.js');
+                        e2Script.onload = () => {
+                            console.log('🎯 E2 Controller loaded.');
+                            
+                            // 8. Load UI (Bot Panel)
+                            const script = document.createElement('script');
+                            script.src = chrome.runtime.getURL('src/ui/bot.js');
+                            script.onload = () => {
+                                console.log('🤖 UI loaded successfully!');
+                                script.remove();
+                            };
+                            (document.head || document.documentElement).appendChild(script);
+                            e2Script.remove();
                         };
-                        (document.head || document.documentElement).appendChild(script);
+                        (document.head || document.documentElement).appendChild(e2Script);
                         moveScript.remove();
                     };
                     (document.head || document.documentElement).appendChild(moveScript);
-                    logicScript.remove();
+                        logicScript.remove();
+                    };
+                    (document.head || document.documentElement).appendChild(logicScript);
+                    helpersScript.remove();
                 };
-                (document.head || document.documentElement).appendChild(logicScript);
+                (document.head || document.documentElement).appendChild(helpersScript);
                 configScript.remove();
             };
             (document.head || document.documentElement).appendChild(configScript);
