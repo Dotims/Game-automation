@@ -372,6 +372,37 @@ Object.assign(window.MargonemAPI, {
       if (_0x1b0983.abortNavigation || !_0x1b0983.isNavigating) {
         return;
       }
+      
+      // Check if mobs appeared while navigating (especially on red/PvP maps with limited visibility)
+      const apiState = window.MargonemAPI.state;
+      if (apiState.is_exping && apiState.autoFightActive) {
+        try {
+          const allMobs = window.MargonemAPI.getAllMobs();
+          const hasLevelRange = apiState.levelRange.min !== null || apiState.levelRange.max !== null;
+          const validMobs = allMobs.filter(mob => {
+            const isBlocked = apiState.blockedMobs.has(mob.id);
+            let isValid = false;
+            if (hasLevelRange) {
+              const minLvl = apiState.levelRange.min || 1;
+              const maxLvl = apiState.levelRange.max || 300;
+              isValid = mob.lvl >= minLvl && mob.lvl <= maxLvl;
+            } else {
+              isValid = apiState.selectedNicks.includes(mob.nick);
+            }
+            return isValid && !isBlocked;
+          });
+          
+          if (validMobs.length > 0) {
+            // Mobs found during navigation - stop and fight them
+            console.log("[NAV] Mobs appeared during navigation, stopping to fight:", validMobs.length);
+            this.stopNavigation(true);
+            return;
+          }
+        } catch (e) {
+          console.error("[NAV] Error checking mobs during navigation:", e);
+        }
+      }
+      
       const _0x5c2b9d = this.getCurrentLocation();
       const _0x94856f = _0x1b0983.currentPath && _0x1b0983.currentPath[_0x1b0983.currentPathIndex];
       if (_0x94856f && _0x5c2b9d === _0x94856f.nextMap) {
@@ -2416,6 +2447,9 @@ Object.assign(window.MargonemAPI, {
       try {
         // Get available maps from selectedMaps
         const availableMaps = selectedMaps || [];
+        console.log("[DEBUG] ====== EXPING START ======");
+        console.log("[DEBUG] Available maps:", availableMaps);
+        console.log("[DEBUG] Number of maps:", availableMaps.length);
         if (availableMaps.length === 0) {
           throw new Error("No maps selected for exping");
         }
@@ -2424,30 +2458,59 @@ Object.assign(window.MargonemAPI, {
         while (!_0x20203a.is_aborted) {
           this.checkAborted();
           
-          // Use getNextBestMap to pick the next map (prioritizes unvisited, then least recently visited)
+          const currentMap = window.MargonemAPI.navigation.getCurrentLocation();
+          console.log("[DEBUG] Current map:", currentMap);
+          const isCurrentMapValid = availableMaps.includes(currentMap);
+          console.log("[DEBUG] Is current map in available maps?:", isCurrentMapValid);
+          
+          // PRIORITY 1: If we're already on a valid map, try to fight here first
+          if (isCurrentMapValid) {
+            console.log("[DEBUG] Already on valid map, checking for mobs...");
+            // Reset map_cleaned flag to check for mobs
+            window.MargonemAPI.state.map_cleaned = false;
+            
+            try {
+              // Record visit and fight on current location
+              this.recordMapVisit(currentMap);
+              const fightResult = await this.fightOnCurrentLocation(_0x2ab902, _0x1b6f35);
+              this.checkAborted();
+              if (fightResult) {
+                console.log("[Exping] Mapa wyczyszczona:", currentMap);
+              }
+            } catch (e) {
+              console.log("[Exping] Błąd walki na obecnej mapie:", currentMap, e);
+            }
+          }
+          
+          // PRIORITY 2: After fighting on current map (or if not valid), go to next map
           const nextMap = this.getNextBestMap(availableMaps);
+          console.log("[DEBUG] getNextBestMap returned:", nextMap);
           if (!nextMap) {
             console.log("[Exping] Brak dostępnych map do odwiedzenia");
             await new Promise(r => setTimeout(r, 5000));
             continue;
           }
           
-          try {
-            console.log("[Exping] Nawigacja do mapy:", nextMap);
-            await this.navigateToLocation(nextMap);
-            this.checkAborted();
-            
-            // Record that we visited this map
-            this.recordMapVisit(nextMap);
-            
-            const _0x55ea88 = await this.fightOnCurrentLocation(_0x2ab902, _0x1b6f35);
-            this.checkAborted();
-            if (_0x55ea88) {
-              console.log("[Exping] Mapa wyczyszczona:", nextMap);
+          // Only navigate if we need to go to a different map
+          if (nextMap !== currentMap) {
+            try {
+              console.log("[DEBUG] Navigating to map:", nextMap);
+              console.log("[Exping] Nawigacja do mapy:", nextMap);
+              await this.navigateToLocation(nextMap);
+              this.checkAborted();
+              
+              // Record that we visited this map
+              this.recordMapVisit(nextMap);
+              
+              const _0x55ea88 = await this.fightOnCurrentLocation(_0x2ab902, _0x1b6f35);
+              this.checkAborted();
+              if (_0x55ea88) {
+                console.log("[Exping] Mapa wyczyszczona:", nextMap);
+              }
+            } catch (_0x47a56d) {
+              console.log("[Exping] Błąd na mapie, kontynuuję:", nextMap);
+              continue;
             }
-          } catch (_0x47a56d) {
-            console.log("[Exping] Błąd na mapie, kontynuuję:", nextMap);
-            continue;
           }
           
           _0x20203a.iteration.count++;

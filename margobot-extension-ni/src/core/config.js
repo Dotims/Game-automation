@@ -30,7 +30,14 @@ window.BotConfig.isMapBlocked = function(mapName) {
     
     const heroLevel = window.Engine?.hero?.d?.lvl || 0;
     if (heroLevel < config.minLevel) {
-        console.log(`[Config] Mapa zablokowana: ${mapName} (Wymagany lvl: ${config.minLevel}, Twój lvl: ${heroLevel})`);
+        // Throttle logs to avoid spamming console during pathfinding.
+        window.BotConfig._blockedLogLastAt = window.BotConfig._blockedLogLastAt || Object.create(null);
+        const now = Date.now();
+        const last = window.BotConfig._blockedLogLastAt[mapName] || 0;
+        if (now - last > 10000) {
+            window.BotConfig._blockedLogLastAt[mapName] = now;
+            console.log(`[Config] Mapa zablokowana: ${mapName} (Wymagany lvl: ${config.minLevel}, Twój lvl: ${heroLevel})`);
+        }
         return true;
     }
     return false;
