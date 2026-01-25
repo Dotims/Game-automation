@@ -1,8 +1,34 @@
-﻿window.serverUrl = 'http://localhost';
+﻿/**
+ * MargonemAPI Main Logic
+ * Core bot functionality - this file contains the remaining logic
+ * that hasn't been extracted to separate modules yet.
+ * 
+ * Modules loaded before this:
+ * - state.js - Global state management
+ * - pathfinding.js - A* pathfinding
+ * - potions.js - Potion utilities
+ * - combat.js - Combat system
+ * - healing.js - Auto-healing
+ * - exping.js - Exping/grinding
+ */
+
+window.serverUrl = 'http://localhost';
 let sessionToken = 'local-bypass'; // Bypass for local usage without server
 window.MargonemAPI = window.MargonemAPI || {};
+
+// Log which modules are already loaded
+console.log('[Logic] Checking pre-loaded modules:', {
+    state: !!window.MargonemAPI.state,
+    pathfinding: !!window.MargonemAPI.pathfinding,
+    potions: !!window.MargonemAPI.potions,
+    combat: !!window.MargonemAPI.combat,
+    healing: !!window.MargonemAPI.healingSystem,
+    exping: !!window.MargonemAPI.exping
+});
+
 Object.assign(window.MargonemAPI, {
-  state: {
+  // State - only define if not already loaded from state.js
+  state: window.MargonemAPI.state || {
     bag: null,
     is_exping: false,
     map_cleaned: false,
@@ -1786,7 +1812,14 @@ Object.assign(window.MargonemAPI, {
     getNextBestMap: function (availableMaps) {
       if (!availableMaps || availableMaps.length === 0) return null;
       
-      const history = window.MargonemAPI.state.exping_location.visitedMapsHistory || {};
+      // Upewnij się że visitedMapsHistory istnieje
+      if (!window.MargonemAPI.state.exping_location) {
+        window.MargonemAPI.state.exping_location = {};
+      }
+      if (!window.MargonemAPI.state.exping_location.visitedMapsHistory) {
+        window.MargonemAPI.state.exping_location.visitedMapsHistory = {};
+      }
+      const history = window.MargonemAPI.state.exping_location.visitedMapsHistory;
       const currentMap = window.MargonemAPI.navigation.getCurrentLocation();
       
       // Filter out current map
@@ -1821,14 +1854,23 @@ Object.assign(window.MargonemAPI, {
      */
     recordMapVisit: function (mapName) {
       if (!mapName) return;
+      // Upewnij się że visitedMapsHistory istnieje
+      if (!window.MargonemAPI.state.exping_location) {
+        window.MargonemAPI.state.exping_location = {};
+      }
+      if (!window.MargonemAPI.state.exping_location.visitedMapsHistory) {
+        window.MargonemAPI.state.exping_location.visitedMapsHistory = {};
+      }
       window.MargonemAPI.state.exping_location.visitedMapsHistory[mapName] = Date.now();
     },
     startExping: async function (minLevel, maxLevel, expZoneName, sellWhenFull = false, teleportIfPlayer = false, potionCount = 0, selectedMaps = null) {
       window.MargonemAPI.state.exping_location.is_aborted = false;
       window.MargonemAPI.state.exping_location.selectedMaps = selectedMaps;
       const potionsMultiplier = window.MargonemAPI.state.exping_location.potionsMultiplier || 1;
-      window.MargonemAPI.state.exping_location.requestedPotions = potionCount;
-      window.MargonemAPI.state.exping_location.targetPotions = Math.max(0, (potionCount || 0) * (potionsMultiplier || 1));
+      // Domyślna wartość 30 potek jeśli input pusty lub 0
+      const effectivePotionCount = potionCount > 0 ? potionCount : 30;
+      window.MargonemAPI.state.exping_location.requestedPotions = effectivePotionCount;
+      window.MargonemAPI.state.exping_location.targetPotions = Math.max(0, effectivePotionCount * (potionsMultiplier || 1));
       window.MargonemAPI.state.exping_location.blockPotions = true;
       if (!sessionToken) {
         return;
@@ -1881,8 +1923,20 @@ Object.assign(window.MargonemAPI, {
                         uzyjPrzedmiot("Zwój teleportacji na Kwieciste Przejście");
                         await this.waitForMapChange("Kwieciste Przejście");
                         await this.tuniaSelling();
+                        
+                        // Sprawdź czy trzeba dokupać potki po sprzedaży
+                        const targetPotions = window.MargonemAPI.state.exping_location.targetPotions || 30;
+                        const currentPotions = policzLeczyPrzedmioty() || 0;
+                        console.log("[POTKI] Sprawdzenie po sprzedaży - mam:", currentPotions, "cel:", targetPotions);
+                        if (currentPotions < targetPotions) {
+                          console.log("[POTKI] Brakuje potek, kupuję...");
+                          await window.MargonemAPI.testBuyPotionsAtTunia(Math.ceil((targetPotions - currentPotions) / 5));
+                        }
+                        
                         window.MargonemAPI.healingSystem.interval_of_selling = true;
-                      } catch (teleportError) {}
+                      } catch (teleportError) {
+                        console.log("[POTKI] Błąd przy sprzedaży/kupowaniu:", teleportError?.message || teleportError);
+                      }
                       window.MargonemAPI.state.exping_location.is_aborted = true;
                       await sleep(3000);
                       return this.startExping(minLevel, maxLevel, expZoneName, sellWhenFull, teleportIfPlayer, potionCount);
@@ -1944,6 +1998,20 @@ Object.assign(window.MargonemAPI, {
                       await this.waitForMapChange("Kwieciste Przejście");
                       await sleep(2000);
                       await this.tuniaSelling();
+                      
+                      // Sprawdź czy trzeba dokupać potki po sprzedaży
+                      const targetPotions = window.MargonemAPI.state.exping_location.targetPotions || 30;
+                      const currentPotions = policzLeczyPrzedmioty() || 0;
+                      console.log("[POTKI] Sprawdzenie po teleporcie (gracz) - mam:", currentPotions, "cel:", targetPotions);
+                      if (currentPotions < targetPotions) {
+                        console.log("[POTKI] Brakuje potek, kupuję...");
+                        try {
+                          await window.MargonemAPI.testBuyPotionsAtTunia(Math.ceil((targetPotions - currentPotions) / 5));
+                        } catch (e) {
+                          console.log("[POTKI] Błąd kupowania:", e?.message || e);
+                        }
+                      }
+                      
                       window.MargonemAPI.state.exping_location.is_aborted = true;
                       window.MargonemAPI.healingSystem.interval_of_selling = true;
                       await sleep(3000);

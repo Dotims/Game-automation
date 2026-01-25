@@ -1,10 +1,26 @@
 /**
  * MargoSzpont NI Extension - Content Injector
  * Wstrzykuje bot.js do strony gry w kontekście MAIN dla Nowego Interfejsu
- * Wersja v4: logic.js -> movement.js -> bot.js
+ * Wersja v5: Modular architecture with separate modules
+ * 
+ * Loading order:
+ * 1. e2_data.js - Boss/Expowiska data
+ * 2. map_data.js - Map connections
+ * 3. config.js - Configuration
+ * 4. helpers.js - Utility functions
+ * 5. state.js - Global state management
+ * 6. pathfinding.js - A* pathfinding
+ * 7. potions.js - Potion utilities
+ * 8. combat.js - Combat system
+ * 9. healing.js - Auto-healing
+ * 10. exping.js - Exping/grinding system
+ * 11. logic.js - Main logic (reduced)
+ * 12. movement.js - Navigation
+ * 13. controller.js - E2 Controller
+ * 14. bot.js - UI Panel
  */
 
-console.log('🤖 MargoSzpont NI: Content injector loading...');
+console.log('🤖 MargoSzpont NI: Content injector loading (v5 modular)...');
 
 // Dynamic check for NI game environment
 function isGamePage() {
@@ -19,13 +35,63 @@ function isGamePage() {
 // Global injection guard
 let injectionStarted = false;
 
+/**
+ * Helper function to load a script and return a promise
+ */
+function loadScript(path) {
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = chrome.runtime.getURL(path);
+        script.onload = () => {
+            script.remove();
+            resolve();
+        };
+        script.onerror = reject;
+        (document.head || document.documentElement).appendChild(script);
+    });
+}
+
+/**
+ * Load all scripts in sequence
+ */
+async function loadScriptsSequentially() {
+    const scripts = [
+        { path: 'src/data/e2_data.js', name: 'E2 Data' },
+        { path: 'src/data/map_data.js', name: 'Map Data' },
+        { path: 'src/core/config.js', name: 'Config' },
+        { path: 'src/utils/helpers.js', name: 'Helpers' },
+        { path: 'src/core/state.js', name: 'State' },
+        { path: 'src/navigation/pathfinding.js', name: 'Pathfinding' },
+        { path: 'src/utils/potions.js', name: 'Potions' },
+        { path: 'src/combat/combat.js', name: 'Combat' },
+        { path: 'src/healing/healing.js', name: 'Healing' },
+        { path: 'src/exping/exping.js', name: 'Exping' },
+        { path: 'src/logic.js', name: 'Logic' },
+        { path: 'src/navigation/movement.js', name: 'Movement' },
+        { path: 'src/e2/controller.js', name: 'E2 Controller' },
+        { path: 'src/ui/bot.js', name: 'UI' }
+    ];
+    
+    for (const { path, name } of scripts) {
+        try {
+            await loadScript(path);
+            console.log(`✅ ${name} loaded`);
+        } catch (error) {
+            console.error(`❌ Failed to load ${name}:`, error);
+            // Continue loading other scripts even if one fails
+        }
+    }
+    
+    console.log('🤖 MargoSzpont NI: All modules loaded!');
+}
+
 // Inject bot scripts in order
 function injectBot() {
     if (injectionStarted) return false; // Already started injection
     if (document.getElementById('my-bot-panel')) return false; // Already injected
     injectionStarted = true; // Mark as started
     
-    console.log('🤖 MargoSzpont NI: Injecting bot scripts...');
+    console.log('🤖 MargoSzpont NI: Injecting bot scripts (modular architecture)...');
     
     // 1. Inject License
     try {
@@ -39,77 +105,10 @@ function injectBot() {
         });
     } catch(e) {}
 
-    // 2. Load E2 Data (Bosses + Expowiska)
-    const e2DataScript = document.createElement('script');
-    e2DataScript.src = chrome.runtime.getURL('src/data/e2_data.js');
-    e2DataScript.onload = () => {
-        console.log('🎯 E2 Data loaded.');
-        
-        // 3. Load Map Data
-        const mapDataScript = document.createElement('script');
-        mapDataScript.src = chrome.runtime.getURL('src/data/map_data.js');
-        mapDataScript.onload = () => {
-            console.log('🗺️ Map Data loaded.');
-
-            // 4. Load Config (BLOCKED_MAPS, settings)
-            const configScript = document.createElement('script');
-            configScript.src = chrome.runtime.getURL('src/core/config.js');
-            configScript.onload = () => {
-                console.log('⚙️ Config loaded.');
-
-                // 5. Load Helpers (Utils)
-                const helpersScript = document.createElement('script');
-                helpersScript.src = chrome.runtime.getURL('src/utils/helpers.js');
-                helpersScript.onload = () => {
-                    console.log('🔧 Helpers loaded.');
-
-                    // 6. Load Logic (Core)
-                    const logicScript = document.createElement('script');
-                    logicScript.src = chrome.runtime.getURL('src/logic.js');
-                    logicScript.onload = () => {
-                        console.log('🤖 Logic loaded.');
-                    
-                    // 6. Load Movement (Navigation)
-                    const moveScript = document.createElement('script');
-                    moveScript.src = chrome.runtime.getURL('src/navigation/movement.js');
-                    moveScript.onload = () => {
-                        // console.log('🤖 Movement loaded.');
-                        
-                        // 7. Load E2 Controller
-                        const e2Script = document.createElement('script');
-                        e2Script.src = chrome.runtime.getURL('src/e2/controller.js');
-                        e2Script.onload = () => {
-                            // console.log('🎯 E2 Controller loaded.');
-                            
-                            // 8. Load UI (Bot Panel)
-                            const script = document.createElement('script');
-                            script.src = chrome.runtime.getURL('src/ui/bot.js');
-                            script.onload = () => {
-                                // console.log('🤖 UI loaded successfully!');
-                                script.remove();
-                            };
-                            (document.head || document.documentElement).appendChild(script);
-                            e2Script.remove();
-                        };
-                        (document.head || document.documentElement).appendChild(e2Script);
-                        moveScript.remove();
-                    };
-                    (document.head || document.documentElement).appendChild(moveScript);
-                        logicScript.remove();
-                    };
-                    (document.head || document.documentElement).appendChild(logicScript);
-                    helpersScript.remove();
-                };
-                (document.head || document.documentElement).appendChild(helpersScript);
-                configScript.remove();
-            };
-            (document.head || document.documentElement).appendChild(configScript);
-            mapDataScript.remove();
-        };
-        (document.head || document.documentElement).appendChild(mapDataScript);
-        e2DataScript.remove();
-    };
-    (document.head || document.documentElement).appendChild(e2DataScript);
+    // 2. Load all scripts in sequence
+    loadScriptsSequentially().catch(error => {
+        console.error('🤖 MargoSzpont NI: Error loading scripts:', error);
+    });
     
     return true;
 }
