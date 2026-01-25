@@ -1275,6 +1275,7 @@
                         placeholder="e.g. 10"
                     />
                 </div>
+                <!-- TEST POTEK - ZAKOMENTOWANE
                 <button
                     id="testPotionsBtn"
                     class="bot-ui-button"
@@ -1295,6 +1296,7 @@
                 <div id="testPotionsStatus" style="font-size: 0.75rem; color: #9ca3af; margin-top: 0.25rem;">
                     Kliknij aby przetestować kupowanie potek u healera.
                 </div>
+                -->
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 0.75rem;">
@@ -1338,8 +1340,9 @@
     const sellItemsCheckbox = content.querySelector("#sellItemsCheckbox");
     const teleportIfOnMapCheckbox = content.querySelector("#teleportIfOnMapCheckbox");
     const healPotionsInput = content.querySelector("#healPotionsInput");
-    const testPotionsBtn = content.querySelector("#testPotionsBtn");
-    const testPotionsStatus = content.querySelector("#testPotionsStatus");
+    // TEST POTEK - ZAKOMENTOWANE
+    // const testPotionsBtn = content.querySelector("#testPotionsBtn");
+    // const testPotionsStatus = content.querySelector("#testPotionsStatus");
     function handleAllLevelsToggle() {
       if (allLevelsCheckbox.checked) {
         minLevelInput.value = "1";
@@ -1369,20 +1372,22 @@
         sellItemsCheckbox.disabled = true;
         teleportIfOnMapCheckbox.disabled = false;
         healPotionsInput.disabled = false;
-        testPotionsBtn.disabled = false;
+        // TEST POTEK - ZAKOMENTOWANE
+        // testPotionsBtn.disabled = false;
         sellItemsCheckbox.title = msg;
         teleportIfOnMapCheckbox.title = "";
         healPotionsInput.title = "";
-        testPotionsBtn.title = "";
+        // testPotionsBtn.title = "";
       } else {
         sellItemsCheckbox.disabled = false;
         teleportIfOnMapCheckbox.disabled = false;
         healPotionsInput.disabled = false;
-        testPotionsBtn.disabled = false;
+        // TEST POTEK - ZAKOMENTOWANE
+        // testPotionsBtn.disabled = false;
         sellItemsCheckbox.title = "";
         teleportIfOnMapCheckbox.title = "";
         healPotionsInput.title = "";
-        testPotionsBtn.title = "";
+        // testPotionsBtn.title = "";
       }
     }
     updateLevelDependentOptions();
@@ -1498,7 +1503,8 @@
       }
     });
 
-    // Event listener dla przycisku testowego potek
+    // TEST POTEK - ZAKOMENTOWANE
+    /*
     testPotionsBtn.addEventListener("click", async () => {
       const targetClicks = parseInt(healPotionsInput.value) || 15;
       
@@ -1535,6 +1541,7 @@
         testPotionsBtn.disabled = false;
       }
     });
+    */
 
     return new DraggablePanel("Expowiska", content, {
       x: 200,

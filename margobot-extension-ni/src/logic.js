@@ -3923,9 +3923,108 @@ Object.assign(window.MargonemAPI, {
     console.log("[TEST POTEK] ZAKOŃCZONO POMYŚLNIE");
     console.log("=================================================");
     return true;
+  },
+
+  // ====== FUNKCJA DO WYKRYWANIA MIKSTUR LECZĄCYCH W EKWIPUNKU ======
+  getHealingPotions: function() {
+    const engine = window.Engine;
+    if (!engine || !engine.items) {
+      console.log("[MIKSTURY] Błąd: Engine.items niedostępne");
+      return { count: 0, totalHealing: 0, potions: [] };
+    }
+
+    // "g" = przedmioty w torbie (ground/bag)
+    const bagItems = engine.items.fetchLocationItems("g");
+    if (!bagItems || !bagItems.length) {
+      console.log("[MIKSTURY] Torba jest pusta");
+      return { count: 0, totalHealing: 0, potions: [] };
+    }
+
+    let totalCount = 0;
+    let totalHealing = 0;
+    const potions = [];
+
+    bagItems.forEach(item => {
+      let healingValue = 0;
+      let amount = 1;
+
+      // Spróbuj pobrać wartość leczenia z _cachedStats
+      if (item._cachedStats && item._cachedStats.leczy !== undefined) {
+        healingValue = parseInt(item._cachedStats.leczy, 10) || 0;
+        amount = parseInt(item._cachedStats.amount, 10) || 1;
+      }
+      // Jeśli nie ma _cachedStats, spróbuj z item.stat (string format)
+      else if (item.stat && typeof item.stat === 'string' && item.stat.includes('leczy=')) {
+        const healMatch = item.stat.match(/leczy=(\d+)/);
+        const amountMatch = item.stat.match(/amount=(\d+)/);
+        if (healMatch) healingValue = parseInt(healMatch[1], 10) || 0;
+        if (amountMatch) amount = parseInt(amountMatch[1], 10) || 1;
+      }
+
+      if (healingValue > 0) {
+        totalCount += amount;
+        totalHealing += healingValue * amount;
+        potions.push({
+          id: item.id,
+          name: item.name || "Nieznana mikstura",
+          healing: healingValue,
+          amount: amount,
+          icon: item.icon || null
+        });
+      }
+    });
+
+    // Sortuj od najsilniejszych do najsłabszych
+    potions.sort((a, b) => b.healing - a.healing);
+
+    const result = {
+      count: totalCount,
+      totalHealing: totalHealing,
+      potions: potions
+    };
+
+    // Wyświetl w konsoli
+    console.log("=================================================");
+    console.log("[MIKSTURY] MIKSTURY LECZĄCE W EKWIPUNKU");
+    console.log("=================================================");
+    console.log("[MIKSTURY] Łączna ilość mikstur:", totalCount);
+    console.log("[MIKSTURY] Łączna wartość leczenia:", totalHealing, "HP");
+    console.log("[MIKSTURY] Lista mikstur:");
+    
+    if (potions.length === 0) {
+      console.log("[MIKSTURY]   (brak mikstur leczących)");
+    } else {
+      potions.forEach((p, i) => {
+        console.log(`[MIKSTURY]   ${i+1}. "${p.name}" - leczy: ${p.healing} HP, ilość: ${p.amount}`);
+      });
+    }
+    
+    console.log("=================================================");
+
+    return result;
   }
 });
 
 // Helper functions moved to src/utils/helpers.js
 
 window.MargonemAPI.heroPositionMonitor.init()
+
+// Automatyczne wyświetlenie mikstur po załadowaniu gry
+;(function initPotionCheck() {
+  // Czekaj aż Engine i items będą dostępne
+  const checkInterval = setInterval(() => {
+    if (window.Engine && window.Engine.items && window.Engine.hero && window.Engine.hero.d) {
+      clearInterval(checkInterval);
+      // Dodatkowe opóźnienie żeby upewnić się że wszystko się załadowało
+      setTimeout(() => {
+        console.log("[BOT] Gra załadowana - sprawdzam mikstury leczące...");
+        window.MargonemAPI.getHealingPotions();
+      }, 2000);
+    }
+  }, 500);
+  
+  // Timeout po 60 sekundach żeby nie sprawdzać w nieskończoność
+  setTimeout(() => {
+    clearInterval(checkInterval);
+  }, 60000);
+})();
