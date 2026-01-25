@@ -73,19 +73,19 @@ function injectBot() {
                     const moveScript = document.createElement('script');
                     moveScript.src = chrome.runtime.getURL('src/navigation/movement.js');
                     moveScript.onload = () => {
-                        console.log('🤖 Movement loaded.');
+                        // console.log('🤖 Movement loaded.');
                         
                         // 7. Load E2 Controller
                         const e2Script = document.createElement('script');
                         e2Script.src = chrome.runtime.getURL('src/e2/controller.js');
                         e2Script.onload = () => {
-                            console.log('🎯 E2 Controller loaded.');
+                            // console.log('🎯 E2 Controller loaded.');
                             
                             // 8. Load UI (Bot Panel)
                             const script = document.createElement('script');
                             script.src = chrome.runtime.getURL('src/ui/bot.js');
                             script.onload = () => {
-                                console.log('🤖 UI loaded successfully!');
+                                // console.log('🤖 UI loaded successfully!');
                                 script.remove();
                             };
                             (document.head || document.documentElement).appendChild(script);

@@ -948,11 +948,11 @@ window.MargonemAPI.e2 = {
 
 setTimeout(async () => {
   if (window.MargonemAPI && window.MargonemAPI.e2) {
-    console.log("[E2 API] Inicjalizacja systemu E2");
+    // console.log("[E2 API] Inicjalizacja systemu E2");
     const _0xc6fd95 = await window.MargonemAPI.e2.resumeFromSavedState();
     if (!_0xc6fd95) {
       window.MargonemAPI.e2.initializeCharacters();
-      console.log("[E2 API] Zainicjalizowano system E2");
+      // console.log("[E2 API] Zainicjalizowano system E2");
     }
   }
 }, 2000);

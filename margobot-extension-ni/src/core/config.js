@@ -36,7 +36,7 @@ window.BotConfig.isMapBlocked = function(mapName) {
         const last = window.BotConfig._blockedLogLastAt[mapName] || 0;
         if (now - last > 10000) {
             window.BotConfig._blockedLogLastAt[mapName] = now;
-            console.log(`[Config] Mapa zablokowana: ${mapName} (Wymagany lvl: ${config.minLevel}, Twój lvl: ${heroLevel})`);
+            // console.log(`[Config] Mapa zablokowana: ${mapName} (Wymagany lvl: ${config.minLevel}, Twój lvl: ${heroLevel})`);
         }
         return true;
     }

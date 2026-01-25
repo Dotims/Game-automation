@@ -286,7 +286,8 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            resize: both;
+          resize: none;
+          box-sizing: border-box;
         }
 
         .bot-ui-card-header {
@@ -831,6 +832,18 @@
           }
           newWidth = Math.max(this.config.minSize.width, newWidth);
           newHeight = Math.max(this.config.minSize.height, newHeight);
+
+          // Clamp to configured max size (if provided) and to viewport.
+          try {
+            const rect = this.element.getBoundingClientRect();
+            const viewportMaxW = Math.max(this.config.minSize.width, window.innerWidth - rect.left - 8);
+            const viewportMaxH = Math.max(this.config.minSize.height, window.innerHeight - rect.top - 8);
+            const configMaxW = this.config.maxSize && Number.isFinite(this.config.maxSize.width) ? this.config.maxSize.width : Infinity;
+            const configMaxH = this.config.maxSize && Number.isFinite(this.config.maxSize.height) ? this.config.maxSize.height : Infinity;
+            newWidth = Math.min(newWidth, viewportMaxW, configMaxW);
+            newHeight = Math.min(newHeight, viewportMaxH, configMaxH);
+          } catch (e2) {}
+
           this.element.style.width = `${newWidth}px`;
           this.element.style.height = `${newHeight}px`;
           this.element.dispatchEvent(new CustomEvent("panelresize", {
@@ -1074,7 +1087,8 @@
     content.style.flexDirection = "column";
     content.style.height = "100%";
     content.style.gap = "1rem";
-    content.style.padding = "1rem";
+    // Keep the panel content flush with the card; spacing is handled inside the inner card.
+    content.style.padding = "0";
     content.style.boxSizing = "border-box";
     const expingState = {
       active: false,
@@ -1085,39 +1099,41 @@
       sellItems: false,
       teleportIfOnMap: false
     };
+    // NOTE(UI): "Bij wszystko" toggle is temporarily hidden (no clear UX/use-case right now).
+    // The logic is kept for potential future re-enable.
     content.innerHTML = `
-        <div style="
-            background: #1f2937;
-            padding: 1rem;
-            border-radius: 0.75rem;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            width: calc(100% - 2rem);
-            max-width: 300px;
-        ">
+      <div style="
+        background: #1f2937;
+        padding: 1rem;
+        border-radius: 0.75rem;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+      ">
             <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
-                <label style="
-                    display: flex;
-                    align-items: center;
-                    gap: 0.5rem;
-                    color: #6b7280;
-                    font-size: 0.875rem;
-                    font-weight: 500;
-                    cursor: pointer;
-                ">
+          <label style="
+            display: none;
+            align-items: center;
+            gap: 0.5rem;
+            color: #cbd5e1;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+          ">
                     <input
                         type="checkbox"
                         id="allLevelsCheckbox"
                         class="bot-ui-checkbox"
-                        checked
                     />
-                    <span>Bij wszystko</span>
+            <span>Bij wszystko</span>
                 </label>
 
-                <div style="display: flex; gap: 1rem;">
-                    <div style="flex: 1;">
+          <div style="display: flex; gap: 0.75rem;">
+            <div style="flex: 1; min-width: 0;">
                         <label style="
                             display: block;
-                            color: #6b7280;
+                      color: #cbd5e1;
                             font-size: 0.875rem;
                             margin-bottom: 0.25rem;
                             font-weight: 500;
@@ -1141,10 +1157,10 @@
                             "
                         >
                     </div>
-                    <div style="flex: 1;">
+                        <div style="flex: 1; min-width: 0;">
                         <label style="
                             display: block;
-                            color: #6b7280;
+                        color: #cbd5e1;
                             font-size: 0.875rem;
                             margin-bottom: 0.25rem;
                             font-weight: 500;
@@ -1173,8 +1189,8 @@
 
             <div style="margin-bottom: 1rem;">
                 <label style="
-                    display: block;
-                    color: #6b7280;
+                  display: block;
+                  color: #cbd5e1;
                     font-size: 0.875rem;
                     margin-bottom: 0.5rem;
                     font-weight: 500;
@@ -1203,10 +1219,10 @@
 
             <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
                 <label style="
-                    display: flex;
-                    align-items: center;
-                    gap: 0.5rem;
-                    color: #6b7280;
+                  display: flex;
+                  align-items: center;
+                  gap: 0.5rem;
+                  color: #cbd5e1;
                     font-size: 0.875rem;
                     cursor: pointer;
                 ">
@@ -1218,10 +1234,10 @@
                     <span>Sprzedawaj itemy</span>
                 </label>
                 <label style="
-                    display: flex;
-                    align-items: center;
-                    gap: 0.5rem;
-                    color: #6b7280;
+                  display: flex;
+                  align-items: center;
+                  gap: 0.5rem;
+                  color: #cbd5e1;
                     font-size: 0.875rem;
                     cursor: pointer;
                 ">
@@ -1236,8 +1252,8 @@
 
             <div style="margin-bottom: 1rem;">
                 <label style="
-                    display: block;
-                    color: #6b7280;
+                  display: block;
+                  color: #cbd5e1;
                     font-size: 0.875rem;
                     margin-bottom: 0.5rem;
                     font-weight: 500;
@@ -1258,6 +1274,26 @@
                         "
                         placeholder="e.g. 10"
                     />
+                </div>
+                <button
+                    id="testPotionsBtn"
+                    class="bot-ui-button"
+                    style="
+                        width: 100%;
+                        padding: 0.5rem;
+                        border-radius: 0.5rem;
+                        margin-top: 0.5rem;
+                        background: #4f46e5;
+                        color: white;
+                        font-weight: 600;
+                        cursor: pointer;
+                        border: none;
+                    "
+                >
+                    🧪 Testuj kupowanie potek
+                </button>
+                <div id="testPotionsStatus" style="font-size: 0.75rem; color: #9ca3af; margin-top: 0.25rem;">
+                    Kliknij aby przetestować kupowanie potek u healera.
                 </div>
             </div>
 
@@ -1302,6 +1338,8 @@
     const sellItemsCheckbox = content.querySelector("#sellItemsCheckbox");
     const teleportIfOnMapCheckbox = content.querySelector("#teleportIfOnMapCheckbox");
     const healPotionsInput = content.querySelector("#healPotionsInput");
+    const testPotionsBtn = content.querySelector("#testPotionsBtn");
+    const testPotionsStatus = content.querySelector("#testPotionsStatus");
     function handleAllLevelsToggle() {
       if (allLevelsCheckbox.checked) {
         minLevelInput.value = "1";
@@ -1315,6 +1353,14 @@
     }
     allLevelsCheckbox.addEventListener("change", handleAllLevelsToggle);
     handleAllLevelsToggle();
+
+    function parseExpowiskoLevel(expName) {
+      if (!expName || typeof expName !== "string") return null;
+      const m = expName.match(/(\d+)(?!.*\d)/);
+      if (!m) return null;
+      const lvl = parseInt(m[1], 10);
+      return Number.isFinite(lvl) ? lvl : null;
+    }
     function updateLevelDependentOptions() {
       const requiredLevel = 70;
       const heroLevel = window.Engine && window.Engine.hero && window.Engine.hero.d && window.Engine.hero.d.lvl || 0;
@@ -1322,29 +1368,21 @@
       if (heroLevel < requiredLevel) {
         sellItemsCheckbox.disabled = true;
         teleportIfOnMapCheckbox.disabled = false;
-        healPotionsInput.disabled = true;
+        healPotionsInput.disabled = false;
+        testPotionsBtn.disabled = false;
         sellItemsCheckbox.title = msg;
         teleportIfOnMapCheckbox.title = "";
-        healPotionsInput.title = msg;
-        if (!content.querySelector("#healPotionsNote")) {
-          let note = document.createElement("div");
-          note.id = "healPotionsNote";
-          note.style.fontSize = "0.75rem";
-          note.style.color = "#f87171";
-          note.textContent = msg;
-          healPotionsInput.parentElement.appendChild(note);
-        }
+        healPotionsInput.title = "";
+        testPotionsBtn.title = "";
       } else {
         sellItemsCheckbox.disabled = false;
         teleportIfOnMapCheckbox.disabled = false;
         healPotionsInput.disabled = false;
+        testPotionsBtn.disabled = false;
         sellItemsCheckbox.title = "";
         teleportIfOnMapCheckbox.title = "";
         healPotionsInput.title = "";
-        const note = content.querySelector("#healPotionsNote");
-        if (note) {
-          note.remove();
-        }
+        testPotionsBtn.title = "";
       }
     }
     updateLevelDependentOptions();
@@ -1378,6 +1416,20 @@
       const selectedExp = expowiskoSelect.value;
       expingState.selectedExpowisko = selectedExp;
       mapWarningElem.textContent = "";
+
+      // Auto-set min/max level around expowisko level (lvl ± 5) when the name contains a level.
+      // Example: "Piaskowi niewolnicy 133" -> min=128, max=138
+      const lvl = parseExpowiskoLevel(selectedExp);
+      if (Number.isFinite(lvl)) {
+        allLevelsCheckbox.checked = false;
+        const min = Math.max(1, lvl - 5);
+        const max = lvl + 5;
+        minLevelInput.value = String(min);
+        maxLevelInput.value = String(max);
+        minLevelInput.disabled = false;
+        maxLevelInput.disabled = false;
+      }
+
       if (expowiskoMapCheckInterval) {
         clearInterval(expowiskoMapCheckInterval);
         expowiskoMapCheckInterval = null;
@@ -1424,6 +1476,7 @@
         mapsPanel.minimize();
         mapsPanel = null;
       }
+      window.MargonemAPI.state.exping_location = window.MargonemAPI.state.exping_location || {};
       window.MargonemAPI.exping.startExping(minLevel, maxLevel, selectedExpowisko, sellItems, teleportIfOnMap, healPotions, selectedMaps);
     }
     function stop_exping() {
@@ -1444,6 +1497,45 @@
         stop_exping();
       }
     });
+
+    // Event listener dla przycisku testowego potek
+    testPotionsBtn.addEventListener("click", async () => {
+      const targetClicks = parseInt(healPotionsInput.value) || 15;
+      
+      testPotionsStatus.textContent = "🔄 Uruchamiam test... (sprawdź konsolę F12)";
+      testPotionsStatus.style.color = "#fbbf24";
+      testPotionsBtn.disabled = true;
+
+      console.log("=================================================");
+      console.log("[TEST POTEK] Przycisk kliknięty");
+      console.log("[TEST POTEK] Kliknięć do wykonania:", targetClicks);
+      console.log("[TEST POTEK] Kupi potek:", targetClicks * 5);
+      console.log("=================================================");
+
+      try {
+        if (typeof window.MargonemAPI?.testBuyPotionsAtHealer === 'function') {
+          const result = await window.MargonemAPI.testBuyPotionsAtHealer(targetClicks);
+          if (result) {
+            testPotionsStatus.textContent = "✅ Test zakończony pomyślnie!";
+            testPotionsStatus.style.color = "#4ade80";
+          } else {
+            testPotionsStatus.textContent = "❌ Test nieudany - sprawdź konsolę F12";
+            testPotionsStatus.style.color = "#f87171";
+          }
+        } else {
+          console.error("[TEST POTEK] Funkcja testBuyPotionsAtHealer nie istnieje!");
+          testPotionsStatus.textContent = "❌ Funkcja nie znaleziona";
+          testPotionsStatus.style.color = "#f87171";
+        }
+      } catch (err) {
+        console.error("[TEST POTEK] Błąd:", err);
+        testPotionsStatus.textContent = "❌ Błąd: " + (err.message || err);
+        testPotionsStatus.style.color = "#f87171";
+      } finally {
+        testPotionsBtn.disabled = false;
+      }
+    });
+
     return new DraggablePanel("Expowiska", content, {
       x: 200,
       y: 60
@@ -1456,6 +1548,10 @@
       minSize: {
         width: 250,
         height: 350
+      },
+      maxSize: {
+        width: 420,
+        height: 720
       }
     });
   }
@@ -2287,6 +2383,8 @@
     content.style.background = "#1e2426";
     content.style.borderRadius = "3px";
     function debugLog(message, type = "info") {
+      // Disabled spam logs
+      return;
       const prefix = "[E2 Panel]";
       const timestamp = new Date().toLocaleTimeString();
       switch (type) {
@@ -3375,20 +3473,20 @@
       const licenseSuccess = true; // Bypassed License Flow
       setTimeout(async () => {
         if (window.MargonemAPI && window.MargonemAPI.e2) {
-          console.log("[E2 API] Inicjalizacja systemu E2");
+          // console.log("[E2 API] Inicjalizacja systemu E2");
           const resumed = await window.MargonemAPI.e2.resumeFromSavedState();
           if (!resumed) {
             window.MargonemAPI.e2.initializeCharacters();
-            console.log("[E2 API] Zainicjalizowano system E2");
+            // console.log("[E2 API] Zainicjalizowano system E2");
           }
         }
       }, 2000);
       window.MargonemAPI.heroPositionMonitor.init();
       initialize();
       function initializeE2Panel(retryCount = 0, maxRetries = 5) {
-        console.log(`[E2] Próba inicjalizacji panelu (${retryCount + 1}/${maxRetries + 1})`);
+        // console.log(`[E2] Próba inicjalizacji panelu (${retryCount + 1}/${maxRetries + 1})`);
         if (window.e2Panel) {
-          console.log("[E2] Panel już istnieje, aktualizuję");
+          // console.log("[E2] Panel już istnieje, aktualizuję");
           window.e2Panel.remove();
           window.e2Panel = null;
         }
@@ -3411,7 +3509,7 @@
         }
         try {
           window.e2Panel = createE2Panel();
-          console.log("[E2] Panel zainicjalizowany pomyślnie");
+          // console.log("[E2] Panel zainicjalizowany pomyślnie");
           return true;
         } catch (error) {
           console.error("[E2] Błąd podczas tworzenia panelu:", error);
@@ -3428,7 +3526,7 @@
       let panelInitInterval = setInterval(() => {
         try {
           if (window.MargonemAPI && window.MargonemAPI.e2 && window.e2) {
-            console.log("[E2] Wykryto API E2, inicjalizacja panelu...");
+            // console.log("[E2] Wykryto API E2, inicjalizacja panelu...");
             const success = initializeE2Panel();
             if (success) {
               clearInterval(panelInitInterval);

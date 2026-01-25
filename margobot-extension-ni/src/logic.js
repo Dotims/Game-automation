@@ -138,7 +138,7 @@ Object.assign(window.MargonemAPI, {
           }
           return this.originalAfterUpdate.call(Engine.hero, _0x4072ef, _0x342443, _0x4422f4);
         };
-        console.log("[MargonemAPI] Position monitor initialized");
+        // console.log("[MargonemAPI] Position monitor initialized");
         this.isInitialized = true;
       }
     },
@@ -1826,6 +1826,9 @@ Object.assign(window.MargonemAPI, {
     startExping: async function (_0x500f61, _0x5e122b, _0x2f1e11, _0x2fadaf = false, _0x46202f = false, _0x317959 = 0, _0x37958e = null) {
       window.MargonemAPI.state.exping_location.is_aborted = false;
       window.MargonemAPI.state.exping_location.selectedMaps = _0x37958e;
+      const _0x3a6fb0 = window.MargonemAPI.state.exping_location.potionsMultiplier || 1;
+      window.MargonemAPI.state.exping_location.requestedPotions = _0x317959;
+      window.MargonemAPI.state.exping_location.targetPotions = Math.max(0, (_0x317959 || 0) * (_0x3a6fb0 || 1));
       window.MargonemAPI.state.exping_location.blockPotions = true;
       if (!sessionToken) {
         return;
@@ -1887,60 +1890,44 @@ Object.assign(window.MargonemAPI, {
                   }
                 }, 1000);
               }
-              if (_0x317959 > 0 && !window.MargonemAPI.state.exping_location.blockPotions) {
+              if (_0x317959 > 0) {
                 window.MargonemAPI.state.exping_location.potion_checker = setInterval(async () => {
-                  if (window.MargonemAPI.state.exping_location.interval_of_selling) {
-                    const _0x16aed5 = window.Engine;
-                    if (policzLeczyPrzedmioty() <= 0) {
-                      clearInterval(window.MargonemAPI.state.exping_location.potion_checker);
-                      window.MargonemAPI.healingSystem.interval_of_selling = false;
-                      window.MargonemAPI.exping.stopExping();
+                  if (!window.MargonemAPI.state.exping_location.interval_of_selling) {
+                    return;
+                  }
+                  if (window.MargonemAPI.state.exping_location.blockPotions) {
+                    return;
+                  }
+                  if (window.MargonemAPI.state.exping_location._potionRefillInProgress) {
+                    return;
+                  }
+                  const _0x2b3946 = policzLeczyPrzedmioty() || 0;
+                  const _0x2cfd2e = window.MargonemAPI.state.exping_location.targetPotions || _0x317959;
+                  if (_0x2b3946 >= _0x2cfd2e) {
+                    return;
+                  }
+                  if (window.MargonemAPI.state.exping_location.potionsDebug) {
+                    console.log("[Potions][CHECK] have=", _0x2b3946, "target=", _0x2cfd2e, "missing=", Math.max(0, _0x2cfd2e - _0x2b3946), "mult=", window.MargonemAPI.state.exping_location.potionsMultiplier || 1);
+                  }
+                  window.MargonemAPI.state.exping_location._potionRefillInProgress = true;
+                  clearInterval(window.MargonemAPI.state.exping_location.potion_checker);
+                  window.MargonemAPI.healingSystem.interval_of_selling = false;
+                  window.MargonemAPI.exping.stopExping();
+                  try {
+                    if (window.Engine.hero.d.lvl >= 70) {
                       uzyjPrzedmiot("Zwój teleportacji na Kwieciste Przejście");
                       await this.waitForMapChange("Kwieciste Przejście");
                       await this.tuniaSelling();
-                      const _0x36de00 = _0x16aed5.hero.d.warrior_stats?.maxhp || 10000;
-                      await this.navigateToLocation("Dom Tunii");
-                      this.checkAborted();
-                      await this.waitForMapChange("Dom Tunii");
-                      this.checkAborted();
-                      window.Engine.hero.autoGoTo({
-                        x: 8,
-                        y: 9
-                      }, false);
-                      await waitForPosition(8, 9, 60000);
-                      this.checkAborted();
-                      window.Engine.hero.talkNearMob();
-                      await sleep(1000);
-                      await waitForElement("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar > div.scroll-pane > ul > li.dialogue-window-answer.answer.line_shop > span");
-                      this.checkAborted();
-                      const _0x3b5eb0 = document.querySelector("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar > div.scroll-pane > ul > li.dialogue-window-answer.answer.line_shop > span");
-                      _0x3b5eb0.click();
-                      await waitForElement("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.alerts-layer.layer > div.border-window.ui-draggable.window-on-peak > div.content > div.inner-content > div");
-                      this.checkAborted();
-                      await sleep(1000);
-                      const _0xb82eb5 = wybierzIdNajlepszejPotki(_0x36de00);
-                      const _0x38e219 = _0x317959 * 3;
-                      for (let _0x139166 = 0; _0x139166 < _0x38e219; _0x139166++) {
-                        await buyItem(_0xb82eb5);
-                        await sleep(1000);
-                      }
-                      window.Engine.shop.basket.finalize();
-                      await sleep(1000);
-                      this.checkAborted();
-                      window.Engine.shop.close();
-                      await waitForElementToDisappear("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.alerts-layer.layer > div.border-window.ui-draggable.window-on-peak > div.content > div.inner-content > div");
-                      this.checkAborted();
-                      await this.navigateToLocation("Kwieciste Przejście");
-                      this.checkAborted();
-                      await this.waitForMapChange("Kwieciste Przejście");
-                      this.checkAborted();
-                      window.MargonemAPI.state.exping_location.is_aborted = true;
-                      window.MargonemAPI.healingSystem.interval_of_selling = true;
-                      await sleep(3000);
-                      return this.startExping(_0x500f61, _0x5e122b, _0x2f1e11, _0x2fadaf, _0x46202f, _0x317959);
+                    } else {
+                      await this.buyPotionsAtHealer(_0x2cfd2e);
                     }
-                  }
-                }, 1000);
+                  } catch (_0x262148) {}
+                  window.MargonemAPI.state.exping_location.is_aborted = true;
+                  window.MargonemAPI.healingSystem.interval_of_selling = true;
+                  window.MargonemAPI.state.exping_location._potionRefillInProgress = false;
+                  await sleep(3000);
+                  return this.startExping(_0x500f61, _0x5e122b, _0x2f1e11, _0x2fadaf, _0x46202f, _0x317959);
+                }, 1500);
               }
             }
             if (_0x46202f) {
@@ -2118,12 +2105,24 @@ Object.assign(window.MargonemAPI, {
                 await sleep(1000);
               }
               const _0x42d4c3 = window.Engine.hero.d.warrior_stats?.maxhp || 10000;
-              if (_0x317959 > 0 && policzLeczyPrzedmioty() <= 0) {
-                const _0x163eb3 = wybierzIdNajlepszejPotki(_0x42d4c3);
-                const _0x57ea23 = _0x317959 * 3;
-                for (let _0x4bc842 = 0; _0x4bc842 < _0x57ea23; _0x4bc842++) {
-                  await buyItem(_0x163eb3);
-                  await sleep(1000);
+              if (_0x317959 > 0) {
+                const _0x2a8a7f = policzLeczyPrzedmioty() || 0;
+                const _0x50611c = window.MargonemAPI.state.exping_location.targetPotions || _0x317959;
+                const _0x55c73b = Math.max(0, _0x50611c - _0x2a8a7f);
+                if (_0x55c73b > 0) {
+                  const _0x163eb3 = wybierzIdNajlepszejPotki(_0x42d4c3);
+                  const _0x1c9bf2 = window.Engine.shop.items?.[_0x163eb3];
+                  const _0x531c45 = _0x1c9bf2?.pr || 0;
+                  const _0x2a1dd1 = window.Engine.hero.d.gold || 0;
+                  const _0x565cc8 = _0x531c45 > 0 ? Math.max(0, Math.floor(_0x2a1dd1 / _0x531c45) - 1) : 45;
+                  const _0x57ea23 = Math.min(_0x55c73b, _0x565cc8, 45);
+                  if (window.MargonemAPI.state.exping_location.potionsDebug) {
+                    console.log("[Potions][BUY@TUNIA(KP)] buy=", _0x57ea23, "have=", _0x2a8a7f, "target=", _0x50611c);
+                  }
+                  for (let _0x4bc842 = 0; _0x4bc842 < _0x57ea23; _0x4bc842++) {
+                    await buyItem(_0x163eb3);
+                    await sleep(1000);
+                  }
                 }
               }
               window.Engine.shop.basket.finalize();
@@ -2255,12 +2254,33 @@ Object.assign(window.MargonemAPI, {
                   await sleep(1000);
                 }
                 const _0x41d3b4 = window.Engine.hero.d.warrior_stats?.maxhp || 10000;
-                if (_0x317959 > 0 && policzLeczyPrzedmioty() <= 0) {
-                  const _0x2d4415 = wybierzIdNajlepszejPotki(_0x41d3b4);
-                  const _0x254a25 = _0x317959 * 3;
-                  for (let _0x2867fe = 0; _0x2867fe < _0x254a25; _0x2867fe++) {
-                    await buyItem(_0x2d4415);
-                    await sleep(1000);
+                let _0x45bc12 = false;
+                if (_0x317959 > 0) {
+                  const _0x576dfb = policzLeczyPrzedmioty() || 0;
+                  const _0x3b93b8 = window.MargonemAPI.state.exping_location.targetPotions || _0x317959;
+                  const _0x445145 = Math.max(0, _0x3b93b8 - _0x576dfb);
+                  if (_0x445145 > 0) {
+                    const _0x2d4415 = wybierzIdNajlepszejPotki(_0x41d3b4);
+                    const _0x29cc30 = window.Engine.shop.items?.[_0x2d4415];
+                    if (!_0x2d4415 || !_0x29cc30 || !_0x29cc30._cachedStats || _0x29cc30._cachedStats.leczy === undefined) {
+                      _0x45bc12 = true;
+                      if (window.MargonemAPI.state.exping_location.potionsDebug) {
+                        const _0x2df3d4 = window.Engine.shop.items ? Object.keys(window.Engine.shop.items).length : 0;
+                        console.log("[Potions][BUY@TUNIA] no healing potions in this shop; potionId=", _0x2d4415, "shopItems=", _0x2df3d4);
+                      }
+                    } else {
+                    const _0x4fcae3 = _0x29cc30?.pr || 0;
+                    const _0x4f430a = window.Engine.hero.d.gold || 0;
+                    const _0x4fb373 = _0x4fcae3 > 0 ? Math.max(0, Math.floor(_0x4f430a / _0x4fcae3) - 1) : 45;
+                    const _0x254a25 = Math.min(_0x445145, _0x4fb373, 45);
+                    if (window.MargonemAPI.state.exping_location.potionsDebug) {
+                      console.log("[Potions][BUY@TUNIA] buy=", _0x254a25, "have=", _0x576dfb, "target=", _0x3b93b8, "potionId=", _0x2d4415, "name=", _0x29cc30?.name);
+                    }
+                    for (let _0x2867fe = 0; _0x2867fe < _0x254a25; _0x2867fe++) {
+                      await buyItem(_0x2d4415);
+                      await sleep(1000);
+                    }
+                    }
                   }
                 }
                 window.Engine.shop.basket.finalize();
@@ -2273,6 +2293,17 @@ Object.assign(window.MargonemAPI, {
                 this.checkAborted();
                 await this.waitForMapChange("Kwieciste Przejście");
                 this.checkAborted();
+
+                if (_0x45bc12) {
+                  try {
+                    await this.buyPotionsAtHealer(window.MargonemAPI.state.exping_location.targetPotions || _0x317959);
+                  } catch (_0x1ba886) {}
+                  this.checkAborted();
+                  await this.navigateToLocation("Kwieciste Przejście");
+                  this.checkAborted();
+                  await this.waitForMapChange("Kwieciste Przejście");
+                  this.checkAborted();
+                }
               }
               window.MargonemAPI.state.exping_location.blockPotions = false;
               const _0x115651 = _0x16f68a.some(_0x102596 => {
@@ -2327,12 +2358,192 @@ Object.assign(window.MargonemAPI, {
         return;
       }
     },
+    buyPotionsAtHealer: async function (_0x1cde0a) {
+      const POTION_SELLERS = [{
+        name: "Uzdrowicielka Emanilia",
+        map: "Liściaste Rozstaje",
+        x: 21,
+        y: 51
+      }, {
+        name: "Mnich Seweryn",
+        map: "Klasztor Różanitów - świątynia",
+        x: 25,
+        y: 8
+      }, {
+        name: "Uzdrowiciel Ypsli",
+        map: "Mirvenis-Adur",
+        x: 82,
+        y: 7
+      }, {
+        name: "Jemenoss",
+        map: "Mythar",
+        x: 45,
+        y: 13
+      }, {
+        name: "Kapłanka Hiada",
+        map: "Thuzal",
+        x: 52,
+        y: 17
+      }, {
+        name: "Szalony Etrefan",
+        map: "Eder",
+        x: 56,
+        y: 40
+      }, {
+        name: "Doktor Nad",
+        map: "Nithal",
+        x: 5,
+        y: 48
+      }, {
+        name: "Uzdrowiciel Toramidamus",
+        map: "Tuzmer",
+        x: 26,
+        y: 21
+      }, {
+        name: "Uzdrowicielka Halfinia",
+        map: "Karka-han",
+        x: 31,
+        y: 38
+      }, {
+        name: "Wysoka kapłanka Gryfia",
+        map: "Torneg",
+        x: 79,
+        y: 8
+      }, {
+        name: "Uzdrowicielka Makatara",
+        map: "Ithan",
+        x: 18,
+        y: 15
+      }, {
+        name: "Uzdrowicielka Hiliko",
+        map: "Werbin",
+        x: 38,
+        y: 16
+      }];
+      const _0x3a1c75 = window.MargonemAPI.navigation.getCurrentLocation();
+      if (!_0x3a1c75) {
+        return false;
+      }
+      const _0x2d5b74 = window.MargonemAPI.state.exping_location?.potionsDebug;
+      let _0x2f49bd = null;
+      try {
+        const _0x59ec9e = await Promise.all(POTION_SELLERS.map(async _0x1c8607 => {
+          try {
+            const _0x1ce8dd = await window.MargonemAPI.navigation.findShortestPath(_0x3a1c75, _0x1c8607.map);
+            return {
+              seller: _0x1c8607,
+              distance: _0x1ce8dd?.distance ?? Infinity
+            };
+          } catch (_0x5c5b7e) {
+            return {
+              seller: _0x1c8607,
+              distance: Infinity
+            };
+          }
+        }));
+        _0x2f49bd = _0x59ec9e.reduce((_0x5e46d2, _0x1d6d4f) => _0x1d6d4f.distance < _0x5e46d2.distance ? _0x1d6d4f : _0x5e46d2, {
+          distance: Infinity
+        }).seller;
+      } catch (_0x37cf7f) {}
+      if (!_0x2f49bd) {
+        _0x2f49bd = POTION_SELLERS[0];
+      }
+
+      if (_0x2d5b74) {
+        console.log("[Potions][HEALER] selected=", _0x2f49bd?.name, "map=", _0x2f49bd?.map, "pos=", _0x2f49bd?.x + "," + _0x2f49bd?.y, "target=", _0x1cde0a, "from=", _0x3a1c75);
+      }
+
+      this.checkAborted();
+      await this.navigateToLocation(_0x2f49bd.map);
+      this.checkAborted();
+      await this.waitForMapChange(_0x2f49bd.map);
+      this.checkAborted();
+      window.Engine.hero.autoGoTo({
+        x: _0x2f49bd.x,
+        y: _0x2f49bd.y
+      }, false);
+      await waitForPosition(_0x2f49bd.x, _0x2f49bd.y, 60000);
+      this.checkAborted();
+
+      if (_0x2d5b74) {
+        console.log("[Potions][HEALER] arrived map=", window.MargonemAPI.navigation.getCurrentLocation(), "hero=", {
+          x: window.Engine?.hero?.x || window.Engine?.hero?.d?.x,
+          y: window.Engine?.hero?.y || window.Engine?.hero?.d?.y
+        });
+      }
+
+      window.Engine.hero.talkNearMob();
+      await sleep(1000);
+
+      const _0x4ec2b6 = await Promise.race([waitForElement("div.dialogue-window.is-open"), sleep(8000).then(() => null)]);
+      if (!_0x4ec2b6) {
+        if (_0x2d5b74) {
+          console.log("[Potions][HEALER] dialogue did not open");
+        }
+        return false;
+      }
+      this.checkAborted();
+
+      const _0x3e0f38 = Array.from(document.querySelectorAll("li.dialogue-window-answer.answer"));
+      const _0x2d0b8e = _0x3e0f38.find(_0x58fb8f => _0x58fb8f.classList.contains("line_shop")) || _0x3e0f38.find(_0x58fb8f => {
+        const _0x1d9e7a = (_0x58fb8f.textContent || "").toLowerCase();
+        return _0x1d9e7a.includes("sklep") || _0x1d9e7a.includes("handel") || _0x1d9e7a.includes("kup") || _0x1d9e7a.includes("sprzed");
+      });
+
+      if (_0x2d5b74) {
+        console.log("[Potions][HEALER] dialogue options=", _0x3e0f38.map(_0x4d25d2 => (_0x4d25d2.textContent || "").trim()));
+      }
+
+      if (!_0x2d0b8e) {
+        if (_0x2d5b74) {
+          console.log("[Potions][HEALER] no shop option found in dialogue");
+        }
+        return false;
+      }
+
+      const _0x4bde51 = _0x2d0b8e.querySelector("span") || _0x2d0b8e;
+      _0x4bde51.click();
+
+      const _0x5a2ea3 = await Promise.race([
+        waitForElement("div.alerts-layer.layer div.border-window.ui-draggable.window-on-peak"),
+        waitForElement("div.border-window.ui-draggable.window-on-peak div.shop-content"),
+        sleep(8000).then(() => null)
+      ]);
+      if (!_0x5a2ea3) {
+        if (_0x2d5b74) {
+          console.log("[Potions][HEALER] shop window did not open");
+        }
+        return false;
+      }
+
+      await sleep(1000);
+      await this.buingPots(_0x1cde0a);
+      return true;
+    },
     buingPots: async function () {
       const _0x275431 = window.Engine.hero.d.warrior_stats?.maxhp || 10000;
       await sleep(1000);
       const _0x554deb = await wybierzIdNajlepszejPotki(_0x275431);
-      const _0x53a833 = window.MargonemAPI.znajdzIloscPotkow(_0x554deb);
-      for (let _0x51dede = 0; _0x51dede < _0x53a833; _0x51dede++) {
+      const _0x2b3f6e = window.Engine.shop.items?.[_0x554deb];
+      if (!_0x554deb || !_0x2b3f6e || !_0x2b3f6e._cachedStats || _0x2b3f6e._cachedStats.leczy === undefined) {
+        if (window.MargonemAPI.state.exping_location?.potionsDebug) {
+          const _0x51b9f6 = window.Engine.shop.items ? Object.keys(window.Engine.shop.items).length : 0;
+          console.log("[Potions][BUY@HEALER] no healing potions in healer shop; potionId=", _0x554deb, "shopItems=", _0x51b9f6);
+        }
+        window.Engine.shop.close();
+        return;
+      }
+      const _0x1b5cb5 = window.MargonemAPI.state.exping_location?.targetPotions || 0;
+      const _0x9d0b57 = policzLeczyPrzedmioty() || 0;
+      const _0x3b99b3 = Math.max(0, _0x1b5cb5 - _0x9d0b57);
+      const _0x383b43 = _0x2b3f6e?.pr || 0;
+      const _0x4fda1e = window.Engine.hero.d.gold || 0;
+      const _0x1a9b8a = _0x383b43 > 0 ? Math.max(0, Math.floor(_0x4fda1e / _0x383b43) - 1) : 45;
+      const _0x53a833 = _0x1b5cb5 > 0 ? Math.min(_0x3b99b3, _0x1a9b8a, 45) : window.MargonemAPI.znajdzIloscPotkow(_0x554deb);
+      if (window.MargonemAPI.state.exping_location?.potionsDebug) {
+        console.log("[Potions][BUY@HEALER] buy=", _0x53a833, "have=", _0x9d0b57, "target=", _0x1b5cb5, "potionId=", _0x554deb, "name=", _0x2b3f6e?.name);
+      }
+      for (let _0x51dede = 0; _0x51dede < (_0x53a833 || 0); _0x51dede++) {
         await buyItem(_0x554deb);
         await sleep(1000);
       }
@@ -2399,6 +2610,40 @@ Object.assign(window.MargonemAPI, {
           window.Engine.shop.basket.finalize();
           await sleep(1000);
         }
+
+        const _0x4bc61f = window.MargonemAPI.state.exping_location?.targetPotions || 0;
+        let _0x35a6e9 = false;
+        if (_0x4bc61f > 0) {
+          const _0x33bd4d = policzLeczyPrzedmioty() || 0;
+          const _0x2b43b8 = Math.max(0, _0x4bc61f - _0x33bd4d);
+          if (_0x2b43b8 > 0) {
+            const _0x1f60f8 = window.Engine.hero.d.warrior_stats?.maxhp || 10000;
+            const _0x10d40d = wybierzIdNajlepszejPotki(_0x1f60f8);
+            const _0x5690c4 = window.Engine.shop.items?.[_0x10d40d];
+            if (!_0x10d40d || !_0x5690c4 || !_0x5690c4._cachedStats || _0x5690c4._cachedStats.leczy === undefined) {
+              _0x35a6e9 = true;
+              if (window.MargonemAPI.state.exping_location.potionsDebug) {
+                const _0x3d1f42 = window.Engine.shop.items ? Object.keys(window.Engine.shop.items).length : 0;
+                console.log("[Potions][BUY@TUNIA] no healing potions in Tunia shop; potionId=", _0x10d40d, "shopItems=", _0x3d1f42);
+              }
+            } else {
+            const _0x4c8f8b = _0x5690c4?.pr || 0;
+            const _0x1f83ed = window.Engine.hero.d.gold || 0;
+            const _0x23c61d = _0x4c8f8b > 0 ? Math.max(0, Math.floor(_0x1f83ed / _0x4c8f8b) - 1) : 45;
+            const _0x5ac1aa = Math.min(_0x2b43b8, _0x23c61d, 45);
+            if (window.MargonemAPI.state.exping_location.potionsDebug) {
+              console.log("[Potions][BUY@TUNIA] buy=", _0x5ac1aa, "have=", _0x33bd4d, "target=", _0x4bc61f, "potionId=", _0x10d40d, "name=", _0x5690c4?.name);
+            }
+            for (let _0x5b0fa9 = 0; _0x5b0fa9 < _0x5ac1aa; _0x5b0fa9++) {
+              await buyItem(_0x10d40d);
+              await sleep(1000);
+            }
+            window.Engine.shop.basket.finalize();
+            await sleep(1000);
+            }
+          }
+        }
+
         window.Engine.shop.close();
         await waitForElementToDisappear("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.alerts-layer.layer > div.border-window.ui-draggable.window-on-peak > div.content > div.inner-content > div");
         await this.navigateToLocation("Kwieciste Przejście");
@@ -2408,8 +2653,46 @@ Object.assign(window.MargonemAPI, {
           y: 20
         }, false);
         await waitForPosition(20, 20, 60000);
+
+        if (_0x35a6e9) {
+          if (window.MargonemAPI.state.exping_location?.potionsDebug) {
+            console.log("[Potions][TUNIA->HEALER] fallback triggered, calling buyPotionsAtHealer");
+          }
+          try {
+            await this.buyPotionsAtHealer(window.MargonemAPI.state.exping_location?.targetPotions || 0);
+          } catch (_0x331b3a) {
+            if (window.MargonemAPI.state.exping_location?.potionsDebug) {
+              console.log("[Potions][TUNIA->HEALER] buyPotionsAtHealer error:", _0x331b3a?.message || _0x331b3a);
+            }
+          }
+          await this.navigateToLocation("Kwieciste Przejście");
+          await this.waitForMapChange("Kwieciste Przejście");
+          window.Engine.hero.autoGoTo({
+            x: 20,
+            y: 20
+          }, false);
+          await waitForPosition(20, 20, 60000);
+        }
         return true;
       } catch (_0x5718aa) {
+        if (window.MargonemAPI.state.exping_location?.potionsDebug) {
+          console.log("[Potions][TUNIA] tuniaSelling threw error:", _0x5718aa?.message || _0x5718aa);
+        }
+        // Even if tuniaSelling fails, try healer fallback if target > 0
+        const _0x3dcf71 = window.MargonemAPI.state.exping_location?.targetPotions || 0;
+        const _0x2a9b3e = policzLeczyPrzedmioty() || 0;
+        if (_0x3dcf71 > 0 && _0x2a9b3e < _0x3dcf71) {
+          if (window.MargonemAPI.state.exping_location?.potionsDebug) {
+            console.log("[Potions][TUNIA] error fallback to healer, have=", _0x2a9b3e, "target=", _0x3dcf71);
+          }
+          try {
+            await this.buyPotionsAtHealer(_0x3dcf71);
+          } catch (_0x4b2e3a) {}
+          try {
+            await this.navigateToLocation("Kwieciste Przejście");
+            await this.waitForMapChange("Kwieciste Przejście");
+          } catch (_0x5c3b1e) {}
+        }
         return false;
       }
     },
@@ -2633,6 +2916,10 @@ Object.assign(window.MargonemAPI, {
         const _0x21ca31 = window.MargonemAPI.state.exping_location;
         clearInterval(window.MargonemAPI.state.exping_location.death_cam);
         clearInterval(window.MargonemAPI.state.exping_location.teleport_if_player);
+        clearInterval(window.MargonemAPI.state.exping_location.potion_checker);
+        clearInterval(window.MargonemAPI.state.exping_location.bag_full);
+        window.MargonemAPI.state.exping_location.is_aborted = true;
+        window.MargonemAPI.state.exping_location._potionRefillInProgress = false;
         if (_0x4dd3b8.timers) {
           Object.values(_0x4dd3b8.timers).forEach(_0x350bca => {
             if (_0x350bca) {
@@ -3094,6 +3381,548 @@ Object.assign(window.MargonemAPI, {
       return 45;
     }
     return _0x569183;
+  },
+
+  // ====== FUNKCJA KUPOWANIA POTEK U TUNII (przez klikanie DOM) ======
+  testBuyPotionsAtTunia: async function (targetAmount) {
+    console.log("[TUNIA] Start - cel:", targetAmount, "potek");
+    
+    const heroLevel = window.Engine?.hero?.d?.lvl || 1;
+    const maxHP = window.Engine?.hero?.d?.warrior_stats?.maxhp || 10000;
+    const targetHeal = Math.floor(maxHP / 3); // potka powinna leczyć ~1/3 maxHP
+    
+    console.log("[TUNIA] Poziom postaci:", heroLevel);
+    console.log("[TUNIA] MaxHP:", maxHP);
+    console.log("[TUNIA] Szukam potki leczącej ~", targetHeal, "HP");
+    
+    // 1. Nawiguj do Dom Tunii
+    const currentMap = window.MargonemAPI.navigation.getCurrentLocation();
+    console.log("[TUNIA] Aktualna mapa:", currentMap);
+    
+    if (currentMap !== "Dom Tunii") {
+      console.log("[TUNIA] Nawiguję do Dom Tunii...");
+      await window.MargonemAPI.exping.navigateToLocation("Dom Tunii");
+      await window.MargonemAPI.exping.waitForMapChange("Dom Tunii");
+      console.log("[TUNIA] Dotarłem do Dom Tunii");
+    }
+    
+    // 2. Idź do Tunii (pozycja 8,9)
+    console.log("[TUNIA] Idę do Tunii Frupotius (8,9)...");
+    window.Engine.hero.autoGoTo({ x: 8, y: 9 }, false);
+    await waitForPosition(8, 9, 60000);
+    console.log("[TUNIA] Jestem przy Tunii");
+    await sleep(500); // krótka pauza przed rozmową
+    
+    // 3. Rozpocznij rozmowę
+    console.log("[TUNIA] Zaczynam rozmowę...");
+    window.Engine.hero.talkNearMob();
+    await sleep(300); // daj czas na rozpoczęcie dialogu
+    
+    // 4. Czekaj na pojawienie się opcji sklepu w dialogu
+    console.log("[TUNIA] Czekam na dialog...");
+    const shopOption = await waitForElement("li.dialogue-window-answer.answer.line_shop > span");
+    if (!shopOption) {
+      throw new Error("Nie znaleziono opcji sklepu w dialogu");
+    }
+    
+    // Pobierz element ponownie (waitForElement może zwrócić true/promise)
+    const shopOptionEl = document.querySelector("li.dialogue-window-answer.answer.line_shop > span");
+    if (!shopOptionEl) {
+      throw new Error("Nie znaleziono elementu opcji sklepu");
+    }
+    console.log("[TUNIA] Klikam opcję sklepu...");
+    shopOptionEl.click();
+    
+    // 5. Czekaj na otwarcie sklepu (pełny selektor jak w oryginalnej funkcji)
+    console.log("[TUNIA] Czekam na sklep...");
+    const shopWindow = await waitForElement("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.alerts-layer.layer > div.border-window.ui-draggable.window-on-peak > div.content > div.inner-content > div");
+    if (!shopWindow) {
+      throw new Error("Sklep się nie otworzył");
+    }
+    console.log("[TUNIA] Sklep otwarty");
+    await sleep(1000);
+    
+    // 6. Pobierz dane przedmiotów BEZPOŚREDNIO z Engine.shop.items
+    const engineItems = window.Engine?.shop?.items || {};
+    const engineKeys = Object.keys(engineItems);
+    console.log("[TUNIA] Przedmiotów w Engine.shop.items:", engineKeys.length);
+    
+    // Debug - pokaż strukturę pierwszego przedmiotu
+    if (engineKeys.length > 0) {
+      const firstItem = engineItems[engineKeys[0]];
+      console.log("[TUNIA] Struktura przykładowego przedmiotu:");
+      console.log("[TUNIA]   name:", firstItem?.name);
+      console.log("[TUNIA]   id:", firstItem?.id);
+      console.log("[TUNIA]   cl (lvl):", firstItem?.cl);
+      console.log("[TUNIA]   pr (cena):", firstItem?.pr);
+      console.log("[TUNIA]   stat:", firstItem?.stat);
+    }
+    
+    // 7. Znajdź potki leczące analizując pole 'stat'
+    let healingPotions = [];
+    
+    for (const key of engineKeys) {
+      const item = engineItems[key];
+      if (!item || !item.stat) continue;
+      
+      // Parsuj stat string - format: "leczy=20000;amount=5;..."
+      const statParts = item.stat.split(";");
+      let healAmount = 0;
+      let reqLevel = parseInt(item.cl) || 0;
+      
+      for (const part of statParts) {
+        const [statKey, statValue] = part.split("=");
+        if (statKey === "leczy") {
+          healAmount = parseInt(statValue) || 0;
+        }
+        if (statKey === "lvl") {
+          reqLevel = Math.max(reqLevel, parseInt(statValue) || 0);
+        }
+      }
+      
+      // Jeśli to potka leczącą (ma pole leczy)
+      if (healAmount > 0) {
+        healingPotions.push({
+          key: key,               // klucz w Engine.shop.items ('1', '2', etc.)
+          id: item.id,            // rzeczywiste ID przedmiotu (41876, etc.)
+          name: item.name,
+          heal: healAmount,
+          lvl: reqLevel,
+          price: item.pr || 0,
+          item: item              // referencja do oryginalnego obiektu
+        });
+        console.log(`[TUNIA] Potka: "${item.name}" klucz:${key} leczy:${healAmount}HP lvl:${reqLevel} cena:${item.pr}`);
+      }
+    }
+    
+    console.log("[TUNIA] Znaleziono potek leczących:", healingPotions.length);
+    
+    if (healingPotions.length === 0) {
+      console.log("[TUNIA] BŁĄD - nie znaleziono potek leczących!");
+      window.Engine.shop.close();
+      throw new Error("Brak potek leczących w sklepie");
+    }
+    
+    // 8. Filtruj potki których poziom postać może używać
+    let usablePotions = healingPotions.filter(p => p.lvl <= heroLevel);
+    console.log("[TUNIA] Potki możliwe do użycia (lvl <= " + heroLevel + "):", usablePotions.length);
+    
+    if (usablePotions.length === 0) {
+      console.log("[TUNIA] UWAGA: Żadna potka nie pasuje do poziomu! Biorę najsłabszą.");
+      healingPotions.sort((a, b) => a.lvl - b.lvl);
+      usablePotions = [healingPotions[0]];
+    }
+    
+    // 9. Wybierz potkę która leczy najbliżej targetHeal (1/3 maxHP)
+    let selectedPotion = null;
+    let bestDiff = Infinity;
+    
+    for (const potion of usablePotions) {
+      const diff = Math.abs(potion.heal - targetHeal);
+      console.log(`[TUNIA] Porównuję: "${potion.name}" leczy:${potion.heal} diff:${diff}`);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        selectedPotion = potion;
+      }
+    }
+    
+    // Fallback - weź najsilniejszą dostępną
+    if (!selectedPotion) {
+      usablePotions.sort((a, b) => b.heal - a.heal);
+      selectedPotion = usablePotions[0];
+    }
+    
+    console.log("[TUNIA] ========================================");
+    console.log("[TUNIA] WYBRANA POTKA:", selectedPotion.name);
+    console.log("[TUNIA]   Klucz w sklepie:", selectedPotion.key);
+    console.log("[TUNIA]   ID przedmiotu:", selectedPotion.id);
+    console.log("[TUNIA]   Leczy:", selectedPotion.heal, "HP");
+    console.log("[TUNIA]   Wymagany lvl:", selectedPotion.lvl);
+    console.log("[TUNIA]   Cena:", selectedPotion.price);
+    console.log("[TUNIA] ========================================");
+    
+    // 10. targetAmount = liczba KLIKNIĘĆ do wykonania (każde kliknięcie = 5 potek)
+    const currentPotions = typeof policzLeczyPrzedmioty === 'function' ? policzLeczyPrzedmioty() : 0;
+    const gold = window.Engine?.hero?.d?.gold || 0;
+    const price = selectedPotion.price || 0;
+    const stackSize = 5; // każdy buyItem kupuje stack 5 potek
+    
+    const clicksNeeded = targetAmount; // targetAmount to liczba kliknięć
+    const canAffordClicks = price > 0 ? Math.floor(gold / price) : 999;
+    const toBuyClicks = Math.min(clicksNeeded, canAffordClicks, 99);
+    
+    console.log("[TUNIA] Mam potek:", currentPotions);
+    console.log("[TUNIA] Kliknięć do wykonania:", clicksNeeded);
+    console.log("[TUNIA] Złoto:", gold);
+    console.log("[TUNIA] Cena za stack:", price);
+    console.log("[TUNIA] Stać mnie na kliknięć:", canAffordClicks);
+    console.log("[TUNIA] Kupuję kliknięć:", toBuyClicks, "=", toBuyClicks * stackSize, "potek");
+    
+    if (toBuyClicks <= 0) {
+      console.log("[TUNIA] Brak kliknięć do wykonania lub brak złota");
+      window.Engine.shop.close();
+      return true;
+    }
+    
+    // 11. Sprawdź czy sklep i koszyk są dostępne
+    if (!window.Engine?.shop?.basket?.buyItem) {
+      console.log("[TUNIA] BŁĄD - Engine.shop.basket.buyItem nie istnieje!");
+      console.log("[TUNIA] Engine.shop:", !!window.Engine?.shop);
+      console.log("[TUNIA] Engine.shop.basket:", !!window.Engine?.shop?.basket);
+      window.Engine.shop?.close?.();
+      throw new Error("Sklep nie jest poprawnie otwarty");
+    }
+    
+    // 12. Dodaj potki do koszyka - używaj referencji item którą mamy
+    const shopItem = selectedPotion.item;
+    if (!shopItem) {
+      console.log("[TUNIA] BŁĄD - brak referencji do przedmiotu!");
+      window.Engine.shop.close();
+      throw new Error("Brak referencji do przedmiotu");
+    }
+    
+    console.log("[TUNIA] Rozpoczynam kupowanie...");
+    for (let i = 0; i < toBuyClicks; i++) {
+      try {
+        window.Engine.shop.basket.buyItem(shopItem);
+        if ((i + 1) % 10 === 0 || i === toBuyClicks - 1) {
+          console.log(`[TUNIA] Dodano do koszyka ${i+1}/${toBuyClicks} (${(i+1)*5} potek)`);
+        }
+      } catch (e) {
+        console.log(`[TUNIA] Błąd przy dodawaniu ${i+1}:`, e.message);
+        break;
+      }
+      await sleep(100);
+    }
+    
+    // 13. Finalizuj zakup
+    console.log("[TUNIA] Finalizuję zakup...");
+    await sleep(500);
+    
+    try {
+      if (typeof window.Engine?.shop?.basket?.finalize === 'function') {
+        window.Engine.shop.basket.finalize();
+        console.log("[TUNIA] Zakup sfinalizowany");
+      } else {
+        console.log("[TUNIA] basket.finalize nie jest funkcją, próbuję alternatywnie...");
+        // Alternatywna metoda - kliknij przycisk finalizacji
+        const finalizeBtn = document.querySelector("div.shop-wrapper button.finalize, div.shop-wrapper .btn-finalize, div.great-merchamp.btns-spacing > div:nth-child(1)");
+        if (finalizeBtn) {
+          finalizeBtn.click();
+          console.log("[TUNIA] Kliknięto przycisk finalizacji");
+        }
+      }
+    } catch (e) {
+      console.log("[TUNIA] Błąd przy finalizacji:", e.message);
+    }
+    
+    await sleep(1500);
+    
+    // 14. Zamknij sklep
+    console.log("[TUNIA] Zamykam sklep...");
+    try {
+      if (typeof window.Engine?.shop?.close === 'function') {
+        window.Engine.shop.close();
+      } else {
+        // Alternatywna metoda - kliknij X
+        const closeBtn = document.querySelector("div.border-window.window-on-peak .close-button, div.border-window.window-on-peak .btn-close");
+        if (closeBtn) {
+          closeBtn.click();
+        }
+      }
+    } catch (e) {
+      console.log("[TUNIA] Błąd przy zamykaniu sklepu:", e.message);
+    }
+    await sleep(500);
+    
+    const finalPotions = typeof policzLeczyPrzedmioty === 'function' ? policzLeczyPrzedmioty() : 0;
+    console.log("[TUNIA] ========================================");
+    console.log("[TUNIA] ZAKOŃCZONO");
+    console.log("[TUNIA] Potki przed:", currentPotions);
+    console.log("[TUNIA] Potki po:", finalPotions);
+    console.log("[TUNIA] Kupiono:", finalPotions - currentPotions);
+    console.log("[TUNIA] ========================================");
+    
+    return true;
+  },
+
+  // ====== IZOLOWANY TEST KUPOWANIA POTEK ======
+  testBuyPotionsAtHealer: async function (targetAmount) {
+    const heroLevel = window.Engine?.hero?.d?.lvl || 0;
+    
+    console.log("=================================================");
+    console.log("[TEST POTEK] START - cel:", targetAmount, "potek");
+    console.log("[TEST POTEK] Poziom postaci:", heroLevel);
+    console.log("=================================================");
+
+    // Dla postaci lvl >= 70 użyj Tunii Frupotius (lepsza)
+    if (heroLevel >= 70) {
+      console.log("[TEST POTEK] Poziom >= 70, używam Tunii Frupotius w Dom Tunii");
+      try {
+        // Ustaw targetPotions żeby tuniaSelling wiedziała ile kupić
+        if (!window.MargonemAPI.state.exping_location) {
+          window.MargonemAPI.state.exping_location = {};
+        }
+        window.MargonemAPI.state.exping_location.targetPotions = targetAmount;
+        window.MargonemAPI.state.exping_location.potionsDebug = true; // włącz debug logi
+        console.log("[TEST POTEK] Ustawiono targetPotions:", targetAmount);
+        
+        // Użyj nowej funkcji kupowania potek bezpośrednio
+        await window.MargonemAPI.testBuyPotionsAtTunia(targetAmount);
+        console.log("[TEST POTEK] testBuyPotionsAtTunia zakończone pomyślnie");
+        return true;
+      } catch (e) {
+        console.log("[TEST POTEK] BŁĄD testBuyPotionsAtTunia:", e.message || e);
+        return false;
+      }
+    }
+
+    // Dla postaci < 70 lvl - użyj healerów
+    console.log("[TEST POTEK] Poziom < 70, szukam najbliższego healera");
+    
+    const POTION_SELLERS = [
+      { name: "Uzdrowicielka Emanilia", map: "Liściaste Rozstaje", x: 21, y: 51 },
+      { name: "Mnich Seweryn", map: "Klasztor Różanitów - świątynia", x: 25, y: 8 },
+      { name: "Uzdrowiciel Ypsli", map: "Mirvenis-Adur", x: 82, y: 7 },
+      { name: "Jemenoss", map: "Mythar", x: 45, y: 13 },
+      { name: "Kapłanka Hiada", map: "Thuzal", x: 52, y: 17 },
+      { name: "Szalony Etrefan", map: "Eder", x: 56, y: 40 },
+      { name: "Doktor Nad", map: "Nithal", x: 5, y: 48 },
+      { name: "Uzdrowiciel Toramidamus", map: "Tuzmer", x: 26, y: 21 },
+      { name: "Uzdrowicielka Halfinia", map: "Karka-han", x: 31, y: 38 },
+      { name: "Wysoka kapłanka Gryfia", map: "Torneg", x: 79, y: 8 },
+      { name: "Uzdrowicielka Makatara", map: "Ithan", x: 18, y: 15 },
+      { name: "Uzdrowicielka Hiliko", map: "Werbin", x: 38, y: 16 }
+    ];
+
+    // 1. Sprawdzenie aktualnej lokacji
+    const currentMap = window.MargonemAPI.navigation.getCurrentLocation();
+    const heroPos = {
+      x: window.Engine?.hero?.x || window.Engine?.hero?.d?.x,
+      y: window.Engine?.hero?.y || window.Engine?.hero?.d?.y
+    };
+    console.log("[TEST POTEK] Aktualna mapa:", currentMap);
+    console.log("[TEST POTEK] Pozycja bohatera:", heroPos);
+    console.log("[TEST POTEK] Złoto:", window.Engine?.hero?.d?.gold);
+    console.log("[TEST POTEK] MaxHP:", window.Engine?.hero?.d?.warrior_stats?.maxhp);
+
+    // 2. Policz aktualne leki
+    const currentPotions = typeof policzLeczyPrzedmioty === 'function' ? policzLeczyPrzedmioty() : 0;
+    console.log("[TEST POTEK] Aktualne leki w eq:", currentPotions);
+
+    // 3. Znajdź najbliższego healera
+    console.log("[TEST POTEK] Szukam najbliższego healera...");
+    let selectedHealer = null;
+    let distances = [];
+    
+    try {
+      for (const seller of POTION_SELLERS) {
+        try {
+          const pathInfo = await window.MargonemAPI.navigation.findShortestPath(currentMap, seller.map);
+          const dist = pathInfo?.distance ?? Infinity;
+          distances.push({ name: seller.name, map: seller.map, distance: dist });
+          console.log(`[TEST POTEK]   - ${seller.name} (${seller.map}): ${dist === Infinity ? 'NIEOSIĄGALNY' : dist + ' kroków'}`);
+        } catch (e) {
+          distances.push({ name: seller.name, map: seller.map, distance: Infinity });
+          console.log(`[TEST POTEK]   - ${seller.name} (${seller.map}): BŁĄD - ${e.message}`);
+        }
+      }
+      
+      const sorted = distances.sort((a, b) => a.distance - b.distance);
+      if (sorted[0] && sorted[0].distance !== Infinity) {
+        selectedHealer = POTION_SELLERS.find(s => s.name === sorted[0].name);
+      }
+    } catch (e) {
+      console.log("[TEST POTEK] Błąd szukania healera:", e.message);
+    }
+
+    if (!selectedHealer) {
+      selectedHealer = POTION_SELLERS[0]; // fallback
+      console.log("[TEST POTEK] Fallback na pierwszego healera:", selectedHealer.name);
+    }
+
+    console.log("[TEST POTEK] Wybrany healer:", selectedHealer.name, "mapa:", selectedHealer.map, "poz:", selectedHealer.x + "," + selectedHealer.y);
+
+    // 4. Nawigacja do healera
+    console.log("[TEST POTEK] Nawiguję do mapy:", selectedHealer.map);
+    try {
+      await window.MargonemAPI.exping.navigateToLocation(selectedHealer.map);
+      console.log("[TEST POTEK] navigateToLocation zakończone");
+    } catch (e) {
+      console.log("[TEST POTEK] BŁĄD nawigacji:", e.message);
+      return false;
+    }
+
+    // 5. Czekaj na mapę
+    console.log("[TEST POTEK] Czekam na zmianę mapy...");
+    try {
+      await window.MargonemAPI.exping.waitForMapChange(selectedHealer.map);
+      console.log("[TEST POTEK] Mapa zmieniona, aktualna:", window.MargonemAPI.navigation.getCurrentLocation());
+    } catch (e) {
+      console.log("[TEST POTEK] BŁĄD czekania na mapę:", e.message);
+      return false;
+    }
+
+    // 6. Idź do healera
+    console.log("[TEST POTEK] Idę do healera na pozycję:", selectedHealer.x, selectedHealer.y);
+    window.Engine.hero.autoGoTo({ x: selectedHealer.x, y: selectedHealer.y }, false);
+    try {
+      await waitForPosition(selectedHealer.x, selectedHealer.y, 60000);
+      console.log("[TEST POTEK] Dotarłem do healera");
+    } catch (e) {
+      console.log("[TEST POTEK] BŁĄD - nie dotarłem do healera:", e.message);
+      return false;
+    }
+
+    // 7. Rozpocznij dialog
+    console.log("[TEST POTEK] Zaczynam rozmowę z NPC...");
+    window.Engine.hero.talkNearMob();
+    await sleep(1000);
+
+    // 8. Czekaj na okno dialogowe
+    console.log("[TEST POTEK] Czekam na okno dialogowe...");
+    const dialogueWindow = await Promise.race([
+      waitForElement("div.dialogue-window.is-open"),
+      sleep(8000).then(() => null)
+    ]);
+
+    if (!dialogueWindow) {
+      console.log("[TEST POTEK] BŁĄD - okno dialogowe się nie otworzyło!");
+      return false;
+    }
+    console.log("[TEST POTEK] Okno dialogowe otwarte");
+
+    // 9. Znajdź opcję sklepu
+    const answers = Array.from(document.querySelectorAll("li.dialogue-window-answer.answer"));
+    console.log("[TEST POTEK] Opcje dialogowe (" + answers.length + "):");
+    answers.forEach((a, i) => {
+      const text = (a.textContent || "").trim();
+      const hasShopClass = a.classList.contains("line_shop");
+      console.log(`[TEST POTEK]   ${i+1}. "${text}" ${hasShopClass ? '[SKLEP]' : ''}`);
+    });
+
+    const shopOption = answers.find(a => a.classList.contains("line_shop")) 
+      || answers.find(a => {
+        const txt = (a.textContent || "").toLowerCase();
+        return txt.includes("sklep") || txt.includes("handel") || txt.includes("kup") || txt.includes("sprzed");
+      });
+
+    if (!shopOption) {
+      console.log("[TEST POTEK] BŁĄD - nie znaleziono opcji sklepu!");
+      return false;
+    }
+
+    console.log("[TEST POTEK] Znaleziono opcję sklepu:", (shopOption.textContent || "").trim());
+
+    // 10. Kliknij sklep
+    const shopSpan = shopOption.querySelector("span") || shopOption;
+    console.log("[TEST POTEK] Klikam opcję sklepu...");
+    shopSpan.click();
+
+    // 11. Czekaj na okno sklepu
+    console.log("[TEST POTEK] Czekam na okno sklepu...");
+    const shopWindow = await Promise.race([
+      waitForElement("div.alerts-layer.layer div.border-window.ui-draggable.window-on-peak"),
+      waitForElement("div.border-window.ui-draggable.window-on-peak div.shop-content"),
+      sleep(8000).then(() => null)
+    ]);
+
+    if (!shopWindow) {
+      console.log("[TEST POTEK] BŁĄD - okno sklepu się nie otworzyło!");
+      return false;
+    }
+    console.log("[TEST POTEK] Okno sklepu otwarte");
+
+    await sleep(1000);
+
+    // 12. Przeszukaj przedmioty w sklepie
+    const shopItems = window.Engine?.shop?.items || {};
+    const shopItemIds = Object.keys(shopItems);
+    console.log("[TEST POTEK] Przedmioty w sklepie (" + shopItemIds.length + "):");
+    
+    let healingPotions = [];
+    for (const itemId of shopItemIds) {
+      const item = shopItems[itemId];
+      const stats = item?._cachedStats || {};
+      const name = item?.name || "???";
+      const price = item?.pr || 0;
+      const hasLeczy = stats.leczy !== undefined;
+      
+      console.log(`[TEST POTEK]   ID:${itemId} "${name}" cena:${price} leczy:${hasLeczy ? stats.leczy : 'BRAK'}`);
+      
+      if (hasLeczy && stats.leczy > 0) {
+        healingPotions.push({ id: itemId, name, price, healing: stats.leczy });
+      }
+    }
+
+    if (healingPotions.length === 0) {
+      console.log("[TEST POTEK] BŁĄD - brak potek leczących w sklepie!");
+      window.Engine.shop.close();
+      return false;
+    }
+
+    console.log("[TEST POTEK] Znalezione potki leczące:", healingPotions.length);
+
+    // 13. Wybierz najlepszą potkę
+    const maxHP = window.Engine?.hero?.d?.warrior_stats?.maxhp || 10000;
+    console.log("[TEST POTEK] MaxHP bohatera:", maxHP);
+
+    const bestPotionId = await wybierzIdNajlepszejPotki(maxHP);
+    const bestPotion = shopItems[bestPotionId];
+    
+    if (!bestPotion || !bestPotion._cachedStats?.leczy) {
+      console.log("[TEST POTEK] BŁĄD - nie można wybrać najlepszej potki!");
+      console.log("[TEST POTEK] bestPotionId=", bestPotionId, "bestPotion=", bestPotion);
+      window.Engine.shop.close();
+      return false;
+    }
+
+    console.log("[TEST POTEK] Najlepsza potka: ID=", bestPotionId, "nazwa=", bestPotion.name, "leczy=", bestPotion._cachedStats.leczy);
+
+    // 14. Oblicz ile kupić
+    const currentHealItems = typeof policzLeczyPrzedmioty === 'function' ? policzLeczyPrzedmioty() : 0;
+    const needToBuy = Math.max(0, targetAmount - currentHealItems);
+    const gold = window.Engine?.hero?.d?.gold || 0;
+    const potionPrice = bestPotion?.pr || 1;
+    const canAfford = potionPrice > 0 ? Math.max(0, Math.floor(gold / potionPrice) - 1) : 45;
+    const finalAmount = Math.min(needToBuy, canAfford, 45);
+
+    console.log("[TEST POTEK] Kalkulacja zakupu:");
+    console.log("[TEST POTEK]   - cel:", targetAmount);
+    console.log("[TEST POTEK]   - mam:", currentHealItems);
+    console.log("[TEST POTEK]   - potrzebuję:", needToBuy);
+    console.log("[TEST POTEK]   - złoto:", gold);
+    console.log("[TEST POTEK]   - cena potki:", potionPrice);
+    console.log("[TEST POTEK]   - stać mnie na:", canAfford);
+    console.log("[TEST POTEK]   - KUPUJĘ:", finalAmount);
+
+    if (finalAmount <= 0) {
+      console.log("[TEST POTEK] Nie muszę kupować więcej potek!");
+      window.Engine.shop.close();
+      return true;
+    }
+
+    // 15. Kupuj potki
+    console.log("[TEST POTEK] Rozpoczynam kupowanie...");
+    for (let i = 0; i < finalAmount; i++) {
+      console.log(`[TEST POTEK] Kupuję potkę ${i+1}/${finalAmount}...`);
+      await buyItem(bestPotionId);
+      await sleep(500);
+    }
+
+    console.log("[TEST POTEK] Finalizuję zakup...");
+    window.Engine.shop.basket.finalize();
+    await sleep(1000);
+
+    console.log("[TEST POTEK] Zamykam sklep...");
+    window.Engine.shop.close();
+
+    const finalPotionCount = typeof policzLeczyPrzedmioty === 'function' ? policzLeczyPrzedmioty() : 0;
+    console.log("[TEST POTEK] Leki po zakupie:", finalPotionCount);
+    console.log("=================================================");
+    console.log("[TEST POTEK] ZAKOŃCZONO POMYŚLNIE");
+    console.log("=================================================");
+    return true;
   }
 });
 

@@ -617,6 +617,6 @@ if (typeof window !== 'undefined') {
         if(!window.MargonemAPI.E2) window.MargonemAPI.E2 = {};
         Object.assign(window.MargonemAPI.E2, MovementBot.E2);
         
-        console.log("🤖 Movement logic attached to MargonemAPI");
+        // console.log("🤖 Movement logic attached to MargonemAPI");
     }
 }
