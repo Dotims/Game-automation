@@ -110,14 +110,14 @@ Object.assign(window.MargonemAPI, {
     }
   },
   getServerPosition: function () {
-    const _0xee67a3 = window.Engine;
-    if (!_0xee67a3 || !_0xee67a3.hero) {
+    const engine = window.Engine;
+    if (!engine || !engine.hero) {
       return null;
     }
-    const _0x230d39 = _0xee67a3.hero;
+    const hero = engine.hero;
     return {
-      x: _0x230d39.lastServerX !== undefined ? _0x230d39.lastServerX : _0x230d39.d.x,
-      y: _0x230d39.lastServerY !== undefined ? _0x230d39.lastServerY : _0x230d39.d.y
+      x: hero.lastServerX !== undefined ? hero.lastServerX : hero.d.x,
+      y: hero.lastServerY !== undefined ? hero.lastServerY : hero.d.y
     };
   },
   heroPositionMonitor: {
@@ -131,53 +131,53 @@ Object.assign(window.MargonemAPI, {
       }
       if (Engine && Engine.hero && Engine.hero.afterUpdate) {
         this.originalAfterUpdate = Engine.hero.afterUpdate;
-        Engine.hero.afterUpdate = (_0x4072ef, _0x342443, _0x4422f4) => {
-          const _0x194c3f = _0x4072ef.back === 1 || (_0x342443.x !== Engine.hero.lastServerX || _0x342443.y !== Engine.hero.lastServerY) && Engine.lock.check() && Engine.stepsToSend.steps.length > 0;
-          if (_0x194c3f) {
-            this.onBackDetected(Engine.hero.lastServerX || _0x4072ef.x, Engine.hero.lastServerY || _0x4072ef.y);
+        Engine.hero.afterUpdate = (serverData, newPosition, additionalData) => {
+          const isBackDetected = serverData.back === 1 || (newPosition.x !== Engine.hero.lastServerX || newPosition.y !== Engine.hero.lastServerY) && Engine.lock.check() && Engine.stepsToSend.steps.length > 0;
+          if (isBackDetected) {
+            this.onBackDetected(Engine.hero.lastServerX || serverData.x, Engine.hero.lastServerY || serverData.y);
           }
-          return this.originalAfterUpdate.call(Engine.hero, _0x4072ef, _0x342443, _0x4422f4);
+          return this.originalAfterUpdate.call(Engine.hero, serverData, newPosition, additionalData);
         };
         // console.log("[MargonemAPI] Position monitor initialized");
         this.isInitialized = true;
       }
     },
-    onBackDetected: function (_0x33910e, _0x59d092) {
+    onBackDetected: function (serverX, serverY) {
       this.backDetected = true;
       this.lastBackTime = Date.now();
-      const _0x223b6e = window.Engine;
-      if (_0x223b6e && _0x223b6e.hero) {
-        console.log("[MargonemAPI] Back detected! Server position: " + _0x33910e + "," + _0x59d092 + " vs Local position: " + _0x223b6e.hero.d.x + "," + _0x223b6e.hero.d.y);
+      const engine = window.Engine;
+      if (engine && engine.hero) {
+        console.log("[MargonemAPI] Back detected! Server position: " + serverX + "," + serverY + " vs Local position: " + engine.hero.d.x + "," + engine.hero.d.y);
       } else {
-        console.log("[MargonemAPI] Back detected! Server position: " + _0x33910e + "," + _0x59d092);
+        console.log("[MargonemAPI] Back detected! Server position: " + serverX + "," + serverY);
       }
       if (window.MargonemAPI.combat && window.MargonemAPI.combat.handleBackEvent) {
-        window.MargonemAPI.combat.handleBackEvent(_0x33910e, _0x59d092);
+        window.MargonemAPI.combat.handleBackEvent(serverX, serverY);
       }
     }
   },
   debug: {
     getPositionStatus: function () {
-      const _0x2f3125 = window.Engine;
-      if (!_0x2f3125 || !_0x2f3125.hero) {
+      const engine = window.Engine;
+      if (!engine || !engine.hero) {
         return "Engine or hero not available";
       }
-      const _0x99df44 = Math.floor(parseFloat(_0x2f3125.hero.d.x || 0));
-      const _0x54296b = Math.floor(parseFloat(_0x2f3125.hero.d.y || 0));
-      const _0x4302ea = Math.floor(parseFloat(_0x2f3125.hero.lastServerX || _0x2f3125.hero.d.x || 0));
-      const _0x229961 = Math.floor(parseFloat(_0x2f3125.hero.lastServerY || _0x2f3125.hero.d.y || 0));
-      const _0x44b798 = {
-        x: _0x99df44,
-        y: _0x54296b
+      const localX = Math.floor(parseFloat(engine.hero.d.x || 0));
+      const localY = Math.floor(parseFloat(engine.hero.d.y || 0));
+      const serverX = Math.floor(parseFloat(engine.hero.lastServerX || engine.hero.d.x || 0));
+      const serverY = Math.floor(parseFloat(engine.hero.lastServerY || engine.hero.d.y || 0));
+      const localPosition = {
+        x: localX,
+        y: localY
       };
-      const _0x28a4ae = {
-        x: _0x4302ea,
-        y: _0x229961
+      const serverPosition = {
+        x: serverX,
+        y: serverY
       };
       return {
-        localPosition: _0x44b798,
-        serverPosition: _0x28a4ae,
-        synced: _0x99df44 === _0x4302ea && _0x54296b === _0x229961,
+        localPosition: localPosition,
+        serverPosition: serverPosition,
+        synced: localX === serverX && localY === serverY,
         lastBackTime: window.MargonemAPI.heroPositionMonitor.lastBackTime,
         timeSinceLastBack: Date.now() - window.MargonemAPI.heroPositionMonitor.lastBackTime,
         backDetected: window.MargonemAPI.heroPositionMonitor.backDetected
@@ -186,7 +186,7 @@ Object.assign(window.MargonemAPI, {
   },
   navigation: {
     findShortestPath: function (startLocation, endLocation) {
-      const _0xad4122 = window.MargonemAPI.state.navigation.locationData;
+      const locationData = window.MargonemAPI.state.navigation.locationData;
       startLocation = normalizeLocationName(startLocation);
       endLocation = normalizeLocationName(endLocation);
       if (!mapData[startLocation] || !mapData[endLocation]) {
@@ -195,38 +195,38 @@ Object.assign(window.MargonemAPI, {
           error: "Jedna z lokacji nie istnieje"
         };
       }
-      const directConnection = mapData[startLocation].gateways.find(_0x471060 => normalizeLocationName(_0x471060.name) === endLocation);
+      const directConnection = mapData[startLocation].gateways.find(gateway => normalizeLocationName(gateway.name) === endLocation);
       if (directConnection) {
-        const _0x845680 = {
+        const gatewayCoords = {
           x: directConnection.x,
           y: directConnection.y
         };
         const pathStep = {
           currentMap: startLocation,
           nextMap: endLocation,
-          gateway: _0x845680
+          gateway: gatewayCoords
         };
-        const _0x161c68 = [pathStep];
-        const _0xf3c60c = {
-          path: _0x161c68,
+        const pathArray = [pathStep];
+        const result = {
+          path: pathArray,
           distance: 1
         };
-        return _0xf3c60c;
+        return result;
       }
-      function _0x5c41da(_0x2b4f5f, _0x7e76ee) {
-        const _0x3185e1 = mapData[_0x2b4f5f].gateways.some(_0x13f6e0 => normalizeLocationName(_0x13f6e0.name) === _0x7e76ee);
-        const _0x2d569f = mapData[_0x7e76ee].gateways.some(_0x246f1e => normalizeLocationName(_0x246f1e.name) === _0x2b4f5f);
-        return _0x3185e1 && _0x2d569f;
+      function isBidirectionalConnection(locationA, locationB) {
+        const hasGatewayAtoB = mapData[locationA].gateways.some(gw => normalizeLocationName(gw.name) === locationB);
+        const hasGatewayBtoA = mapData[locationB].gateways.some(gw => normalizeLocationName(gw.name) === locationA);
+        return hasGatewayAtoB && hasGatewayBtoA;
       }
-      function _0x5eb040(_0x25f7c6) {
-        return mapData[_0x25f7c6].gateways.map(_0x5cd804 => normalizeLocationName(_0x5cd804.name)).filter(_0x295270 => mapData[_0x295270] && _0x5c41da(_0x25f7c6, _0x295270));
+      function getConnectedLocations(location) {
+        return mapData[location].gateways.map(gw => normalizeLocationName(gw.name)).filter(loc => mapData[loc] && isBidirectionalConnection(location, loc));
       }
-      function _0x64c884(_0x241ad5, _0x22666b) {
-        const _0x491006 = mapData[_0x241ad5].gateways.find(_0xdba6b0 => normalizeLocationName(_0xdba6b0.name) === _0x22666b);
-        if (_0x491006) {
+      function getGatewayCoords(fromLocation, toLocation) {
+        const gateway = mapData[fromLocation].gateways.find(gw => normalizeLocationName(gw.name) === toLocation);
+        if (gateway) {
           return {
-            x: _0x491006.x,
-            y: _0x491006.y
+            x: gateway.x,
+            y: gateway.y
           };
         } else {
           return null;
@@ -235,40 +235,40 @@ Object.assign(window.MargonemAPI, {
       const distances = {};
       const previousNodes = {};
       const unvisitedSet = new Set();
-      Object.keys(mapData).forEach(_0x13994f => {
-        distances[_0x13994f] = Infinity;
-        previousNodes[_0x13994f] = null;
-        unvisitedSet.add(_0x13994f);
+      Object.keys(mapData).forEach(locationName => {
+        distances[locationName] = Infinity;
+        previousNodes[locationName] = null;
+        unvisitedSet.add(locationName);
       });
       distances[startLocation] = 0;
-      let _0x4d4241 = 0;
-      const _0x6bc63b = 10000;
-      while (unvisitedSet.size > 0 && _0x4d4241 < _0x6bc63b) {
-        _0x4d4241++;
-        let _0x2d330c = null;
-        let _0x190149 = Infinity;
-        for (const _0x58b814 of unvisitedSet) {
-          if (distances[_0x58b814] < _0x190149) {
-            _0x190149 = distances[_0x58b814];
-            _0x2d330c = _0x58b814;
+      let iterations = 0;
+      const maxIterations = 10000;
+      while (unvisitedSet.size > 0 && iterations < maxIterations) {
+        iterations++;
+        let currentNode = null;
+        let minDistance = Infinity;
+        for (const node of unvisitedSet) {
+          if (distances[node] < minDistance) {
+            minDistance = distances[node];
+            currentNode = node;
           }
         }
-        if (_0x2d330c === null) {
+        if (currentNode === null) {
           break;
         }
-        if (_0x2d330c === endLocation) {
+        if (currentNode === endLocation) {
           break;
         }
-        unvisitedSet.delete(_0x2d330c);
-        const _0x4310f6 = _0x5eb040(_0x2d330c);
-        for (const _0x4434c6 of _0x4310f6) {
-          if (!unvisitedSet.has(_0x4434c6)) {
+        unvisitedSet.delete(currentNode);
+        const neighbors = getConnectedLocations(currentNode);
+        for (const neighbor of neighbors) {
+          if (!unvisitedSet.has(neighbor)) {
             continue;
           }
-          const _0x13548e = distances[_0x2d330c] + 1;
-          if (_0x13548e < distances[_0x4434c6]) {
-            distances[_0x4434c6] = _0x13548e;
-            previousNodes[_0x4434c6] = _0x2d330c;
+          const newDistance = distances[currentNode] + 1;
+          if (newDistance < distances[neighbor]) {
+            distances[neighbor] = newDistance;
+            previousNodes[neighbor] = currentNode;
           }
         }
       }
@@ -278,98 +278,98 @@ Object.assign(window.MargonemAPI, {
           error: "Nie znaleziono ścieżki między lokacjami"
         };
       }
-      const _0x293618 = [];
-      let _0x4158e5 = endLocation;
-      while (previousNodes[_0x4158e5] !== null) {
-        const _0x151ebc = previousNodes[_0x4158e5];
-        const _0x28c9df = _0x64c884(_0x151ebc, _0x4158e5);
-        const _0xc1c795 = {
-          currentMap: _0x151ebc,
-          nextMap: _0x4158e5,
-          gateway: _0x28c9df
+      const pathArray = [];
+      let currentLocation = endLocation;
+      while (previousNodes[currentLocation] !== null) {
+        const previousLocation = previousNodes[currentLocation];
+        const gatewayCoords = getGatewayCoords(previousLocation, currentLocation);
+        const pathStep = {
+          currentMap: previousLocation,
+          nextMap: currentLocation,
+          gateway: gatewayCoords
         };
-        _0x293618.unshift(_0xc1c795);
-        _0x4158e5 = _0x151ebc;
+        pathArray.unshift(pathStep);
+        currentLocation = previousLocation;
       }
-      const _0x11235f = {
-        path: _0x293618,
+      const result = {
+        path: pathArray,
         distance: distances[endLocation]
       };
-      return _0x11235f;
+      return result;
     },
     getCurrentLocation: function () {
-      const _0x5892d5 = window.Engine;
-      if (!_0x5892d5 || !_0x5892d5.map) {
+      const engine = window.Engine;
+      if (!engine || !engine.map) {
         return null;
       }
-      const _0x17ca39 = _0x5892d5.map.d.name || null;
-      return _0x17ca39;
+      const mapName = engine.map.d.name || null;
+      return mapName;
     },
-    goToLocation: async function (_0x5cd484) {
+    goToLocation: async function (targetLocation) {
       if (!sessionToken) {
         return;
       }
       window.MargonemAPI.state.navigation.autoFight = setInterval(() => {
         try {
           window.Engine.battle.autoFight();
-        } catch (_0x55092c) {}
+        } catch (error) {}
       }, 1000);
-      const _0x13cf85 = window.MargonemAPI.state.navigation;
-      _0x13cf85.abortNavigation = false;
-      const _0x1f3511 = this.getCurrentLocation();
-      if (!_0x1f3511) {
+      const navState = window.MargonemAPI.state.navigation;
+      navState.abortNavigation = false;
+      const currentLocation = this.getCurrentLocation();
+      if (!currentLocation) {
         return false;
       }
-      if (_0x1f3511 === _0x5cd484) {
+      if (currentLocation === targetLocation) {
         return true;
       }
-      const _0x439aea = this.findShortestPath(_0x1f3511, _0x5cd484);
-      if (_0x439aea.error || !_0x439aea.path.length) {
+      const pathResult = this.findShortestPath(currentLocation, targetLocation);
+      if (pathResult.error || !pathResult.path.length) {
         return false;
       }
-      _0x13cf85.currentPath = _0x439aea.path;
-      _0x13cf85.currentPathIndex = 0;
-      _0x13cf85.isNavigating = true;
-      _0x13cf85.targetLocation = _0x5cd484;
-      _0x13cf85.lastMoveTime = Date.now();
+      navState.currentPath = pathResult.path;
+      navState.currentPathIndex = 0;
+      navState.isNavigating = true;
+      navState.targetLocation = targetLocation;
+      navState.lastMoveTime = Date.now();
       this.processNextPathStep();
-      clearInterval(_0x13cf85.pathCheckInterval);
-      _0x13cf85.pathCheckInterval = setInterval(() => this.checkNavigationProgress(), 1000);
+      clearInterval(navState.pathCheckInterval);
+      navState.pathCheckInterval = setInterval(() => this.checkNavigationProgress(), 1000);
       return true;
     },
     processNextPathStep: async function () {
-      const _0x4fa8a2 = window.MargonemAPI.state.navigation;
-      if (_0x4fa8a2.abortNavigation) {
+      const navState = window.MargonemAPI.state.navigation;
+      if (navState.abortNavigation) {
         return;
       }
-      const _0x35ec09 = _0x4fa8a2.currentPath && _0x4fa8a2.currentPath[_0x4fa8a2.currentPathIndex];
-      if (!_0x35ec09 || !_0x4fa8a2.isNavigating) {
+      const currentStep = navState.currentPath && navState.currentPath[navState.currentPathIndex];
+      if (!currentStep || !navState.isNavigating) {
         this.stopNavigation();
         return;
       }
-      const _0x3802ea = _0x35ec09.gateway;
-      if (_0x3802ea) {
-        const _0xe393b0 = window.Engine;
-        if (_0xe393b0 && _0xe393b0.hero) {
-          const _0x157817 = Math.floor(_0xe393b0.hero.x || _0xe393b0.hero.d && _0xe393b0.hero.d.x);
-          const _0x15cd69 = Math.floor(_0xe393b0.hero.y || _0xe393b0.hero.d && _0xe393b0.hero.d.y);
-          if (_0x157817 === _0x3802ea.x && _0x15cd69 === _0x3802ea.y) {
-            _0xe393b0.hero.getTroughGateway();
-          } else if (Math.abs(_0x157817 - _0x3802ea.x) <= 1 && Math.abs(_0x15cd69 - _0x3802ea.y) <= 1) {
-            _0xe393b0.hero.talkNearMob();
+      const gateway = currentStep.gateway;
+      if (gateway) {
+        const engine = window.Engine;
+        if (engine && engine.hero) {
+          const heroX = Math.floor(engine.hero.x || engine.hero.d && engine.hero.d.x);
+          const heroY = Math.floor(engine.hero.y || engine.hero.d && engine.hero.d.y);
+          if (heroX === gateway.x && heroY === gateway.y) {
+            engine.hero.getTroughGateway();
+          } else if (Math.abs(heroX - gateway.x) <= 1 && Math.abs(heroY - gateway.y) <= 1) {
+            engine.hero.talkNearMob();
           }
-          const _0x3fd22f = {
-            x: _0x3802ea.x,
-            y: _0x3802ea.y
+          const targetCoords = {
+            x: gateway.x,
+            y: gateway.y
           };
-          _0xe393b0.hero.autoGoTo(_0x3fd22f, false);
-          _0x4fa8a2.lastMoveTime = Date.now();
+          engine.hero.autoGoTo(targetCoords, false);
+          navState.lastMoveTime = Date.now();
         }
       }
     },
     checkNavigationProgress: function () {
-      const _0x1b0983 = window.MargonemAPI.state.navigation;
-      if (_0x1b0983.abortNavigation || !_0x1b0983.isNavigating) {
+      const navState = window.MargonemAPI.state.navigation;
+      if (navState.abortNavigation || !navState.isNavigating) {
         return;
       }
       
@@ -403,21 +403,21 @@ Object.assign(window.MargonemAPI, {
         }
       }
       
-      const _0x5c2b9d = this.getCurrentLocation();
-      const _0x94856f = _0x1b0983.currentPath && _0x1b0983.currentPath[_0x1b0983.currentPathIndex];
-      if (_0x94856f && _0x5c2b9d === _0x94856f.nextMap) {
-        _0x1b0983.currentPathIndex++;
-        if (_0x1b0983.currentPathIndex >= _0x1b0983.currentPath.length) {
+      const currentLocation = this.getCurrentLocation();
+      const currentStep = navState.currentPath && navState.currentPath[navState.currentPathIndex];
+      if (currentStep && currentLocation === currentStep.nextMap) {
+        navState.currentPathIndex++;
+        if (navState.currentPathIndex >= navState.currentPath.length) {
           this.stopNavigation(true);
           return;
         }
         this.processNextPathStep();
       }
-      const _0x28067f = Date.now() - _0x1b0983.lastMoveTime;
-      if (_0x28067f > _0x1b0983.stuckCheckInterval) {
+      const timeSinceLastMove = Date.now() - navState.lastMoveTime;
+      if (timeSinceLastMove > navState.stuckCheckInterval) {
         this.processNextPathStep();
       }
-      if (Date.now() - _0x1b0983.lastMoveTime > _0x1b0983.navigationTimeout) {
+      if (Date.now() - navState.lastMoveTime > navState.navigationTimeout) {
         this.stopNavigation(false);
       }
     },
@@ -437,11 +437,11 @@ Object.assign(window.MargonemAPI, {
       if (engineInstance && engineInstance.hero) {
         const heroX = Math.floor(engineInstance.hero.x || engineInstance.hero.d && engineInstance.hero.d.x);
         const heroY = Math.floor(engineInstance.hero.y || engineInstance.hero.d && engineInstance.hero.d.y);
-        const _0x855778 = {
+        const heroPosition = {
           x: heroX,
           y: heroY
         };
-        engineInstance.hero.autoGoTo(_0x855778);
+        engineInstance.hero.autoGoTo(heroPosition);
       }
       if (forceStop) {
         clearInterval(window.MargonemAPI.state.navigation.autoFight);
@@ -504,20 +504,20 @@ Object.assign(window.MargonemAPI, {
           max: null
         };
         if (typeof targetOptions === "object" && targetOptions.levelRange) {
-          const _0x2b86fd = {
+          const levelRangeConfig = {
             min: targetOptions.levelRange.min || null,
             max: targetOptions.levelRange.max || null
           };
-          combatState.levelRange = _0x2b86fd;
+          combatState.levelRange = levelRangeConfig;
           combatState.selectedNicks = [];
         } else {
           combatState.selectedNicks = Array.isArray(targetOptions) ? targetOptions : [targetOptions];
         }
         combatState.autoFightActive = true;
         try {
-          await Promise.race([window.MargonemAPI.combat.recoverySystem.startMonitoring(), new Promise((_0x18ff6e, _0x279756) => setTimeout(() => _0x279756(new Error("RECOVERY_SYSTEM_TIMEOUT")), 5000))]);
-        } catch (_0x4924a8) {
-          console.error("Error starting monitoring system:", _0x4924a8);
+          await Promise.race([window.MargonemAPI.combat.recoverySystem.startMonitoring(), new Promise((resolve, reject) => setTimeout(() => reject(new Error("RECOVERY_SYSTEM_TIMEOUT")), 5000))]);
+        } catch (recoveryError) {
+          console.error("Error starting monitoring system:", recoveryError);
         }
         if (durationSeconds > 0) {
           combatState.fightEndTime = Date.now() + durationSeconds * 1000;
@@ -527,30 +527,30 @@ Object.assign(window.MargonemAPI, {
             }
           }, durationSeconds * 1000);
         }
-        await new Promise(_0xce5419 => setTimeout(_0xce5419, 500));
+        await new Promise(resolve => setTimeout(resolve, 500));
         if (combatState.autoFightActive && this._activeSession === fightSessionId) {
           window.MargonemAPI.combat.autoFight(fightSessionId);
         }
-        const _0x27bb75 = {
+        const successResult = {
           success: true,
           sessionId: fightSessionId
         };
-        return _0x27bb75;
-      } catch (_0x3f5e6e) {
-        console.error("Error in startFight:", _0x3f5e6e);
-        const _0x1b925f = {
+        return successResult;
+      } catch (error) {
+        console.error("Error in startFight:", error);
+        const errorResult = {
           success: false,
-          error: _0x3f5e6e.message || "UNKNOWN_ERROR",
-          details: _0x3f5e6e.stack
+          error: error.message || "UNKNOWN_ERROR",
+          details: error.stack
         };
-        return _0x1b925f;
+        return errorResult;
       } finally {
         this._releaseLock("startFight");
       }
     },
     stopFight: function () {
       const apiState = window.MargonemAPI.state;
-      const _0x142fdf = this._activeSession;
+      const previousSession = this._activeSession;
       this._activeSession = null;
       window.MargonemAPI.combat.stopRequested = true;
       apiState.autoFightActive = false;
@@ -574,72 +574,72 @@ Object.assign(window.MargonemAPI, {
         apiState.timers.update = null;
       }
       if (apiState.timers.autoFightTimeouts) {
-        apiState.timers.autoFightTimeouts.forEach(_0x2c3dd2 => clearTimeout(_0x2c3dd2));
+        apiState.timers.autoFightTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
         apiState.timers.autoFightTimeouts.clear();
       }
       if (apiState.timers.combatIntervals) {
-        apiState.timers.combatIntervals.forEach(_0xd0dfe4 => clearInterval(_0xd0dfe4));
+        apiState.timers.combatIntervals.forEach(intervalId => clearInterval(intervalId));
         apiState.timers.combatIntervals.clear();
       }
       if (apiState.pendingStopActions) {
         apiState.pendingStopActions.clear();
       }
       if (apiState.activeIntervals) {
-        apiState.activeIntervals.forEach(_0x311b84 => clearInterval(_0x311b84));
+        apiState.activeIntervals.forEach(activeIntervalId => clearInterval(activeIntervalId));
         apiState.activeIntervals.clear();
       }
       if (apiState.activeTimeouts) {
-        apiState.activeTimeouts.forEach(_0x3e58e6 => clearTimeout(_0x3e58e6));
+        apiState.activeTimeouts.forEach(activeTimeoutId => clearTimeout(activeTimeoutId));
         apiState.activeTimeouts.clear();
       }
-      Object.keys(this._asyncLocks).forEach(_0x13efaa => {
-        this._releaseLock(_0x13efaa);
+      Object.keys(this._asyncLocks).forEach(lockKey => {
+        this._releaseLock(lockKey);
       });
       if (window.MargonemAPI.navigation) {
         window.MargonemAPI.navigation.stopNavigation(false);
       }
-      const _0x296e1f = window.Engine;
-      if (_0x296e1f && _0x296e1f.hero) {
+      const engine = window.Engine;
+      if (engine && engine.hero) {
         try {
-          const _0x2a0a26 = Math.floor(_0x296e1f.hero.x || _0x296e1f.hero.d && _0x296e1f.hero.d.x || 0);
-          const _0x377ea7 = Math.floor(_0x296e1f.hero.y || _0x296e1f.hero.d && _0x296e1f.hero.d.y || 0);
-          if (!isNaN(_0x2a0a26) && !isNaN(_0x377ea7)) {
-            const _0x2ead3d = {
-              x: _0x2a0a26,
-              y: _0x377ea7
+          const heroX = Math.floor(engine.hero.x || engine.hero.d && engine.hero.d.x || 0);
+          const heroY = Math.floor(engine.hero.y || engine.hero.d && engine.hero.d.y || 0);
+          if (!isNaN(heroX) && !isNaN(heroY)) {
+            const stopPosition = {
+              x: heroX,
+              y: heroY
             };
-            _0x296e1f.hero.autoGoTo(_0x2ead3d);
+            engine.hero.autoGoTo(stopPosition);
           }
-        } catch (_0x37e8f7) {
-          console.error("Error stopping hero movement:", _0x37e8f7);
+        } catch (error) {
+          console.error("Error stopping hero movement:", error);
         }
       }
-      const _0x413585 = {
+      const result = {
         success: true,
-        stoppedSession: _0x142fdf
+        stoppedSession: previousSession
       };
-      return _0x413585;
+      return result;
     },
-    isMobBlocked: function (_0x3566d1) {
-      return window.MargonemAPI.state.blockedMobs.has(_0x3566d1);
+    isMobBlocked: function (mobId) {
+      return window.MargonemAPI.state.blockedMobs.has(mobId);
     },
     clearBlockedMobs: function () {
-      const _0xa17688 = window.MargonemAPI.state;
-      _0xa17688.blockedMobs.clear();
-      _0xa17688.lastAttemptedMobs = [];
+      const state = window.MargonemAPI.state;
+      state.blockedMobs.clear();
+      state.lastAttemptedMobs = [];
     },
-    autoFight: async function (_0x1021e6) {
-      if (this._activeSession !== _0x1021e6) {
+    autoFight: async function (sessionId) {
+      if (this._activeSession !== sessionId) {
         return {
           success: false,
           error: "SESSION_MISMATCH"
         };
       }
-      const _0x15b420 = window.MargonemAPI.state;
-      if (_0x15b420.handlingBackEvent) {
+      const apiState = window.MargonemAPI.state;
+      if (apiState.handlingBackEvent) {
         setTimeout(() => {
-          if (_0x15b420.autoFightActive && this._activeSession === _0x1021e6 && !this.stopRequested) {
-            this.autoFight(_0x1021e6);
+          if (apiState.autoFightActive && this._activeSession === sessionId && !this.stopRequested) {
+            this.autoFight(sessionId);
           }
         }, 50);
         return {
@@ -647,13 +647,13 @@ Object.assign(window.MargonemAPI, {
           error: "HANDLING_BACK_EVENT"
         };
       }
-      const _0x32a3a6 = Date.now() - (window.MargonemAPI.heroPositionMonitor.lastBackTime || 0);
-      if (_0x32a3a6 < 300) {
+      const timeSinceBackEvent = Date.now() - (window.MargonemAPI.heroPositionMonitor.lastBackTime || 0);
+      if (timeSinceBackEvent < 300) {
         setTimeout(() => {
-          if (_0x15b420.autoFightActive && this._activeSession === _0x1021e6 && !this.stopRequested) {
-            this.autoFight(_0x1021e6);
+          if (apiState.autoFightActive && this._activeSession === sessionId && !this.stopRequested) {
+            this.autoFight(sessionId);
           }
-        }, 300 - _0x32a3a6);
+        }, 300 - timeSinceBackEvent);
         return {
           success: false,
           error: "RECENT_BACK_EVENT"
@@ -673,207 +673,207 @@ Object.assign(window.MargonemAPI, {
         };
       }
       try {
-        if (_0x15b420.autoFightInProgress) {
+        if (apiState.autoFightInProgress) {
           return {
             success: false,
             error: "ALREADY_FIGHTING"
           };
         }
-        if (!_0x15b420.autoFightActive) {
+        if (!apiState.autoFightActive) {
           return {
             success: false,
             error: "AUTOFIGHT_INACTIVE"
           };
         }
-        _0x15b420.autoFightInProgress = true;
-        const _0x535cb2 = window.Engine;
-        if (!_0x535cb2) {
-          if (_0x15b420.autoFightActive && this._activeSession === _0x1021e6) {
-            let _0x3675c2 = setTimeout(() => {
-              if (_0x15b420.autoFightActive && !window.MargonemAPI.combat.stopRequested && this._activeSession === _0x1021e6) {
-                window.MargonemAPI.combat.autoFight(_0x1021e6);
+        apiState.autoFightInProgress = true;
+        const engine = window.Engine;
+        if (!engine) {
+          if (apiState.autoFightActive && this._activeSession === sessionId) {
+            let retryTimeoutId = setTimeout(() => {
+              if (apiState.autoFightActive && !window.MargonemAPI.combat.stopRequested && this._activeSession === sessionId) {
+                window.MargonemAPI.combat.autoFight(sessionId);
               }
             }, 5000);
-            _0x15b420.timers.autoFightTimeouts.add(_0x3675c2);
+            apiState.timers.autoFightTimeouts.add(retryTimeoutId);
           }
           return {
             success: false,
             error: "ENGINE_NOT_READY"
           };
-        } else if (!_0x15b420.allMobs.length) {
-          _0x15b420.map_cleaned = true;
+        } else if (!apiState.allMobs.length) {
+          apiState.map_cleaned = true;
           return {
             success: true,
             status: "MAP_CLEANED"
           };
         }
-        let _0x1c6f77;
+        let nearestMob;
         try {
-          const _0x1c7b19 = Promise.race([new Promise(_0x4af2d3 => {
-            _0x1c6f77 = window.MargonemAPI.combat.findNearestMob();
-            _0x4af2d3(_0x1c6f77);
-          }), new Promise((_0x281318, _0x3c545f) => setTimeout(() => _0x3c545f(new Error("FIND_MOB_TIMEOUT")), 3000))]);
-          _0x1c6f77 = await _0x1c7b19;
-        } catch (_0x1e82b1) {
-          console.error("Error finding nearest mob:", _0x1e82b1);
-          if (_0x15b420.autoFightActive && this._activeSession === _0x1021e6) {
-            let _0x4104fc = setTimeout(() => {
-              if (_0x15b420.autoFightActive && !window.MargonemAPI.combat.stopRequested && this._activeSession === _0x1021e6) {
-                window.MargonemAPI.combat.autoFight(_0x1021e6);
+          const findMobPromise = Promise.race([new Promise(resolve => {
+            nearestMob = window.MargonemAPI.combat.findNearestMob();
+            resolve(nearestMob);
+          }), new Promise((resolve, reject) => setTimeout(() => reject(new Error("FIND_MOB_TIMEOUT")), 3000))]);
+          nearestMob = await findMobPromise;
+        } catch (findError) {
+          console.error("Error finding nearest mob:", findError);
+          if (apiState.autoFightActive && this._activeSession === sessionId) {
+            let retryTimeoutId = setTimeout(() => {
+              if (apiState.autoFightActive && !window.MargonemAPI.combat.stopRequested && this._activeSession === sessionId) {
+                window.MargonemAPI.combat.autoFight(sessionId);
               }
             }, 2000);
-            _0x15b420.timers.autoFightTimeouts.add(_0x4104fc);
+            apiState.timers.autoFightTimeouts.add(retryTimeoutId);
           }
-          const _0x1bf7ce = {
+          const errorResult = {
             success: false,
-            error: _0x1e82b1.message || "FIND_MOB_ERROR"
+            error: findError.message || "FIND_MOB_ERROR"
           };
-          return _0x1bf7ce;
+          return errorResult;
         }
-        if (_0x1c6f77) {
+        if (nearestMob) {
           try {
-            await Promise.race([window.MargonemAPI.combat.goFightMob(_0x1c6f77.id, _0x1c6f77.x, _0x1c6f77.y, _0x1021e6), new Promise((_0x13686d, _0x34bc6e) => setTimeout(() => _0x34bc6e(new Error("GO_FIGHT_MOB_TIMEOUT")), 10000))]);
-            if (!_0x15b420.autoFightActive || this._activeSession !== _0x1021e6) {
+            await Promise.race([window.MargonemAPI.combat.goFightMob(nearestMob.id, nearestMob.x, nearestMob.y, sessionId), new Promise((resolve, reject) => setTimeout(() => reject(new Error("GO_FIGHT_MOB_TIMEOUT")), 10000))]);
+            if (!apiState.autoFightActive || this._activeSession !== sessionId) {
               return;
             }
             window.MargonemAPI.combat.recoverySystem.updateLastActionTime();
-          } catch (_0x426654) {
-            console.error("Error in goFightMob:", _0x426654);
-            if (_0x426654.message.includes("TIMEOUT")) {
-              _0x15b420.blockedMobs.add(_0x1c6f77.id);
+          } catch (fightError) {
+            console.error("Error in goFightMob:", fightError);
+            if (fightError.message.includes("TIMEOUT")) {
+              apiState.blockedMobs.add(nearestMob.id);
             }
-            if (_0x15b420.autoFightActive && this._activeSession === _0x1021e6) {
-              let _0x281380 = setTimeout(() => {
-                if (_0x15b420.autoFightActive && !window.MargonemAPI.combat.stopRequested && this._activeSession === _0x1021e6) {
-                  window.MargonemAPI.combat.autoFight(_0x1021e6);
+            if (apiState.autoFightActive && this._activeSession === sessionId) {
+              let retryTimeoutId = setTimeout(() => {
+                if (apiState.autoFightActive && !window.MargonemAPI.combat.stopRequested && this._activeSession === sessionId) {
+                  window.MargonemAPI.combat.autoFight(sessionId);
                 }
               }, 2000);
-              _0x15b420.timers.autoFightTimeouts.add(_0x281380);
+              apiState.timers.autoFightTimeouts.add(retryTimeoutId);
             }
           }
-        } else if (_0x15b420.autoFightActive && this._activeSession === _0x1021e6) {
-          let _0xb496f5 = setTimeout(() => {
-            if (_0x15b420.autoFightActive && !window.MargonemAPI.combat.stopRequested && this._activeSession === _0x1021e6) {
-              window.MargonemAPI.combat.autoFight(_0x1021e6);
+        } else if (apiState.autoFightActive && this._activeSession === sessionId) {
+          let noMobTimeoutId = setTimeout(() => {
+            if (apiState.autoFightActive && !window.MargonemAPI.combat.stopRequested && this._activeSession === sessionId) {
+              window.MargonemAPI.combat.autoFight(sessionId);
             }
           }, 2000);
-          _0x15b420.timers.autoFightTimeouts.add(_0xb496f5);
+          apiState.timers.autoFightTimeouts.add(noMobTimeoutId);
         }
         return {
           success: true
         };
-      } catch (_0x3905cf) {
-        console.error("Unexpected error in autoFight:", _0x3905cf);
-        const _0x5a85db = {
+      } catch (unexpectedError) {
+        console.error("Unexpected error in autoFight:", unexpectedError);
+        const errorResult = {
           success: false,
-          error: _0x3905cf.message || "UNEXPECTED_ERROR",
-          details: _0x3905cf.stack
+          error: unexpectedError.message || "UNEXPECTED_ERROR",
+          details: unexpectedError.stack
         };
-        return _0x5a85db;
+        return errorResult;
       } finally {
-        _0x15b420.autoFightInProgress = false;
+        apiState.autoFightInProgress = false;
         this._releaseLock("autoFight");
       }
     },
-    handleBackEvent: function (_0x342c4d, _0x58ed77) {
+    handleBackEvent: function (eventData, eventType) {
       if (!this._activeSession) {
         return;
       }
-      const _0x195ab3 = window.MargonemAPI.state;
-      Object.keys(this._asyncLocks).forEach(_0x220ad7 => {
-        if (_0x220ad7.startsWith("goFightMob")) {
-          this._releaseLock(_0x220ad7);
+      const apiState = window.MargonemAPI.state;
+      Object.keys(this._asyncLocks).forEach(lockKey => {
+        if (lockKey.startsWith("goFightMob")) {
+          this._releaseLock(lockKey);
         }
       });
-      if (_0x195ab3.timers.combatIntervals) {
-        _0x195ab3.timers.combatIntervals.forEach(_0x14c296 => {
-          clearInterval(_0x14c296);
+      if (apiState.timers.combatIntervals) {
+        apiState.timers.combatIntervals.forEach(intervalId => {
+          clearInterval(intervalId);
         });
-        _0x195ab3.timers.combatIntervals.clear();
+        apiState.timers.combatIntervals.clear();
       }
-      _0x195ab3.handlingBackEvent = true;
+      apiState.handlingBackEvent = true;
       this.recoverySystem.updateLastActionTime();
-      const _0x3c765b = this._activeSession;
+      const currentSession = this._activeSession;
       setTimeout(() => {
-        _0x195ab3.handlingBackEvent = false;
-        if (_0x195ab3.autoFightActive && this._activeSession === _0x3c765b && !this.stopRequested) {
-          this.autoFight(_0x3c765b);
+        apiState.handlingBackEvent = false;
+        if (apiState.autoFightActive && this._activeSession === currentSession && !this.stopRequested) {
+          this.autoFight(currentSession);
         }
       }, 50);
     },
-    clickInterface: async function (_0x20692e, _0x5f0818 = [], _0x1ab946 = 3000, _0x4f33b8 = "button") {
-      const _0x25a41f = document.querySelector(_0x20692e);
-      if (!_0x25a41f) {
-        console.warn(_0x4f33b8 + " not found: " + _0x20692e);
+    clickInterface: async function (selector, verifications = [], defaultTimeout = 3000, elementName = "button") {
+      const element = document.querySelector(selector);
+      if (!element) {
+        console.warn(elementName + " not found: " + selector);
         return {
           success: false,
           error: "ELEMENT_NOT_FOUND"
         };
       }
       try {
-        _0x25a41f.click();
-        console.log("Clicked " + _0x4f33b8 + ": " + _0x20692e);
-        if (_0x5f0818.length > 0) {
-          for (const _0x5e191e of _0x5f0818) {
-            const _0x1a31a0 = Date.now();
-            let _0x1360b1 = false;
-            while (Date.now() - _0x1a31a0 < (_0x5e191e.timeoutMs || _0x1ab946)) {
-              const _0x4b2ce2 = document.querySelector(_0x5e191e.selector);
-              if (_0x4b2ce2 !== null === _0x5e191e.shouldExist) {
-                _0x1360b1 = true;
+        element.click();
+        console.log("Clicked " + elementName + ": " + selector);
+        if (verifications.length > 0) {
+          for (const verification of verifications) {
+            const startTime = Date.now();
+            let verified = false;
+            while (Date.now() - startTime < (verification.timeoutMs || defaultTimeout)) {
+              const verifyElement = document.querySelector(verification.selector);
+              if (verifyElement !== null === verification.shouldExist) {
+                verified = true;
                 break;
               }
-              await new Promise(_0x5a4323 => setTimeout(_0x5a4323, 100));
+              await new Promise(resolve => setTimeout(resolve, 100));
             }
-            if (!_0x1360b1) {
-              const _0x3eaaa1 = {
+            if (!verified) {
+              const verifyError = {
                 success: false,
                 error: "CLICK_VERIFICATION_FAILED",
-                details: "Expected element " + _0x5e191e.selector + " to " + (_0x5e191e.shouldExist ? "exist" : "not exist")
+                details: "Expected element " + verification.selector + " to " + (verification.shouldExist ? "exist" : "not exist")
               };
-              return _0x3eaaa1;
+              return verifyError;
             }
           }
         }
         return {
           success: true
         };
-      } catch (_0x57bd3d) {
-        console.error("Error clicking " + _0x4f33b8 + ":", _0x57bd3d);
-        const _0x3d5a74 = {
+      } catch (clickError) {
+        console.error("Error clicking " + elementName + ":", clickError);
+        const errorResult = {
           success: false,
           error: "CLICK_ERROR",
-          details: _0x57bd3d.message
+          details: clickError.message
         };
-        return _0x3d5a74;
+        return errorResult;
       }
     },
-    goFightMob: async function (_0x5b6e74, _0x282eff, _0x44cd12, _0x47f42c) {
-      const _0x156ded = window.MargonemAPI.state;
-      const _0x318003 = window.Engine;
-      const _0x34b734 = "goFightMob_" + _0x5b6e74;
-      if (!_0x318003 || !_0x318003.hero) {
+    goFightMob: async function (mobId, mobX, mobY, sessionId) {
+      const apiState = window.MargonemAPI.state;
+      const engine = window.Engine;
+      const lockKey = "goFightMob_" + mobId;
+      if (!engine || !engine.hero) {
         return {
           success: false,
           error: "ENGINE_NOT_READY"
         };
       }
-      if (_0x156ded.handlingBackEvent) {
+      if (apiState.handlingBackEvent) {
         return {
           success: false,
           error: "HANDLING_BACK_EVENT"
         };
       }
-      if (!(await this._acquireLock(_0x34b734, 8000))) {
+      if (!(await this._acquireLock(lockKey, 8000))) {
         return {
           success: false,
           error: "MOB_MOVEMENT_IN_PROGRESS"
         };
       }
       try {
-        _0x282eff = parseFloat(_0x282eff);
-        _0x44cd12 = parseFloat(_0x44cd12);
-        if (isNaN(_0x282eff) || isNaN(_0x44cd12)) {
+        mobX = parseFloat(mobX);
+        mobY = parseFloat(mobY);
+        if (isNaN(mobX) || isNaN(mobY)) {
           return {
             success: false,
             error: "INVALID_COORDINATES"
@@ -883,147 +883,147 @@ Object.assign(window.MargonemAPI, {
           window.MargonemAPI.heroPositionMonitor.init();
         }
         window.MargonemAPI.heroPositionMonitor.backDetected = false;
-        const _0x4abc44 = {
-          x: _0x282eff,
-          y: _0x44cd12
+        const targetPosition = {
+          x: mobX,
+          y: mobY
         };
-        _0x318003.hero.autoGoTo(_0x4abc44, false);
-        _0x156ded.currentTargetId = _0x5b6e74;
-        return new Promise((_0x33db11, _0xc976e0) => {
-          const _0x4de81e = setInterval(async () => {
+        engine.hero.autoGoTo(targetPosition, false);
+        apiState.currentTargetId = mobId;
+        return new Promise((resolve, reject) => {
+          const checkInterval = setInterval(async () => {
             if (window.MargonemAPI.heroPositionMonitor.backDetected) {
-              clearInterval(_0x4de81e);
-              _0x156ded.timers.combatIntervals.delete(_0x4de81e);
-              _0xc976e0(new Error("BACK_DETECTED"));
+              clearInterval(checkInterval);
+              apiState.timers.combatIntervals.delete(checkInterval);
+              reject(new Error("BACK_DETECTED"));
               return;
             }
-            if (!_0x156ded.autoFightActive || window.MargonemAPI.combat.stopRequested || this._activeSession !== _0x47f42c) {
-              clearInterval(_0x4de81e);
-              _0x156ded.timers.combatIntervals.delete(_0x4de81e);
-              _0xc976e0(new Error("SESSION_CANCELLED"));
+            if (!apiState.autoFightActive || window.MargonemAPI.combat.stopRequested || this._activeSession !== sessionId) {
+              clearInterval(checkInterval);
+              apiState.timers.combatIntervals.delete(checkInterval);
+              reject(new Error("SESSION_CANCELLED"));
               return;
             }
-            const _0x415395 = _0x318003.hero;
-            if (!_0x415395) {
-              _0xc976e0(new Error("HERO_NOT_FOUND"));
+            const hero = engine.hero;
+            if (!hero) {
+              reject(new Error("HERO_NOT_FOUND"));
               return;
             }
             try {
-              const _0x42d1af = Math.floor(parseFloat(_0x415395.x || _0x415395.d && _0x415395.d.x || 0));
-              const _0x498f0b = Math.floor(parseFloat(_0x415395.y || _0x415395.d && _0x415395.d.y || 0));
-              if (isNaN(_0x42d1af) || isNaN(_0x498f0b)) {
+              const heroX = Math.floor(parseFloat(hero.x || hero.d && hero.d.x || 0));
+              const heroY = Math.floor(parseFloat(hero.y || hero.d && hero.d.y || 0));
+              if (isNaN(heroX) || isNaN(heroY)) {
                 console.warn("Invalid hero coordinates");
                 return;
               }
-              const _0x2268b5 = Math.abs(_0x42d1af - Math.floor(_0x282eff));
-              const _0x541851 = Math.abs(_0x498f0b - Math.floor(_0x44cd12));
-              if (_0x2268b5 <= 1 && _0x541851 <= 1) {
-                clearInterval(_0x4de81e);
-                _0x156ded.timers.combatIntervals.delete(_0x4de81e);
-                if (_0x318003.interface && typeof _0x318003.interface.clickAutofightNearMob === "function") {
-                  if (!_0x156ded.autoFightActive || this._activeSession !== _0x47f42c) {
-                    _0xc976e0(new Error("SESSION_CANCELLED"));
+              const distX = Math.abs(heroX - Math.floor(mobX));
+              const distY = Math.abs(heroY - Math.floor(mobY));
+              if (distX <= 1 && distY <= 1) {
+                clearInterval(checkInterval);
+                apiState.timers.combatIntervals.delete(checkInterval);
+                if (engine.interface && typeof engine.interface.clickAutofightNearMob === "function") {
+                  if (!apiState.autoFightActive || this._activeSession !== sessionId) {
+                    reject(new Error("SESSION_CANCELLED"));
                     return;
                   }
                   if (typeof window.lastClickAutofightTime === "undefined") {
                     window.lastClickAutofightTime = 0;
                   }
-                  const _0x372095 = Date.now();
-                  if (_0x372095 - window.lastClickAutofightTime >= 1000) {
-                    window.lastClickAutofightTime = _0x372095;
+                  const currentTime = Date.now();
+                  if (currentTime - window.lastClickAutofightTime >= 1000) {
+                    window.lastClickAutofightTime = currentTime;
                     try {
-                      await Promise.race([new Promise(_0x103667 => {
-                        _0x318003.interface.clickAutofightNearMob();
-                        _0x103667();
-                      }), new Promise((_0x1c82b8, _0x46a1f1) => setTimeout(() => _0x46a1f1(new Error("CLICK_TIMEOUT")), 2000))]);
+                      await Promise.race([new Promise(resolveClick => {
+                        engine.interface.clickAutofightNearMob();
+                        resolveClick();
+                      }), new Promise((resolveTimeout, rejectTimeout) => setTimeout(() => rejectTimeout(new Error("CLICK_TIMEOUT")), 2000))]);
                       window.MargonemAPI.combat.recoverySystem.updateLastActionTime();
                       setTimeout(async () => {
-                        if (!_0x156ded.autoFightActive || this._activeSession !== _0x47f42c) {
+                        if (!apiState.autoFightActive || this._activeSession !== sessionId) {
                           return;
                         }
-                        const _0x4274b8 = await window.MargonemAPI.combat.clickInterface("div.button.green.close-battle-ground.small", [{
+                        const closeBattleResult = await window.MargonemAPI.combat.clickInterface("div.button.green.close-battle-ground.small", [{
                           selector: "div.button.green.close-battle-ground.small",
                           shouldExist: false
                         }], 300, "close battle button");
-                        if (!_0x156ded.autoFightActive || this._activeSession !== _0x47f42c) {
+                        if (!apiState.autoFightActive || this._activeSession !== sessionId) {
                           return;
                         }
-                        const _0x29727f = await window.MargonemAPI.combat.clickInterface(".accept-button .button.green.small", [{
+                        const acceptResult = await window.MargonemAPI.combat.clickInterface(".accept-button .button.green.small", [{
                           selector: ".accept-button",
                           shouldExist: false
                         }], 300, "accept button");
-                        if (_0x156ded.autoFightActive && !_0x156ded.autoFightInProgress && this._activeSession === _0x47f42c) {
-                          window.MargonemAPI.combat.autoFight(_0x47f42c);
+                        if (apiState.autoFightActive && !apiState.autoFightInProgress && this._activeSession === sessionId) {
+                          window.MargonemAPI.combat.autoFight(sessionId);
                         }
                       }, 100);
-                      _0x33db11({
+                      resolve({
                         success: true
                       });
-                    } catch (_0x56d398) {
-                      console.error("Error in fight sequence:", _0x56d398);
-                      if (_0x156ded.autoFightActive && !_0x156ded.autoFightInProgress && this._activeSession === _0x47f42c) {
+                    } catch (fightSequenceError) {
+                      console.error("Error in fight sequence:", fightSequenceError);
+                      if (apiState.autoFightActive && !apiState.autoFightInProgress && this._activeSession === sessionId) {
                         setTimeout(() => {
-                          if (_0x156ded.autoFightActive && this._activeSession === _0x47f42c) {
-                            window.MargonemAPI.combat.autoFight(_0x47f42c);
+                          if (apiState.autoFightActive && this._activeSession === sessionId) {
+                            window.MargonemAPI.combat.autoFight(sessionId);
                           }
                         }, 500);
                       }
-                      const _0x18ca19 = {
+                      const errorResult = {
                         success: false,
-                        error: _0x56d398.message
+                        error: fightSequenceError.message
                       };
-                      _0x33db11(_0x18ca19);
+                      resolve(errorResult);
                     }
                   } else {
                     console.warn("Click throttled, waiting");
                     setTimeout(() => {
-                      if (_0x156ded.autoFightActive && this._activeSession === _0x47f42c) {
-                        window.MargonemAPI.combat.autoFight(_0x47f42c);
+                      if (apiState.autoFightActive && this._activeSession === sessionId) {
+                        window.MargonemAPI.combat.autoFight(sessionId);
                       }
                     }, 500);
-                    _0x33db11({
+                    resolve({
                       success: false,
                       error: "CLICK_THROTTLED"
                     });
                   }
                 } else {
-                  if (_0x156ded.autoFightActive && !_0x156ded.autoFightInProgress && this._activeSession === _0x47f42c) {
+                  if (apiState.autoFightActive && !apiState.autoFightInProgress && this._activeSession === sessionId) {
                     setTimeout(() => {
-                      if (_0x156ded.autoFightActive && this._activeSession === _0x47f42c) {
-                        window.MargonemAPI.combat.autoFight(_0x47f42c);
+                      if (apiState.autoFightActive && this._activeSession === sessionId) {
+                        window.MargonemAPI.combat.autoFight(sessionId);
                       }
                     }, 500);
                   }
-                  _0x33db11({
+                  resolve({
                     success: false,
                     error: "INTERFACE_NOT_READY"
                   });
                 }
               }
-            } catch (_0x46149d) {
-              console.error("Error in movement check:", _0x46149d);
+            } catch (movementError) {
+              console.error("Error in movement check:", movementError);
             }
           }, 250);
-          _0x156ded.timers.combatIntervals.add(_0x4de81e);
+          apiState.timers.combatIntervals.add(checkInterval);
         });
-      } catch (_0x16b6f4) {
-        console.error("Error in goFightMob:", _0x16b6f4);
-        if (_0x16b6f4.message === "BACK_DETECTED") {
-          const _0x7d9874 = this._activeSession;
+      } catch (error) {
+        console.error("Error in goFightMob:", error);
+        if (error.message === "BACK_DETECTED") {
+          const currentSession = this._activeSession;
           setTimeout(() => {
-            if (_0x156ded.autoFightActive && this._activeSession === _0x7d9874 && !this.stopRequested) {
-              this.autoFight(_0x7d9874);
+            if (apiState.autoFightActive && this._activeSession === currentSession && !this.stopRequested) {
+              this.autoFight(currentSession);
             }
           }, 50);
         }
-        const _0x3d751e = {
+        const errorResult = {
           success: false,
-          error: _0x16b6f4.message || "UNEXPECTED_ERROR",
-          details: _0x16b6f4.stack
+          error: error.message || "UNEXPECTED_ERROR",
+          details: error.stack
         };
-        return _0x3d751e;
+        return errorResult;
       } finally {
-        this._releaseLock(_0x34b734);
+        this._releaseLock(lockKey);
       }
     },
     findNearestMob: function () {
@@ -1031,150 +1031,150 @@ Object.assign(window.MargonemAPI, {
         if (!window.MargonemAPI.heroPositionMonitor.isInitialized) {
           window.MargonemAPI.heroPositionMonitor.init();
         }
-        const _0x3d0b26 = window.MargonemAPI.state;
-        const _0x4b7fd9 = window.Engine;
-        if (!_0x4b7fd9?.hero) {
+        const apiState = window.MargonemAPI.state;
+        const engine = window.Engine;
+        if (!engine?.hero) {
           return null;
         }
         window.MargonemAPI.pathfinding.initializeCollisionGrid();
-        const _0x4055c0 = window.MargonemAPI.getServerPosition();
-        const _0x2b573f = Math.floor(_0x4055c0?.x || _0x4b7fd9.hero.lastServerX || _0x4b7fd9.hero.d.x || 0);
-        const _0x416e53 = Math.floor(_0x4055c0?.y || _0x4b7fd9.hero.lastServerY || _0x4b7fd9.hero.d.y || 0);
-        const _0x369360 = _0x4b7fd9.hero.lvl || _0x4b7fd9.hero.d && _0x4b7fd9.hero.d.lvl || 1;
-        if (isNaN(_0x2b573f) || isNaN(_0x416e53)) {
-          const _0x5a9265 = {
-            heroX: _0x2b573f,
-            heroY: _0x416e53
+        const serverPosition = window.MargonemAPI.getServerPosition();
+        const heroX = Math.floor(serverPosition?.x || engine.hero.lastServerX || engine.hero.d.x || 0);
+        const heroY = Math.floor(serverPosition?.y || engine.hero.lastServerY || engine.hero.d.y || 0);
+        const heroLevel = engine.hero.lvl || engine.hero.d && engine.hero.d.lvl || 1;
+        if (isNaN(heroX) || isNaN(heroY)) {
+          const positionLog = {
+            heroX: heroX,
+            heroY: heroY
           };
-          console.error("Invalid hero position:", _0x5a9265);
+          console.error("Invalid hero position:", positionLog);
           return null;
         }
-        const _0x32cf78 = _0x3d0b26.allMobs.filter(_0x3e67b3 => {
-          const _0x2c2842 = _0x3d0b26.blockedMobs.has(_0x3e67b3.id);
-          const _0x43c096 = _0x3d0b26.levelRange.min !== null || _0x3d0b26.levelRange.max !== null;
-          let _0x11dc11 = false;
-          if (_0x43c096) {
-            const _0x261d15 = _0x3d0b26.levelRange.min || 1;
-            const _0x4201b8 = _0x3d0b26.levelRange.max || 300;
-            _0x11dc11 = _0x3e67b3.lvl >= _0x261d15 && _0x3e67b3.lvl <= _0x4201b8;
+        const validMobs = apiState.allMobs.filter(mob => {
+          const isBlocked = apiState.blockedMobs.has(mob.id);
+          const hasLevelRange = apiState.levelRange.min !== null || apiState.levelRange.max !== null;
+          let isValid = false;
+          if (hasLevelRange) {
+            const minLevel = apiState.levelRange.min || 1;
+            const maxLevel = apiState.levelRange.max || 300;
+            isValid = mob.lvl >= minLevel && mob.lvl <= maxLevel;
           } else {
-            _0x11dc11 = _0x3d0b26.selectedNicks.includes(_0x3e67b3.nick);
+            isValid = apiState.selectedNicks.includes(mob.nick);
           }
-          return _0x11dc11 && !_0x2c2842;
+          return isValid && !isBlocked;
         });
-        if (_0x32cf78.length === 0) {
-          _0x3d0b26.map_cleaned = true;
+        if (validMobs.length === 0) {
+          apiState.map_cleaned = true;
           return null;
         }
-        let _0x40076a = null;
-        let _0x4e0360 = Infinity;
-        const _0x55d4af = [..._0x32cf78].sort((_0xaa1e1e, _0x133d59) => {
-          const _0x56b804 = Math.abs(_0xaa1e1e.x - _0x2b573f) + Math.abs(_0xaa1e1e.y - _0x416e53);
-          const _0x331593 = Math.abs(_0x133d59.x - _0x2b573f) + Math.abs(_0x133d59.y - _0x416e53);
-          return _0x56b804 - _0x331593;
+        let nearestMob = null;
+        let shortestPathLength = Infinity;
+        const sortedMobs = [...validMobs].sort((mobA, mobB) => {
+          const distA = Math.abs(mobA.x - heroX) + Math.abs(mobA.y - heroY);
+          const distB = Math.abs(mobB.x - heroX) + Math.abs(mobB.y - heroY);
+          return distA - distB;
         });
-        const _0x24841e = _0x55d4af.slice(0, 10);
-        for (const _0x4914dc of _0x24841e) {
-          const _0x1234fe = Math.abs(_0x4914dc.x - _0x2b573f) + Math.abs(_0x4914dc.y - _0x416e53);
-          if (_0x1234fe >= _0x4e0360) {
+        const candidateMobs = sortedMobs.slice(0, 10);
+        for (const mob of candidateMobs) {
+          const manhattanDist = Math.abs(mob.x - heroX) + Math.abs(mob.y - heroY);
+          if (manhattanDist >= shortestPathLength) {
             continue;
           }
-          let _0x232f77 = null;
+          let path = null;
           try {
-            _0x232f77 = window.MargonemAPI.pathfinding.findPathWithBackHandling(_0x2b573f, _0x416e53, Math.floor(_0x4914dc.x), Math.floor(_0x4914dc.y));
-          } catch (_0x1435e8) {
-            console.error("Pathfinding error:", _0x1435e8);
+            path = window.MargonemAPI.pathfinding.findPathWithBackHandling(heroX, heroY, Math.floor(mob.x), Math.floor(mob.y));
+          } catch (pathError) {
+            console.error("Pathfinding error:", pathError);
             continue;
           }
-          if (!_0x232f77 || _0x232f77.length === 0) {
+          if (!path || path.length === 0) {
             continue;
           }
-          const _0x321ed1 = _0x232f77.length - 1;
-          if (_0x321ed1 < _0x4e0360) {
-            _0x4e0360 = _0x321ed1;
-            _0x40076a = _0x4914dc;
+          const pathLength = path.length - 1;
+          if (pathLength < shortestPathLength) {
+            shortestPathLength = pathLength;
+            nearestMob = mob;
           }
         }
-        if (!_0x40076a) {
-          _0x3d0b26.map_cleaned = true;
+        if (!nearestMob) {
+          apiState.map_cleaned = true;
           return null;
         }
-        return _0x40076a;
-      } catch (_0x3bb001) {
-        console.error("Error in enhanced findNearestMob:", _0x3bb001);
-        const _0x36e3db = window.MargonemAPI.state;
-        const _0x103233 = window.Engine;
-        if (!_0x103233?.hero) {
+        return nearestMob;
+      } catch (error) {
+        console.error("Error in enhanced findNearestMob:", error);
+        const fallbackState = window.MargonemAPI.state;
+        const fallbackEngine = window.Engine;
+        if (!fallbackEngine?.hero) {
           return null;
         }
         try {
           window.MargonemAPI.pathfinding.initializeCollisionGrid();
-          const _0x2d10e7 = Math.floor(_0x103233.hero.x || _0x103233.hero.d && _0x103233.hero.d.x || 0);
-          const _0x33b82a = Math.floor(_0x103233.hero.y || _0x103233.hero.d && _0x103233.hero.d.y || 0);
-          const _0x2d4c45 = _0x103233.hero.lvl || _0x103233.hero.d && _0x103233.hero.d.lvl || 1;
-          if (isNaN(_0x2d10e7) || isNaN(_0x33b82a)) {
-            const _0x536828 = {
-              heroX: _0x2d10e7,
-              heroY: _0x33b82a
+          const heroX = Math.floor(fallbackEngine.hero.x || fallbackEngine.hero.d && fallbackEngine.hero.d.x || 0);
+          const heroY = Math.floor(fallbackEngine.hero.y || fallbackEngine.hero.d && fallbackEngine.hero.d.y || 0);
+          const heroLevel = fallbackEngine.hero.lvl || fallbackEngine.hero.d && fallbackEngine.hero.d.lvl || 1;
+          if (isNaN(heroX) || isNaN(heroY)) {
+            const positionLog = {
+              heroX: heroX,
+              heroY: heroY
             };
-            console.error("Invalid hero position:", _0x536828);
+            console.error("Invalid hero position:", positionLog);
             return null;
           }
-          const _0x1727c3 = _0x36e3db.allMobs.filter(_0x3a80c2 => {
-            const _0x476864 = _0x36e3db.blockedMobs.has(_0x3a80c2.id);
-            const _0x3a9d9b = _0x36e3db.levelRange.min !== null || _0x36e3db.levelRange.max !== null;
-            let _0x4c3554 = false;
-            if (_0x3a9d9b) {
-              const _0x4982fa = _0x36e3db.levelRange.min || 1;
-              const _0x25bd10 = _0x36e3db.levelRange.max || 300;
-              _0x4c3554 = _0x3a80c2.lvl >= _0x4982fa && _0x3a80c2.lvl <= _0x25bd10;
+          const validMobs = fallbackState.allMobs.filter(mob => {
+            const isBlocked = fallbackState.blockedMobs.has(mob.id);
+            const hasLevelRange = fallbackState.levelRange.min !== null || fallbackState.levelRange.max !== null;
+            let isValid = false;
+            if (hasLevelRange) {
+              const minLevel = fallbackState.levelRange.min || 1;
+              const maxLevel = fallbackState.levelRange.max || 300;
+              isValid = mob.lvl >= minLevel && mob.lvl <= maxLevel;
             } else {
-              _0x4c3554 = _0x36e3db.selectedNicks.includes(_0x3a80c2.nick);
+              isValid = fallbackState.selectedNicks.includes(mob.nick);
             }
-            return _0x4c3554 && !_0x476864;
+            return isValid && !isBlocked;
           });
-          if (_0x1727c3.length === 0) {
-            _0x36e3db.map_cleaned = true;
+          if (validMobs.length === 0) {
+            fallbackState.map_cleaned = true;
             return null;
           }
-          let _0x1616ad = null;
-          let _0x1eff41 = Infinity;
-          const _0x530a71 = [..._0x1727c3].sort((_0xb23dd3, _0x4fe3b8) => {
-            const _0x5135b1 = Math.abs(_0xb23dd3.x - _0x2d10e7) + Math.abs(_0xb23dd3.y - _0x33b82a);
-            const _0x37ae62 = Math.abs(_0x4fe3b8.x - _0x2d10e7) + Math.abs(_0x4fe3b8.y - _0x33b82a);
-            return _0x5135b1 - _0x37ae62;
+          let nearestMob = null;
+          let shortestPathLength = Infinity;
+          const sortedMobs = [...validMobs].sort((mobA, mobB) => {
+            const distA = Math.abs(mobA.x - heroX) + Math.abs(mobA.y - heroY);
+            const distB = Math.abs(mobB.x - heroX) + Math.abs(mobB.y - heroY);
+            return distA - distB;
           });
-          const _0x13cd1a = _0x530a71.slice(0, 10);
-          for (const _0x39999f of _0x13cd1a) {
-            const _0x3c1907 = Math.abs(_0x39999f.x - _0x2d10e7) + Math.abs(_0x39999f.y - _0x33b82a);
-            if (_0x3c1907 >= _0x1eff41) {
+          const candidateMobs = sortedMobs.slice(0, 10);
+          for (const mob of candidateMobs) {
+            const manhattanDist = Math.abs(mob.x - heroX) + Math.abs(mob.y - heroY);
+            if (manhattanDist >= shortestPathLength) {
               continue;
             }
-            let _0xb545e8 = false;
-            let _0x1a4d72 = null;
+            let pathFound = false;
+            let path = null;
             try {
-              _0xb545e8 = true;
-              _0x1a4d72 = window.MargonemAPI.pathfinding.findPath(_0x2d10e7, _0x33b82a, Math.floor(_0x39999f.x), Math.floor(_0x39999f.y));
-            } catch (_0x2b605c) {
-              console.error("Pathfinding error:", _0x2b605c);
-              _0xb545e8 = false;
+              pathFound = true;
+              path = window.MargonemAPI.pathfinding.findPath(heroX, heroY, Math.floor(mob.x), Math.floor(mob.y));
+            } catch (pathError) {
+              console.error("Pathfinding error:", pathError);
+              pathFound = false;
             }
-            if (!_0xb545e8 || !_0x1a4d72 || _0x1a4d72.length === 0) {
+            if (!pathFound || !path || path.length === 0) {
               continue;
             }
-            const _0x40179f = _0x1a4d72.length - 1;
-            if (_0x40179f < _0x1eff41) {
-              _0x1eff41 = _0x40179f;
-              _0x1616ad = _0x39999f;
+            const pathLength = path.length - 1;
+            if (pathLength < shortestPathLength) {
+              shortestPathLength = pathLength;
+              nearestMob = mob;
             }
           }
-          if (!_0x1616ad) {
-            _0x36e3db.map_cleaned = true;
+          if (!nearestMob) {
+            fallbackState.map_cleaned = true;
             return null;
           }
-          return _0x1616ad;
-        } catch (_0x1d8fe3) {
-          console.error("Fallback error in findNearestMob:", _0x1d8fe3);
+          return nearestMob;
+        } catch (fallbackError) {
+          console.error("Fallback error in findNearestMob:", fallbackError);
           return null;
         }
       }
@@ -1197,35 +1197,35 @@ Object.assign(window.MargonemAPI, {
         networkQuality: "good"
       },
       _asyncLocks: {},
-      async _acquireLock(_0x46eb48, _0x8eaa8b = 5000) {
-        if (this._asyncLocks[_0x46eb48]) {
+      async _acquireLock(lockKey, lockTimeout = 5000) {
+        if (this._asyncLocks[lockKey]) {
           return false;
         }
-        this._asyncLocks[_0x46eb48] = {
+        this._asyncLocks[lockKey] = {
           acquired: true,
           time: Date.now(),
           timeout: setTimeout(() => {
-            console.warn("Force releasing recovery lock: " + _0x46eb48 + " due to timeout");
-            this._releaseLock(_0x46eb48);
-          }, _0x8eaa8b)
+            console.warn("Force releasing recovery lock: " + lockKey + " due to timeout");
+            this._releaseLock(lockKey);
+          }, lockTimeout)
         };
         return true;
       },
-      _releaseLock(_0x584c18) {
-        if (this._asyncLocks[_0x584c18]) {
-          if (this._asyncLocks[_0x584c18].timeout) {
-            clearTimeout(this._asyncLocks[_0x584c18].timeout);
+      _releaseLock(lockKey) {
+        if (this._asyncLocks[lockKey]) {
+          if (this._asyncLocks[lockKey].timeout) {
+            clearTimeout(this._asyncLocks[lockKey].timeout);
           }
-          delete this._asyncLocks[_0x584c18];
+          delete this._asyncLocks[lockKey];
         }
       },
-      getNetworkAdjustedTimeout(_0x237cd7) {
-        const _0x23de16 = {
+      getNetworkAdjustedTimeout(baseTimeout) {
+        const multipliers = {
           good: 1,
           medium: 1.5,
           poor: 2.5
         };
-        return _0x237cd7 * _0x23de16[this.state.networkQuality];
+        return baseTimeout * multipliers[this.state.networkQuality];
       },
       startMonitoring: async function () {
         if (!(await this._acquireLock("startMonitoring", 10000))) {
@@ -1270,12 +1270,12 @@ Object.assign(window.MargonemAPI, {
               return;
             }
             try {
-              const _0x270789 = document.querySelector("div.button.green.auto-fight-btn.small");
-              if (_0x270789) {
+              const autoFightBtn = document.querySelector("div.button.green.auto-fight-btn.small");
+              if (autoFightBtn) {
                 await window.MargonemAPI.combat.clickInterface("div.button.green.auto-fight-btn.small", [], 2000, "auto fight button");
               }
-            } catch (_0x1cd99d) {
-              console.error("Error clicking auto-fight button:", _0x1cd99d);
+            } catch (clickError) {
+              console.error("Error clicking auto-fight button:", clickError);
             }
           }, 1000);
           this.state.checkIntervalId = setInterval(async () => {
@@ -1284,21 +1284,21 @@ Object.assign(window.MargonemAPI, {
             }
             try {
               await this.checkState();
-            } catch (_0x3d1d63) {
-              console.error("Error in checkState:", _0x3d1d63);
+            } catch (checkError) {
+              console.error("Error in checkState:", checkError);
             }
           }, this.config.checkInterval);
           return {
             success: true
           };
-        } catch (_0x3f038e) {
-          console.error("Error starting monitoring:", _0x3f038e);
-          const _0xc3a310 = {
+        } catch (error) {
+          console.error("Error starting monitoring:", error);
+          const errorResult = {
             success: false,
-            error: _0x3f038e.message || "MONITORING_ERROR",
-            details: _0x3f038e.stack
+            error: error.message || "MONITORING_ERROR",
+            details: error.stack
           };
-          return _0xc3a310;
+          return errorResult;
         } finally {
           this._releaseLock("startMonitoring");
         }
@@ -1317,38 +1317,38 @@ Object.assign(window.MargonemAPI, {
           this.state.retryCount = 0;
           this.state.recoveryActive = false;
           this.state.monitoringActive = false;
-          Object.keys(this._asyncLocks).forEach(_0x148594 => {
-            this._releaseLock(_0x148594);
+          Object.keys(this._asyncLocks).forEach(lockKey => {
+            this._releaseLock(lockKey);
           });
           return {
             success: true
           };
-        } catch (_0x4521ea) {
-          console.error("Error stopping monitoring:", _0x4521ea);
-          const _0x58b6b1 = {
+        } catch (error) {
+          console.error("Error stopping monitoring:", error);
+          const errorResult = {
             success: false,
-            error: _0x4521ea.message
+            error: error.message
           };
-          return _0x58b6b1;
+          return errorResult;
         }
       },
       updateLastActionTime: function () {
         if (!this.state.monitoringActive) {
           return false;
         }
-        const _0xdff358 = Date.now();
-        const _0x311397 = _0xdff358 - (this.state.lastActionTime || 0);
-        if (_0x311397 > 8000 && this.state.networkQuality !== "poor") {
+        const currentTime = Date.now();
+        const timeSinceLastAction = currentTime - (this.state.lastActionTime || 0);
+        if (timeSinceLastAction > 8000 && this.state.networkQuality !== "poor") {
           this.state.networkQuality = "poor";
           console.warn("Network quality set to poor");
-        } else if (_0x311397 > 3000 && this.state.networkQuality !== "medium") {
+        } else if (timeSinceLastAction > 3000 && this.state.networkQuality !== "medium") {
           this.state.networkQuality = "medium";
           console.log("Network quality set to medium");
-        } else if (_0x311397 < 1000 && this.state.networkQuality !== "good") {
+        } else if (timeSinceLastAction < 1000 && this.state.networkQuality !== "good") {
           this.state.networkQuality = "good";
           console.log("Network quality set to good");
         }
-        this.state.lastActionTime = _0xdff358;
+        this.state.lastActionTime = currentTime;
         if (this.state.recoveryActive) {
           this.state.recoveryActive = false;
           this.state.retryCount = 0;
@@ -1382,23 +1382,23 @@ Object.assign(window.MargonemAPI, {
               error: "AUTOFIGHT_INACTIVE"
             };
           }
-          const _0x68330d = Date.now() - (this.state.lastActionTime || Date.now());
-          const _0x15cfa3 = this.getNetworkAdjustedTimeout(this.config.activityTimeout);
-          if (!this.state.recoveryActive && _0x68330d > _0x15cfa3) {
+          const timeSinceLastAction = Date.now() - (this.state.lastActionTime || Date.now());
+          const adjustedTimeout = this.getNetworkAdjustedTimeout(this.config.activityTimeout);
+          if (!this.state.recoveryActive && timeSinceLastAction > adjustedTimeout) {
             return await this.initiateRecovery();
           }
           return {
             success: true,
             status: "OK"
           };
-        } catch (_0x575df4) {
-          console.error("Error in checkState:", _0x575df4);
-          const _0x3e5f91 = {
+        } catch (error) {
+          console.error("Error in checkState:", error);
+          const errorResult = {
             success: false,
-            error: _0x575df4.message || "CHECK_ERROR",
-            details: _0x575df4.stack
+            error: error.message || "CHECK_ERROR",
+            details: error.stack
           };
-          return _0x3e5f91;
+          return errorResult;
         } finally {
           this._releaseLock("checkState");
         }
@@ -1424,29 +1424,29 @@ Object.assign(window.MargonemAPI, {
               error: "MONITORING_INACTIVE"
             };
           }
-          const _0x16da65 = this.config.maxRetries;
-          const _0x456cd0 = this.config.retryDelay;
-          if (this.state.recoveryActive || this.state.retryCount >= _0x16da65) {
+          const maxRetries = this.config.maxRetries;
+          const retryDelay = this.config.retryDelay;
+          if (this.state.recoveryActive || this.state.retryCount >= maxRetries) {
             return await this.fullSystemReset();
           }
           this.state.recoveryActive = true;
           this.state.retryCount++;
-          const _0x1ea16b = _0x456cd0 * Math.pow(2, this.state.retryCount - 1);
-          console.log("Recovery attempt " + this.state.retryCount + "/" + _0x16da65 + " with delay " + _0x1ea16b + "ms");
-          return await this.executeRecoverySequence(_0x1ea16b);
-        } catch (_0x579382) {
-          console.error("Error in initiateRecovery:", _0x579382);
-          const _0x569b04 = {
+          const exponentialDelay = retryDelay * Math.pow(2, this.state.retryCount - 1);
+          console.log("Recovery attempt " + this.state.retryCount + "/" + maxRetries + " with delay " + exponentialDelay + "ms");
+          return await this.executeRecoverySequence(exponentialDelay);
+        } catch (error) {
+          console.error("Error in initiateRecovery:", error);
+          const errorResult = {
             success: false,
-            error: _0x579382.message || "RECOVERY_ERROR",
-            details: _0x579382.stack
+            error: error.message || "RECOVERY_ERROR",
+            details: error.stack
           };
-          return _0x569b04;
+          return errorResult;
         } finally {
           this._releaseLock("initiateRecovery");
         }
       },
-      async executeRecoverySequence(_0x52c218 = this.config.retryDelay) {
+      async executeRecoverySequence(delay = this.config.retryDelay) {
         if (window.MargonemAPI.combat.stopRequested) {
           return {
             success: false,
@@ -1466,15 +1466,15 @@ Object.assign(window.MargonemAPI, {
               error: "MONITORING_INACTIVE"
             };
           }
-          const _0x1bcc6c = this.closeAllDialogs();
+          const dialogsPromise = this.closeAllDialogs();
           window.MargonemAPI.combat.clearBlockedMobs();
-          await _0x1bcc6c;
+          await dialogsPromise;
           if (this.state.retryCount === 1) {
-            _0x52c218 = Math.min(_0x52c218, 200);
+            delay = Math.min(delay, 200);
           } else {
-            _0x52c218 = Math.min(_0x52c218, 500);
+            delay = Math.min(delay, 500);
           }
-          await new Promise(_0x57f9e4 => setTimeout(_0x57f9e4, _0x52c218));
+          await new Promise(resolve => setTimeout(resolve, delay));
           if (!this.state.monitoringActive || this.stopRequested) {
             return {
               success: false,
@@ -1483,10 +1483,10 @@ Object.assign(window.MargonemAPI, {
           }
           if (window.MargonemAPI.state.autoFightActive) {
             if (!this.stopRequested) {
-              const _0x4b03a2 = window.MargonemAPI.combat._activeSession;
-              if (_0x4b03a2) {
+              const activeSession = window.MargonemAPI.combat._activeSession;
+              if (activeSession) {
                 setTimeout(() => {
-                  window.MargonemAPI.combat.autoFight(_0x4b03a2);
+                  window.MargonemAPI.combat.autoFight(activeSession);
                 }, 10);
               }
             }
@@ -1495,20 +1495,20 @@ Object.assign(window.MargonemAPI, {
           return {
             success: true
           };
-        } catch (_0x3c2da8) {
-          console.error("Error in executeRecoverySequence:", _0x3c2da8);
-          const _0x429423 = {
+        } catch (error) {
+          console.error("Error in executeRecoverySequence:", error);
+          const errorResult = {
             success: false,
-            error: _0x3c2da8.message || "RECOVERY_SEQUENCE_ERROR",
-            details: _0x3c2da8.stack
+            error: error.message || "RECOVERY_SEQUENCE_ERROR",
+            details: error.stack
           };
-          return _0x429423;
+          return errorResult;
         } finally {
           this._releaseLock("executeRecoverySequence");
         }
       },
       closeAllDialogs: async function () {
-        const _0x2744cf = [{
+        const dialogSelectors = [{
           selector: "div.button.green.close-battle-ground.small",
           desc: "close battle"
         }, {
@@ -1524,13 +1524,13 @@ Object.assign(window.MargonemAPI, {
           selector: ".close-dialog",
           desc: "close dialog"
         }];
-        const _0x3313a6 = _0x2744cf.map(_0x23df43 => {
-          return window.MargonemAPI.combat.clickInterface(_0x23df43.selector, [], 200, _0x23df43.desc).catch(_0x550c36 => ({
+        const closePromises = dialogSelectors.map(dialog => {
+          return window.MargonemAPI.combat.clickInterface(dialog.selector, [], 200, dialog.desc).catch(error => ({
             success: false,
-            error: _0x550c36.message
+            error: error.message
           }));
         });
-        await Promise.all(_0x3313a6);
+        await Promise.all(closePromises);
         return {
           success: true
         };
@@ -1556,45 +1556,45 @@ Object.assign(window.MargonemAPI, {
             };
           }
           console.log("Performing full system reset");
-          const _0x2b131f = {
+          const savedLevelRange = {
             min: window.MargonemAPI.state.levelRange.min || null,
             max: window.MargonemAPI.state.levelRange.max || null
           };
-          const _0x410139 = _0x2b131f;
-          const _0x1780f5 = [...window.MargonemAPI.state.selectedNicks];
+          const levelRangeConfig = savedLevelRange;
+          const savedNicks = [...window.MargonemAPI.state.selectedNicks];
           window.MargonemAPI.combat.stopFight();
           this.state.recoveryActive = false;
           this.state.retryCount = 0;
-          await new Promise(_0x45d408 => setTimeout(_0x45d408, 5000));
+          await new Promise(resolve => setTimeout(resolve, 5000));
           if (!this.state.monitoringActive) {
             return {
               success: false,
               error: "MONITORING_STOPPED_DURING_RESET"
             };
           }
-          if (_0x410139.min !== null || _0x410139.max !== null) {
-            const _0x1a6db6 = {
-              min: _0x410139.min || 1,
-              max: _0x410139.max || 300
+          if (levelRangeConfig.min !== null || levelRangeConfig.max !== null) {
+            const restoreLevelRange = {
+              min: levelRangeConfig.min || 1,
+              max: levelRangeConfig.max || 300
             };
-            const _0x1ea51b = {
-              levelRange: _0x1a6db6
+            const fightOptions = {
+              levelRange: restoreLevelRange
             };
-            return await window.MargonemAPI.combat.startFight(_0x1ea51b);
-          } else if (_0x1780f5.length > 0) {
-            return await window.MargonemAPI.combat.startFight(_0x1780f5);
+            return await window.MargonemAPI.combat.startFight(fightOptions);
+          } else if (savedNicks.length > 0) {
+            return await window.MargonemAPI.combat.startFight(savedNicks);
           }
           return {
             success: true
           };
-        } catch (_0xf40abb) {
-          console.error("Error in fullSystemReset:", _0xf40abb);
-          const _0x291844 = {
+        } catch (error) {
+          console.error("Error in fullSystemReset:", error);
+          const errorResult = {
             success: false,
-            error: _0xf40abb.message || "SYSTEM_RESET_ERROR",
-            details: _0xf40abb.stack
+            error: error.message || "SYSTEM_RESET_ERROR",
+            details: error.stack
           };
-          return _0x291844;
+          return errorResult;
         } finally {
           this._releaseLock("fullSystemReset");
         }
@@ -1607,19 +1607,19 @@ Object.assign(window.MargonemAPI, {
       this.initializeDeathMonitoring();
     },
     initializeDeathMonitoring() {
-      const _0x3b481b = setInterval(() => {
-        const _0x3cbed1 = window.Engine;
-        if (_0x3cbed1?.dead !== undefined) {
-          clearInterval(_0x3b481b);
-          let _0x53c0e9 = _0x3cbed1.dead;
-          Object.defineProperty(_0x3cbed1, "dead", {
+      const checkInterval = setInterval(() => {
+        const engine = window.Engine;
+        if (engine?.dead !== undefined) {
+          clearInterval(checkInterval);
+          let isDead = engine.dead;
+          Object.defineProperty(engine, "dead", {
             get() {
-              return _0x53c0e9;
+              return isDead;
             },
-            set(_0x1352e0) {
-              const _0x570f23 = _0x53c0e9 && !_0x1352e0;
-              _0x53c0e9 = _0x1352e0;
-              if (_0x570f23 && window.MargonemAPI.state.heal.healAfterDeath) {
+            set(newValue) {
+              const wasRevived = isDead && !newValue;
+              isDead = newValue;
+              if (wasRevived && window.MargonemAPI.state.heal.healAfterDeath) {
                 setTimeout(() => {
                   window.MargonemAPI.healingSystem.checkAndHeal();
                 }, 300);
@@ -1631,142 +1631,142 @@ Object.assign(window.MargonemAPI, {
       }, 100);
     },
     ensureInterval() {
-      const _0x2a182f = window.MargonemAPI.state.heal;
-      if (_0x2a182f.monitoringInterval) {
-        clearInterval(_0x2a182f.monitoringInterval);
-        _0x2a182f.monitoringInterval = null;
+      const healState = window.MargonemAPI.state.heal;
+      if (healState.monitoringInterval) {
+        clearInterval(healState.monitoringInterval);
+        healState.monitoringInterval = null;
       }
-      _0x2a182f.monitoringInterval = setInterval(() => {
+      healState.monitoringInterval = setInterval(() => {
         this.checkAndHeal();
       }, 1500);
-      _0x2a182f.isMonitoring = true;
+      healState.isMonitoring = true;
     },
     startMonitoring() {
-      const _0x1027be = window.MargonemAPI.state.heal;
-      if (!_0x1027be.isMonitoring) {
+      const healState = window.MargonemAPI.state.heal;
+      if (!healState.isMonitoring) {
         this.ensureInterval();
       }
-      _0x1027be.active = true;
+      healState.active = true;
     },
     stopMonitoring() {
-      const _0x250be5 = window.MargonemAPI.state.heal;
-      _0x250be5.active = false;
-      _0x250be5.isMonitoring = false;
-      if (_0x250be5.monitoringInterval) {
-        clearInterval(_0x250be5.monitoringInterval);
-        _0x250be5.monitoringInterval = null;
+      const healState = window.MargonemAPI.state.heal;
+      healState.active = false;
+      healState.isMonitoring = false;
+      if (healState.monitoringInterval) {
+        clearInterval(healState.monitoringInterval);
+        healState.monitoringInterval = null;
       }
     },
     checkAndHeal() {
-      const _0x45006e = window.MargonemAPI.state.heal;
-      if (!_0x45006e.active || window.MargonemAPI.state.isDead) {
+      const healState = window.MargonemAPI.state.heal;
+      if (!healState.active || window.MargonemAPI.state.isDead) {
         return;
       }
-      const _0x1985a6 = window.Engine;
-      if (!_0x1985a6?.hero?.d) {
+      const engine = window.Engine;
+      if (!engine?.hero?.d) {
         return;
       }
-      const _0x13e368 = _0x1985a6.hero.d.warrior_stats?.hp || 0;
-      const _0xc3e482 = _0x1985a6.hero.d.warrior_stats?.maxhp || 1;
-      if (_0x13e368 >= _0xc3e482) {
+      const currentHp = engine.hero.d.warrior_stats?.hp || 0;
+      const maxHp = engine.hero.d.warrior_stats?.maxhp || 1;
+      if (currentHp >= maxHp) {
         return;
       }
-      const _0x340647 = this.pickItem(_0x13e368, _0xc3e482);
-      if (_0x340647) {
-        this.useItem(_0x340647);
-        if (_0x45006e.notify) {
-          window.message("[AutoHeal] Used: " + _0x340647.name);
+      const selectedItem = this.pickItem(currentHp, maxHp);
+      if (selectedItem) {
+        this.useItem(selectedItem);
+        if (healState.notify) {
+          window.message("[AutoHeal] Used: " + selectedItem.name);
         }
       }
     },
-    pickItem(_0x4cf55f, _0xbe1313) {
-      const _0x53a667 = window.MargonemAPI.state.heal;
-      const _0x355847 = window.Engine?.items?.fetchLocationItems("g") || [];
-      let _0x270b77 = _0x355847.filter(_0x3c287f => {
-        const _0x22dac1 = _0x3c287f.name?.toLowerCase() || "";
-        const _0x4631b8 = _0x53a667.ignoredItems.some(_0x58d065 => _0x58d065.toLowerCase() === _0x22dac1);
-        if (_0x4631b8) {
+    pickItem(currentHp, maxHp) {
+      const healState = window.MargonemAPI.state.heal;
+      const allItems = window.Engine?.items?.fetchLocationItems("g") || [];
+      let validItems = allItems.filter(item => {
+        const itemName = item.name?.toLowerCase() || "";
+        const isIgnored = healState.ignoredItems.some(ignoredName => ignoredName.toLowerCase() === itemName);
+        if (isIgnored) {
           return false;
         }
-        const _0x467560 = _0x3c287f._cachedStats?.rarity;
-        let _0x5099c2 = "P";
-        switch (_0x467560) {
+        const itemRarity = item._cachedStats?.rarity;
+        let rarityCode = "P";
+        switch (itemRarity) {
           case "legendary":
-            _0x5099c2 = "L";
+            rarityCode = "L";
             break;
           case "upgraded":
-            _0x5099c2 = "Ul";
+            rarityCode = "Ul";
             break;
           case "heroic":
-            _0x5099c2 = "H";
+            rarityCode = "H";
             break;
           case "unique":
-            _0x5099c2 = "U";
+            rarityCode = "U";
             break;
           case "common":
-            _0x5099c2 = "P";
+            rarityCode = "P";
             break;
         }
-        if (!_0x53a667.rarity.includes(_0x5099c2)) {
+        if (!healState.rarity.includes(rarityCode)) {
           return false;
         }
         return true;
       });
-      const _0x456126 = _0x53a667.usePotions ? _0x270b77.filter(_0xc0d19f => _0xc0d19f._cachedStats?.leczy && parseInt(_0xc0d19f._cachedStats.leczy) >= _0x53a667.minPotionHealing) : [];
-      const _0x1c069b = _0x53a667.useFulls ? _0x270b77.filter(_0x376a78 => _0x376a78._cachedStats?.fullheal) : [];
-      const _0x4063c1 = _0x53a667.usePercents ? _0x270b77.filter(_0x5d4963 => _0x5d4963._cachedStats?.perheal) : [];
-      const _0x2e421b = _0xbe1313 - _0x4cf55f;
-      const _0x5c1687 = _0x456126.filter(_0x1d1d8f => parseInt(_0x1d1d8f._cachedStats.leczy) <= _0x2e421b);
-      let _0x2b1982;
-      if (_0x5c1687.length > 0) {
-        _0x2b1982 = _0x5c1687.reduce((_0x3ab77b, _0x510b78) => {
-          const _0x4309b2 = parseInt(_0x3ab77b._cachedStats.leczy);
-          const _0x45adf8 = parseInt(_0x510b78._cachedStats.leczy);
-          if (_0x45adf8 < _0x4309b2) {
-            return _0x510b78;
+      const potionItems = healState.usePotions ? validItems.filter(item => item._cachedStats?.leczy && parseInt(item._cachedStats.leczy) >= healState.minPotionHealing) : [];
+      const fullHealItems = healState.useFulls ? validItems.filter(item => item._cachedStats?.fullheal) : [];
+      const percentHealItems = healState.usePercents ? validItems.filter(item => item._cachedStats?.perheal) : [];
+      const hpMissing = maxHp - currentHp;
+      const efficientPotions = potionItems.filter(item => parseInt(item._cachedStats.leczy) <= hpMissing);
+      let selectedItem;
+      if (efficientPotions.length > 0) {
+        selectedItem = efficientPotions.reduce((best, current) => {
+          const bestHealing = parseInt(best._cachedStats.leczy);
+          const currentHealing = parseInt(current._cachedStats.leczy);
+          if (currentHealing < bestHealing) {
+            return current;
           } else {
-            return _0x3ab77b;
+            return best;
           }
         });
-      } else if (_0x1c069b.length > 0) {
-        _0x2b1982 = _0x1c069b.reduce((_0x109932, _0x19d3e7) => {
-          const _0x4393e8 = parseInt(_0x109932._cachedStats.fullheal || "999999");
-          const _0x5d6a69 = parseInt(_0x19d3e7._cachedStats.fullheal || "999999");
-          if (_0x5d6a69 < _0x4393e8) {
-            return _0x19d3e7;
+      } else if (fullHealItems.length > 0) {
+        selectedItem = fullHealItems.reduce((best, current) => {
+          const bestValue = parseInt(best._cachedStats.fullheal || "999999");
+          const currentValue = parseInt(current._cachedStats.fullheal || "999999");
+          if (currentValue < bestValue) {
+            return current;
           } else {
-            return _0x109932;
+            return best;
           }
         });
-      } else if (_0x4063c1.length > 0) {
-        _0x2b1982 = _0x4063c1.reduce((_0x52d818, _0x54bb55) => {
-          const _0x166dc9 = parseInt(_0x52d818._cachedStats.perheal);
-          const _0x2c18df = parseInt(_0x54bb55._cachedStats.perheal);
-          if (_0x2c18df > _0x166dc9) {
-            return _0x54bb55;
+      } else if (percentHealItems.length > 0) {
+        selectedItem = percentHealItems.reduce((best, current) => {
+          const bestPercent = parseInt(best._cachedStats.perheal);
+          const currentPercent = parseInt(current._cachedStats.perheal);
+          if (currentPercent > bestPercent) {
+            return current;
           } else {
-            return _0x52d818;
+            return best;
           }
         });
-      } else if (_0x53a667.healToFull && _0x4cf55f / _0xbe1313 * 100 < _0x53a667.minHealHpPercent && _0x456126.length > 0) {
-        _0x2b1982 = _0x456126.reduce((_0x336244, _0x15b7b7) => {
-          const _0x2b50dd = parseInt(_0x336244._cachedStats.leczy);
-          const _0xc9d4ad = parseInt(_0x15b7b7._cachedStats.leczy);
-          if (_0xc9d4ad < _0x2b50dd) {
-            return _0x15b7b7;
+      } else if (healState.healToFull && currentHp / maxHp * 100 < healState.minHealHpPercent && potionItems.length > 0) {
+        selectedItem = potionItems.reduce((best, current) => {
+          const bestHealing = parseInt(best._cachedStats.leczy);
+          const currentHealing = parseInt(current._cachedStats.leczy);
+          if (currentHealing < bestHealing) {
+            return current;
           } else {
-            return _0x336244;
+            return best;
           }
         });
       }
-      return _0x2b1982;
+      return selectedItem;
     },
-    useItem(_0x3210e4) {
-      if (!_0x3210e4 || !_0x3210e4.id) {
+    useItem(item) {
+      if (!item || !item.id) {
         return;
       }
-      const _0x15ddda = "moveitem&st=1&id=" + _0x3210e4.id;
-      window._g(_0x15ddda, () => {
+      const command = "moveitem&st=1&id=" + item.id;
+      window._g(command, () => {
         setTimeout(() => this.checkAndHeal(), 300);
       });
     }
@@ -1823,57 +1823,57 @@ Object.assign(window.MargonemAPI, {
       if (!mapName) return;
       window.MargonemAPI.state.exping_location.visitedMapsHistory[mapName] = Date.now();
     },
-    startExping: async function (_0x500f61, _0x5e122b, _0x2f1e11, _0x2fadaf = false, _0x46202f = false, _0x317959 = 0, _0x37958e = null) {
+    startExping: async function (minLevel, maxLevel, expZoneName, sellWhenFull = false, teleportIfPlayer = false, potionCount = 0, selectedMaps = null) {
       window.MargonemAPI.state.exping_location.is_aborted = false;
-      window.MargonemAPI.state.exping_location.selectedMaps = _0x37958e;
-      const _0x3a6fb0 = window.MargonemAPI.state.exping_location.potionsMultiplier || 1;
-      window.MargonemAPI.state.exping_location.requestedPotions = _0x317959;
-      window.MargonemAPI.state.exping_location.targetPotions = Math.max(0, (_0x317959 || 0) * (_0x3a6fb0 || 1));
+      window.MargonemAPI.state.exping_location.selectedMaps = selectedMaps;
+      const potionsMultiplier = window.MargonemAPI.state.exping_location.potionsMultiplier || 1;
+      window.MargonemAPI.state.exping_location.requestedPotions = potionCount;
+      window.MargonemAPI.state.exping_location.targetPotions = Math.max(0, (potionCount || 0) * (potionsMultiplier || 1));
       window.MargonemAPI.state.exping_location.blockPotions = true;
       if (!sessionToken) {
         return;
       }
-      const _0x8521da = localStorage.getItem("tm_fingerprint");
+      const fingerprint = localStorage.getItem("tm_fingerprint");
       try {
-        const _0xebf1c5 = {
+        const requestBody = {
           sessionToken: sessionToken,
-          fingerprint: _0x8521da
+          fingerprint: fingerprint
         };
-        const _0x1e8f59 = { token: sessionToken, success: true };
+        const validateResponse = { token: sessionToken, success: true };
         /* bypassed fetch
-        const _0x1e8f59 = await fetchAndDecrypt(serverUrl + "/IQQHJ1QWxdUj0gv", {
+        const validateResponse = await fetchAndDecrypt(serverUrl + "/IQQHJ1QWxdUj0gv", {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
           },
-          body: JSON.stringify(_0xebf1c5)
+          body: JSON.stringify(requestBody)
         });
         */
-        if (_0x1e8f59.token === sessionToken) {
-          if (!_0x1e8f59.success) {
+        if (validateResponse.token === sessionToken) {
+          if (!validateResponse.success) {
             stopHeartbeat();
-            const _0x3774b2 = document.getElementById("tm-license-content");
-            if (_0x3774b2) {
-              _0x3774b2.innerHTML = "<div style='color: red;'>Sesja zakończona lub wystąpił błąd! Sesja została automatycznie zakończona.</div>";
+            const licenseContent = document.getElementById("tm-license-content");
+            if (licenseContent) {
+              licenseContent.innerHTML = "<div style='color: red;'>Sesja zakończona lub wystąpił błąd! Sesja została automatycznie zakończona.</div>";
             }
             return;
           }
           try {
             if (window.Engine.hero.d.lvl >= 70) {
-              if (_0x2fadaf) {
+              if (sellWhenFull) {
                 window.MargonemAPI.state.exping_location.bag_full = setInterval(async () => {
                   if (window.MargonemAPI.state.exping_location.interval_of_selling) {
-                    const _0x17d0df = document.querySelector(".bags-navigation").querySelectorAll(".bag.inventory-item");
-                    let _0x33a1ac = true;
-                    _0x17d0df.forEach(_0xb9f723 => {
-                      const _0x431427 = _0xb9f723.getAttribute("data-name");
-                      const _0x1c0860 = _0xb9f723.querySelector(".amount");
-                      const _0x160f18 = _0x1c0860 ? parseInt(_0x1c0860.textContent) : 0;
-                      if (_0x160f18 > 0 && !_0x431427.includes("klucze")) {
-                        _0x33a1ac = false;
+                    const bags = document.querySelector(".bags-navigation").querySelectorAll(".bag.inventory-item");
+                    let allBagsEmpty = true;
+                    bags.forEach(bag => {
+                      const bagName = bag.getAttribute("data-name");
+                      const amountElement = bag.querySelector(".amount");
+                      const amount = amountElement ? parseInt(amountElement.textContent) : 0;
+                      if (amount > 0 && !bagName.includes("klucze")) {
+                        allBagsEmpty = false;
                       }
                     });
-                    if (_0x33a1ac) {
+                    if (allBagsEmpty) {
                       window.MargonemAPI.healingSystem.interval_of_selling = false;
                       clearInterval(window.MargonemAPI.state.exping_location.bag_full);
                       window.MargonemAPI.exping.stopExping();
@@ -1882,15 +1882,15 @@ Object.assign(window.MargonemAPI, {
                         await this.waitForMapChange("Kwieciste Przejście");
                         await this.tuniaSelling();
                         window.MargonemAPI.healingSystem.interval_of_selling = true;
-                      } catch (_0x2213fc) {}
+                      } catch (teleportError) {}
                       window.MargonemAPI.state.exping_location.is_aborted = true;
                       await sleep(3000);
-                      return this.startExping(_0x500f61, _0x5e122b, _0x2f1e11, _0x2fadaf, _0x46202f, _0x317959);
+                      return this.startExping(minLevel, maxLevel, expZoneName, sellWhenFull, teleportIfPlayer, potionCount);
                     }
                   }
                 }, 1000);
               }
-              if (_0x317959 > 0) {
+              if (potionCount > 0) {
                 window.MargonemAPI.state.exping_location.potion_checker = setInterval(async () => {
                   if (!window.MargonemAPI.state.exping_location.interval_of_selling) {
                     return;
@@ -1901,13 +1901,13 @@ Object.assign(window.MargonemAPI, {
                   if (window.MargonemAPI.state.exping_location._potionRefillInProgress) {
                     return;
                   }
-                  const _0x2b3946 = policzLeczyPrzedmioty() || 0;
-                  const _0x2cfd2e = window.MargonemAPI.state.exping_location.targetPotions || _0x317959;
-                  if (_0x2b3946 >= _0x2cfd2e) {
+                  const currentPotions = policzLeczyPrzedmioty() || 0;
+                  const targetPotions = window.MargonemAPI.state.exping_location.targetPotions || potionCount;
+                  if (currentPotions >= targetPotions) {
                     return;
                   }
                   if (window.MargonemAPI.state.exping_location.potionsDebug) {
-                    console.log("[Potions][CHECK] have=", _0x2b3946, "target=", _0x2cfd2e, "missing=", Math.max(0, _0x2cfd2e - _0x2b3946), "mult=", window.MargonemAPI.state.exping_location.potionsMultiplier || 1);
+                    console.log("[Potions][CHECK] have=", currentPotions, "target=", targetPotions, "missing=", Math.max(0, targetPotions - currentPotions), "mult=", window.MargonemAPI.state.exping_location.potionsMultiplier || 1);
                   }
                   window.MargonemAPI.state.exping_location._potionRefillInProgress = true;
                   clearInterval(window.MargonemAPI.state.exping_location.potion_checker);
@@ -1919,24 +1919,24 @@ Object.assign(window.MargonemAPI, {
                       await this.waitForMapChange("Kwieciste Przejście");
                       await this.tuniaSelling();
                     } else {
-                      await this.buyPotionsAtHealer(_0x2cfd2e);
+                      await this.buyPotionsAtHealer(targetPotions);
                     }
-                  } catch (_0x262148) {}
+                  } catch (buyError) {}
                   window.MargonemAPI.state.exping_location.is_aborted = true;
                   window.MargonemAPI.healingSystem.interval_of_selling = true;
                   window.MargonemAPI.state.exping_location._potionRefillInProgress = false;
                   await sleep(3000);
-                  return this.startExping(_0x500f61, _0x5e122b, _0x2f1e11, _0x2fadaf, _0x46202f, _0x317959);
+                  return this.startExping(minLevel, maxLevel, expZoneName, sellWhenFull, teleportIfPlayer, potionCount);
                 }, 1500);
               }
             }
-            if (_0x46202f) {
+            if (teleportIfPlayer) {
               window.MargonemAPI.state.exping_location.teleport_if_player = setInterval(async () => {
                 if (window.MargonemAPI.state.exping_location.interval_of_selling) {
                   if (window.Engine.hero.d.lvl >= 70) {
-                    const _0xe56752 = window.Engine;
-                    const _0x354297 = _0xe56752.whoIsHere.getSortedPlayerList();
-                    if (_0x354297.length > 0 && isLocationInExpowisko(_0x2f1e11, _0xe56752.map.d.name)) {
+                    const engine = window.Engine;
+                    const playerList = engine.whoIsHere.getSortedPlayerList();
+                    if (playerList.length > 0 && isLocationInExpowisko(expZoneName, engine.map.d.name)) {
                       clearInterval(window.MargonemAPI.state.exping_location.teleport_if_player);
                       window.MargonemAPI.healingSystem.interval_of_selling = false;
                       window.MargonemAPI.exping.stopExping();
@@ -1947,12 +1947,12 @@ Object.assign(window.MargonemAPI, {
                       window.MargonemAPI.state.exping_location.is_aborted = true;
                       window.MargonemAPI.healingSystem.interval_of_selling = true;
                       await sleep(3000);
-                      return this.startExping(_0x500f61, _0x5e122b, _0x2f1e11, _0x2fadaf, _0x46202f, _0x317959);
+                      return this.startExping(minLevel, maxLevel, expZoneName, sellWhenFull, teleportIfPlayer, potionCount);
                     }
                   } else {
-                    const _0x1b99fd = window.Engine;
-                    const _0x21992c = _0x1b99fd.whoIsHere.getSortedPlayerList();
-                    if (_0x21992c.length > 0 && isLocationInExpowisko(_0x2f1e11, _0x1b99fd.map.d.name)) {
+                    const engine = window.Engine;
+                    const playerList = engine.whoIsHere.getSortedPlayerList();
+                    if (playerList.length > 0 && isLocationInExpowisko(expZoneName, engine.map.d.name)) {
                       clearInterval(window.MargonemAPI.state.exping_location.teleport_if_player);
                       window.MargonemAPI.healingSystem.interval_of_selling = false;
                       window.MargonemAPI.exping.stopExping();
@@ -1961,7 +1961,7 @@ Object.assign(window.MargonemAPI, {
                       window.MargonemAPI.state.exping_location.is_aborted = true;
                       window.MargonemAPI.healingSystem.interval_of_selling = true;
                       await sleep(3000);
-                      return this.startExping(_0x500f61, _0x5e122b, _0x2f1e11, _0x2fadaf, _0x46202f, _0x317959);
+                      return this.startExping(minLevel, maxLevel, expZoneName, sellWhenFull, teleportIfPlayer, potionCount);
                     }
                   }
                 }
@@ -1976,13 +1976,13 @@ Object.assign(window.MargonemAPI, {
                 window.MargonemAPI.exping.stopExping();
                 window.MargonemAPI.healingSystem.interval_of_selling = false;
                 while (window.Engine.dead) {
-                  await new Promise(_0x18f0b0 => setTimeout(_0x18f0b0, 1000));
+                  await new Promise(resolve => setTimeout(resolve, 1000));
                 }
                 await sleep(5000);
                 if (window.Engine.hero.d.lvl < 70) {
                   window.MargonemAPI.navigation.stopNavigation(true);
-                  const _0x375677 = window.Engine.map.d.name;
-                  if (_0x375677 === "Ithan") {
+                  const currentMapName = window.Engine.map.d.name;
+                  if (currentMapName === "Ithan") {
                     await this.notTuniaSelling(39, 51, "body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar > div.scroll-pane > ul > li.dialogue-window-answer.answer.line_shop > span", "body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.alerts-layer.layer > div.border-window.ui-draggable.window-on-peak", "body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.alerts-layer.layer > div.border-window.ui-draggable.window-on-peak > div.content > div.inner-content > div > div.shop-content.normal-shop-zl > div.great-merchamp.btns-spacing > div:nth-child(1) > div.label");
                     window.Engine.hero.autoGoTo({
                       x: 18,
@@ -1994,7 +1994,7 @@ Object.assign(window.MargonemAPI, {
                     document.querySelector("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar.scrollable > div.scroll-pane > ul > li.dialogue-window-answer.answer.line_shop > span").click();
                     await sleep(1000);
                     await this.buingPots();
-                  } else if (_0x375677 === "Karka-han") {
+                  } else if (currentMapName === "Karka-han") {
                     await this.navigateToLocation("Przedmieścia Karka-han");
                     await this.waitForMapChange("Przedmieścia Karka-han");
                     await sleep(2000);
@@ -2011,7 +2011,7 @@ Object.assign(window.MargonemAPI, {
                     document.querySelector("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar.scrollable > div.scroll-pane > ul > li.dialogue-window-answer.answer.line_shop > span").click();
                     await sleep(1000);
                     await this.buingPots();
-                  } else if (_0x375677 === "Nithal") {
+                  } else if (currentMapName === "Nithal") {
                     await this.navigateToLocation("Eder");
                     await this.waitForMapChange("Eder");
                     await this.notTuniaSelling(27, 50, "body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar > div.scroll-pane > ul > li.dialogue-window-answer.answer.line_shop > span", "body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.alerts-layer.layer > div.border-window.ui-draggable.window-on-peak", "body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.alerts-layer.layer > div.border-window.ui-draggable.window-on-peak > div.content > div.inner-content > div > div.shop-content.normal-shop-zl > div.great-merchamp.btns-spacing > div:nth-child(1) > div.label");
@@ -2025,7 +2025,7 @@ Object.assign(window.MargonemAPI, {
                     document.querySelector("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar.scrollable > div.scroll-pane > ul > li.dialogue-window-answer.answer.line_shop > span").click();
                     await sleep(1000);
                     await this.buingPots();
-                  } else if (_0x375677 === "Eder") {
+                  } else if (currentMapName === "Eder") {
                     await this.notTuniaSelling(27, 50, "body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar > div.scroll-pane > ul > li.dialogue-window-answer.answer.line_shop > span", "body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.alerts-layer.layer > div.border-window.ui-draggable.window-on-peak", "body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.alerts-layer.layer > div.border-window.ui-draggable.window-on-peak > div.content > div.inner-content > div > div.shop-content.normal-shop-zl > div.great-merchamp.btns-spacing > div:nth-child(1) > div.label");
                     window.Engine.hero.autoGoTo({
                       x: 56,
@@ -2037,7 +2037,7 @@ Object.assign(window.MargonemAPI, {
                     document.querySelector("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar.scrollable > div.scroll-pane > ul > li.dialogue-window-answer.answer.line_shop > span").click();
                     await sleep(1000);
                     await this.buingPots();
-                  } else if (_0x375677 === "Torneg") {
+                  } else if (currentMapName === "Torneg") {
                     await this.notTuniaSelling(59, 18, "body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar > div.scroll-pane > ul > li.dialogue-window-answer.answer.line_shop", "body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.alerts-layer.layer > div.border-window.ui-draggable.window-on-peak", "body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.alerts-layer.layer > div.border-window.ui-draggable.window-on-peak > div.content > div.inner-content > div > div.shop-content.normal-shop-zl > div.great-merchamp.btns-spacing > div:nth-child(1) > div.label");
                     window.Engine.hero.autoGoTo({
                       x: 79,
@@ -2053,7 +2053,7 @@ Object.assign(window.MargonemAPI, {
                   window.MargonemAPI.state.exping_location.is_aborted = true;
                   window.MargonemAPI.healingSystem.interval_of_selling = true;
                   await sleep(3000);
-                  return this.startExping(_0x500f61, _0x5e122b, _0x2f1e11, _0x2fadaf, _0x46202f, _0x317959);
+                  return this.startExping(minLevel, maxLevel, expZoneName, sellWhenFull, teleportIfPlayer, potionCount);
                 }
                 uzyjPrzedmiot("Zwój teleportacji na Kwieciste Przejście");
                 await this.waitForMapChange("Kwieciste Przejście");
@@ -2061,21 +2061,21 @@ Object.assign(window.MargonemAPI, {
                 window.MargonemAPI.state.exping_location.is_aborted = true;
                 window.MargonemAPI.healingSystem.interval_of_selling = true;
                 await sleep(3000);
-                return this.startExping(_0x500f61, _0x5e122b, _0x2f1e11, _0x2fadaf, _0x46202f, _0x317959);
-              } catch (_0xc27962) {}
+                return this.startExping(minLevel, maxLevel, expZoneName, sellWhenFull, teleportIfPlayer, potionCount);
+              } catch (error) {}
             }, 1000);
-            const _0x3be593 = window.MargonemAPI.navigation.getCurrentLocation();
+            const currentLocation = window.MargonemAPI.navigation.getCurrentLocation();
             this.checkAborted();
-            if (!_0x3be593) {
+            if (!currentLocation) {
               throw new Error("");
             }
-            const _0x16f68a = Expowiska[_0x2f1e11];
-            if (!_0x16f68a || !Array.isArray(_0x16f68a)) {
+            const spotConfig = Expowiska[expZoneName];
+            if (!spotConfig || !Array.isArray(spotConfig)) {
               throw new Error("");
             }
-            const _0x158bf8 = ["driady (280lvl)", "pustynia (275lvl)"];
-            const _0x35eb25 = _0x2f1e11;
-            if (_0x158bf8.includes(_0x35eb25) && _0x3be593 === "Kwieciste Przejście") {
+            const specialSpots = ["driady (280lvl)", "pustynia (275lvl)"];
+            const spotName = expZoneName;
+            if (specialSpots.includes(spotName) && currentLocation === "Kwieciste Przejście") {
               this.checkAborted();
               await this.navigateToLocation("Dom Tunii");
               this.checkAborted();
@@ -2091,8 +2091,8 @@ Object.assign(window.MargonemAPI, {
               await sleep(1000);
               await waitForElement("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar > div.scroll-pane > ul > li.dialogue-window-answer.answer.line_shop > span");
               this.checkAborted();
-              const _0x197853 = document.querySelector("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar > div.scroll-pane > ul > li.dialogue-window-answer.answer.line_shop > span");
-              _0x197853.click();
+              const shopDialogOption = document.querySelector("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar > div.scroll-pane > ul > li.dialogue-window-answer.answer.line_shop > span");
+              shopDialogOption.click();
               await waitForElement("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.alerts-layer.layer > div.border-window.ui-draggable.window-on-peak > div.content > div.inner-content > div");
               this.checkAborted();
               if (!sprawdzPrzedmiot("Zwój teleportacji na Kwieciste Przejście")) {
@@ -2104,23 +2104,23 @@ Object.assign(window.MargonemAPI, {
                 await buyItem(1471);
                 await sleep(1000);
               }
-              const _0x42d4c3 = window.Engine.hero.d.warrior_stats?.maxhp || 10000;
-              if (_0x317959 > 0) {
-                const _0x2a8a7f = policzLeczyPrzedmioty() || 0;
-                const _0x50611c = window.MargonemAPI.state.exping_location.targetPotions || _0x317959;
-                const _0x55c73b = Math.max(0, _0x50611c - _0x2a8a7f);
-                if (_0x55c73b > 0) {
-                  const _0x163eb3 = wybierzIdNajlepszejPotki(_0x42d4c3);
-                  const _0x1c9bf2 = window.Engine.shop.items?.[_0x163eb3];
-                  const _0x531c45 = _0x1c9bf2?.pr || 0;
-                  const _0x2a1dd1 = window.Engine.hero.d.gold || 0;
-                  const _0x565cc8 = _0x531c45 > 0 ? Math.max(0, Math.floor(_0x2a1dd1 / _0x531c45) - 1) : 45;
-                  const _0x57ea23 = Math.min(_0x55c73b, _0x565cc8, 45);
+              const maxHealth = window.Engine.hero.d.warrior_stats?.maxhp || 10000;
+              if (potionCount > 0) {
+                const currentPotionCount = policzLeczyPrzedmioty() || 0;
+                const targetPotions = window.MargonemAPI.state.exping_location.targetPotions || potionCount;
+                const potionsToBuy = Math.max(0, targetPotions - currentPotionCount);
+                if (potionsToBuy > 0) {
+                  const bestPotionId = wybierzIdNajlepszejPotki(maxHealth);
+                  const potionData = window.Engine.shop.items?.[bestPotionId];
+                  const potionPrice = potionData?.pr || 0;
+                  const playerGold = window.Engine.hero.d.gold || 0;
+                  const maxAffordable = potionPrice > 0 ? Math.max(0, Math.floor(playerGold / potionPrice) - 1) : 45;
+                  const buyAmount = Math.min(potionsToBuy, maxAffordable, 45);
                   if (window.MargonemAPI.state.exping_location.potionsDebug) {
-                    console.log("[Potions][BUY@TUNIA(KP)] buy=", _0x57ea23, "have=", _0x2a8a7f, "target=", _0x50611c);
+                    console.log("[Potions][BUY@TUNIA(KP)] buy=", buyAmount, "have=", currentPotionCount, "target=", targetPotions);
                   }
-                  for (let _0x4bc842 = 0; _0x4bc842 < _0x57ea23; _0x4bc842++) {
-                    await buyItem(_0x163eb3);
+                  for (let i = 0; i < buyAmount; i++) {
+                    await buyItem(bestPotionId);
                     await sleep(1000);
                   }
                 }
@@ -2135,7 +2135,7 @@ Object.assign(window.MargonemAPI, {
               this.checkAborted();
               await this.waitForMapChange("Kwieciste Przejście");
               this.checkAborted();
-              if (_0x35eb25 === "pustynia (275lvl)") {
+              if (spotName === "pustynia (275lvl)") {
                 await this.navigateToLocation("Thuzal");
                 this.checkAborted();
                 await this.waitForMapChange("Thuzal");
@@ -2149,19 +2149,19 @@ Object.assign(window.MargonemAPI, {
                 window.Engine.hero.talkNearMob();
                 await waitForElement("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1.additional-bar-br > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar > div.scroll-pane > ul > li:nth-child(1) > span");
                 this.checkAborted();
-                const _0x45b47b = document.querySelector("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1.additional-bar-br > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar > div.scroll-pane > ul > li:nth-child(1) > span");
-                _0x45b47b.click();
+                const dialogOption1 = document.querySelector("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1.additional-bar-br > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar > div.scroll-pane > ul > li:nth-child(1) > span");
+                dialogOption1.click();
                 await waitForElement("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1.additional-bar-br > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar.scrollable > div.scroll-pane > ul > li:nth-child(7) > span");
                 this.checkAborted();
-                const _0x1e0b1c = document.querySelector("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1.additional-bar-br > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar.scrollable > div.scroll-pane > ul > li:nth-child(7) > span");
-                _0x1e0b1c.click();
+                const dialogOption2 = document.querySelector("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1.additional-bar-br > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar.scrollable > div.scroll-pane > ul > li:nth-child(7) > span");
+                dialogOption2.click();
                 await this.waitForMapChange("Trupia Przełęcz");
                 this.checkAborted();
                 window.Engine.hero.talkNearMob();
                 await waitForElement("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1.additional-bar-br > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar.scrollable > div.scroll-pane > ul > li:nth-child(7) > span");
                 this.checkAborted();
-                const _0x50f026 = document.querySelector("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1.additional-bar-br > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar.scrollable > div.scroll-pane > ul > li:nth-child(7) > span");
-                _0x50f026.click();
+                const dialogOption3 = document.querySelector("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1.additional-bar-br > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar.scrollable > div.scroll-pane > ul > li:nth-child(7) > span");
+                dialogOption3.click();
                 await this.waitForMapChange("Tuzmer");
                 this.checkAborted();
                 await this.navigateToLocation("Zajazd pod Różą Wiatrów");
@@ -2204,28 +2204,28 @@ Object.assign(window.MargonemAPI, {
                 this.checkAborted();
                 await this.waitForMapChange("Jaskinia Sępa s.1");
                 this.checkAborted();
-                const _0x28c6b6 = "Smocze Skalisko";
-                const _0x1a42a6 = window.MargonemAPI.state.exping_location;
-                _0x1a42a6.master_map = _0x28c6b6;
-                _0x1a42a6.current_expowisko = _0x2f1e11;
-                _0x1a42a6.current_expowisko_name = _0x35eb25;
-                await this.navigateToLocation(_0x28c6b6);
+                const masterMapDesert = "Smocze Skalisko";
+                const expingState = window.MargonemAPI.state.exping_location;
+                expingState.master_map = masterMapDesert;
+                expingState.current_expowisko = expZoneName;
+                expingState.current_expowisko_name = spotName;
+                await this.navigateToLocation(masterMapDesert);
                 this.checkAborted();
-                await this.handleRegularMapExping(_0x500f61, _0x5e122b);
-              } else if (_0x35eb25 === "driady (280lvl)") {
-                const _0x5a629c = "Rozlewisko Kai";
-                const _0x311cce = window.MargonemAPI.state.exping_location;
-                _0x311cce.master_map = _0x5a629c;
-                _0x311cce.current_expowisko = _0x2f1e11;
-                _0x311cce.current_expowisko_name = _0x35eb25;
+                await this.handleRegularMapExping(minLevel, maxLevel);
+              } else if (spotName === "driady (280lvl)") {
+                const masterMapDriady = "Rozlewisko Kai";
+                const expingStateDriady = window.MargonemAPI.state.exping_location;
+                expingStateDriady.master_map = masterMapDriady;
+                expingStateDriady.current_expowisko = expZoneName;
+                expingStateDriady.current_expowisko_name = spotName;
                 await this.navigateToLocation("Rozlewisko Kai");
                 this.checkAborted();
                 await this.waitForMapChange("Rozlewisko Kai");
                 this.checkAborted();
-                await this.handleRegularMapExping(_0x500f61, _0x5e122b);
+                await this.handleRegularMapExping(minLevel, maxLevel);
               }
             } else {
-              if (_0x3be593 === "Kwieciste Przejście") {
+              if (currentLocation === "Kwieciste Przejście") {
                 await this.navigateToLocation("Dom Tunii");
                 this.checkAborted();
                 await this.waitForMapChange("Dom Tunii");
@@ -2240,8 +2240,8 @@ Object.assign(window.MargonemAPI, {
                 await sleep(1000);
                 await waitForElement("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar > div.scroll-pane > ul > li.dialogue-window-answer.answer.line_shop > span");
                 this.checkAborted();
-                const _0x19c6e3 = document.querySelector("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar > div.scroll-pane > ul > li.dialogue-window-answer.answer.line_shop > span");
-                _0x19c6e3.click();
+                const shopDialogButton = document.querySelector("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.interface-layer.layer > div.bottom.positioner > div.dialogue-window.is-open > div.content > div.inner.scroll-wrapper.small-bar > div.scroll-pane > ul > li.dialogue-window-answer.answer.line_shop > span");
+                shopDialogButton.click();
                 await waitForElement("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.alerts-layer.layer > div.border-window.ui-draggable.window-on-peak > div.content > div.inner-content > div");
                 this.checkAborted();
                 await sleep(1000);
@@ -2253,31 +2253,31 @@ Object.assign(window.MargonemAPI, {
                   await buyItem(1471);
                   await sleep(1000);
                 }
-                const _0x41d3b4 = window.Engine.hero.d.warrior_stats?.maxhp || 10000;
-                let _0x45bc12 = false;
-                if (_0x317959 > 0) {
-                  const _0x576dfb = policzLeczyPrzedmioty() || 0;
-                  const _0x3b93b8 = window.MargonemAPI.state.exping_location.targetPotions || _0x317959;
-                  const _0x445145 = Math.max(0, _0x3b93b8 - _0x576dfb);
-                  if (_0x445145 > 0) {
-                    const _0x2d4415 = wybierzIdNajlepszejPotki(_0x41d3b4);
-                    const _0x29cc30 = window.Engine.shop.items?.[_0x2d4415];
-                    if (!_0x2d4415 || !_0x29cc30 || !_0x29cc30._cachedStats || _0x29cc30._cachedStats.leczy === undefined) {
-                      _0x45bc12 = true;
+                const maxHealth = window.Engine.hero.d.warrior_stats?.maxhp || 10000;
+                let needHealerFallback = false;
+                if (potionCount > 0) {
+                  const currentPotionCount = policzLeczyPrzedmioty() || 0;
+                  const targetPotions = window.MargonemAPI.state.exping_location.targetPotions || potionCount;
+                  const potionsToBuy = Math.max(0, targetPotions - currentPotionCount);
+                  if (potionsToBuy > 0) {
+                    const bestPotionId = wybierzIdNajlepszejPotki(maxHealth);
+                    const potionData = window.Engine.shop.items?.[bestPotionId];
+                    if (!bestPotionId || !potionData || !potionData._cachedStats || potionData._cachedStats.leczy === undefined) {
+                      needHealerFallback = true;
                       if (window.MargonemAPI.state.exping_location.potionsDebug) {
-                        const _0x2df3d4 = window.Engine.shop.items ? Object.keys(window.Engine.shop.items).length : 0;
-                        console.log("[Potions][BUY@TUNIA] no healing potions in this shop; potionId=", _0x2d4415, "shopItems=", _0x2df3d4);
+                        const shopItemCount = window.Engine.shop.items ? Object.keys(window.Engine.shop.items).length : 0;
+                        console.log("[Potions][BUY@TUNIA] no healing potions in this shop; potionId=", bestPotionId, "shopItems=", shopItemCount);
                       }
                     } else {
-                    const _0x4fcae3 = _0x29cc30?.pr || 0;
-                    const _0x4f430a = window.Engine.hero.d.gold || 0;
-                    const _0x4fb373 = _0x4fcae3 > 0 ? Math.max(0, Math.floor(_0x4f430a / _0x4fcae3) - 1) : 45;
-                    const _0x254a25 = Math.min(_0x445145, _0x4fb373, 45);
+                    const potionPrice = potionData?.pr || 0;
+                    const playerGold = window.Engine.hero.d.gold || 0;
+                    const maxAffordable = potionPrice > 0 ? Math.max(0, Math.floor(playerGold / potionPrice) - 1) : 45;
+                    const buyAmount = Math.min(potionsToBuy, maxAffordable, 45);
                     if (window.MargonemAPI.state.exping_location.potionsDebug) {
-                      console.log("[Potions][BUY@TUNIA] buy=", _0x254a25, "have=", _0x576dfb, "target=", _0x3b93b8, "potionId=", _0x2d4415, "name=", _0x29cc30?.name);
+                      console.log("[Potions][BUY@TUNIA] buy=", buyAmount, "have=", currentPotionCount, "target=", targetPotions, "potionId=", bestPotionId, "name=", potionData?.name);
                     }
-                    for (let _0x2867fe = 0; _0x2867fe < _0x254a25; _0x2867fe++) {
-                      await buyItem(_0x2d4415);
+                    for (let i = 0; i < buyAmount; i++) {
+                      await buyItem(bestPotionId);
                       await sleep(1000);
                     }
                     }
@@ -2294,10 +2294,10 @@ Object.assign(window.MargonemAPI, {
                 await this.waitForMapChange("Kwieciste Przejście");
                 this.checkAborted();
 
-                if (_0x45bc12) {
+                if (needHealerFallback) {
                   try {
-                    await this.buyPotionsAtHealer(window.MargonemAPI.state.exping_location.targetPotions || _0x317959);
-                  } catch (_0x1ba886) {}
+                    await this.buyPotionsAtHealer(window.MargonemAPI.state.exping_location.targetPotions || potionCount);
+                  } catch (err) {}
                   this.checkAborted();
                   await this.navigateToLocation("Kwieciste Przejście");
                   this.checkAborted();
@@ -2306,59 +2306,59 @@ Object.assign(window.MargonemAPI, {
                 }
               }
               window.MargonemAPI.state.exping_location.blockPotions = false;
-              const _0x115651 = _0x16f68a.some(_0x102596 => {
-                const [_0x1c31d5] = Object.entries(_0x102596)[0];
-                return _0x1c31d5 === _0x3be593;
+              const isOnValidMap = spotConfig.some(entry => {
+                const [mapName] = Object.entries(entry)[0];
+                return mapName === currentLocation;
               });
               this.checkAborted();
-              if (_0x115651) {
-                const _0x174195 = window.MargonemAPI.state.exping_location;
-                _0x174195.master_map = _0x3be593;
-                _0x174195.current_expowisko = _0x2f1e11;
-                _0x174195.current_expowisko_name = Object.keys(Expowiska[_0x2f1e11])[0];
-                const _0x98ea79 = _0x174195.selectedMaps;
-                const _0x482aeb = _0x98ea79.indexOf(_0x3be593);
-                if (_0x482aeb !== -1) {
-                  const _0x304e9f = _0x98ea79.splice(0, _0x482aeb);
-                  _0x98ea79.push(..._0x304e9f);
+              if (isOnValidMap) {
+                const expingStateSetup = window.MargonemAPI.state.exping_location;
+                expingStateSetup.master_map = currentLocation;
+                expingStateSetup.current_expowisko = expZoneName;
+                expingStateSetup.current_expowisko_name = Object.keys(Expowiska[expZoneName])[0];
+                const selectedMapsList = expingStateSetup.selectedMaps;
+                const currentIndex = selectedMapsList.indexOf(currentLocation);
+                if (currentIndex !== -1) {
+                  const reorderedMaps = selectedMapsList.splice(0, currentIndex);
+                  selectedMapsList.push(...reorderedMaps);
                 }
-                await this.handleRegularMapExping(_0x500f61, _0x5e122b);
+                await this.handleRegularMapExping(minLevel, maxLevel);
                 return;
               }
-              const _0x11b02f = await this.findBestLocation(_0x3be593, _0x16f68a);
+              const bestLocation = await this.findBestLocation(currentLocation, spotConfig);
               this.checkAborted();
-              if (!_0x11b02f) {
+              if (!bestLocation) {
                 throw new Error("");
               }
-              const _0x41987c = window.MargonemAPI.state.exping_location;
-              _0x41987c.master_map = _0x11b02f.map;
-              _0x41987c.current_expowisko = _0x2f1e11;
-              _0x41987c.current_expowisko_name = Object.keys(_0x2f1e11)[0];
-              await this.navigateToLocation(_0x11b02f.map);
+              const expingStateFinal = window.MargonemAPI.state.exping_location;
+              expingStateFinal.master_map = bestLocation.map;
+              expingStateFinal.current_expowisko = expZoneName;
+              expingStateFinal.current_expowisko_name = Object.keys(expZoneName)[0];
+              await this.navigateToLocation(bestLocation.map);
               this.checkAborted();
-              await this.handleRegularMapExping(_0x500f61, _0x5e122b);
+              await this.handleRegularMapExping(minLevel, maxLevel);
             }
-          } catch (_0x2d5c32) {
+          } catch (error) {
             this.stopExping();
-            throw _0x2d5c32;
+            throw error;
           }
         } else {
           stopHeartbeat();
-          const _0x3dde5b = document.getElementById("tm-license-content");
-          if (_0x3dde5b) {
-            _0x3dde5b.innerHTML = "<div style='color: red;'>Sesja zakończona lub wystąpił błąd! Sesja została automatycznie zakończona.</div>";
+          const licenseElement = document.getElementById("tm-license-content");
+          if (licenseElement) {
+            licenseElement.innerHTML = "<div style='color: red;'>Sesja zakończona lub wystąpił błąd! Sesja została automatycznie zakończona.</div>";
           }
           return;
         }
-      } catch (_0x147448) {
-        const _0x105fd3 = document.getElementById("tm-license-content");
-        if (_0x105fd3) {
-          _0x105fd3.innerHTML = "<div style='color: red;'>Brak odpowiedzi serwera – sesja została automatycznie zakończona.</div>";
+      } catch (err) {
+        const licenseContent = document.getElementById("tm-license-content");
+        if (licenseContent) {
+          licenseContent.innerHTML = "<div style='color: red;'>Brak odpowiedzi serwera – sesja została automatycznie zakończona.</div>";
         }
         return;
       }
     },
-    buyPotionsAtHealer: async function (_0x1cde0a) {
+    buyPotionsAtHealer: async function (targetPotionCount) {
       const POTION_SELLERS = [{
         name: "Uzdrowicielka Emanilia",
         map: "Liściaste Rozstaje",
@@ -2420,52 +2420,52 @@ Object.assign(window.MargonemAPI, {
         x: 38,
         y: 16
       }];
-      const _0x3a1c75 = window.MargonemAPI.navigation.getCurrentLocation();
-      if (!_0x3a1c75) {
+      const currentLocation = window.MargonemAPI.navigation.getCurrentLocation();
+      if (!currentLocation) {
         return false;
       }
-      const _0x2d5b74 = window.MargonemAPI.state.exping_location?.potionsDebug;
-      let _0x2f49bd = null;
+      const debugEnabled = window.MargonemAPI.state.exping_location?.potionsDebug;
+      let closestSeller = null;
       try {
-        const _0x59ec9e = await Promise.all(POTION_SELLERS.map(async _0x1c8607 => {
+        const sellerDistances = await Promise.all(POTION_SELLERS.map(async seller => {
           try {
-            const _0x1ce8dd = await window.MargonemAPI.navigation.findShortestPath(_0x3a1c75, _0x1c8607.map);
+            const pathResult = await window.MargonemAPI.navigation.findShortestPath(currentLocation, seller.map);
             return {
-              seller: _0x1c8607,
-              distance: _0x1ce8dd?.distance ?? Infinity
+              seller: seller,
+              distance: pathResult?.distance ?? Infinity
             };
-          } catch (_0x5c5b7e) {
+          } catch (err) {
             return {
-              seller: _0x1c8607,
+              seller: seller,
               distance: Infinity
             };
           }
         }));
-        _0x2f49bd = _0x59ec9e.reduce((_0x5e46d2, _0x1d6d4f) => _0x1d6d4f.distance < _0x5e46d2.distance ? _0x1d6d4f : _0x5e46d2, {
+        closestSeller = sellerDistances.reduce((closest, current) => current.distance < closest.distance ? current : closest, {
           distance: Infinity
         }).seller;
-      } catch (_0x37cf7f) {}
-      if (!_0x2f49bd) {
-        _0x2f49bd = POTION_SELLERS[0];
+      } catch (err) {}
+      if (!closestSeller) {
+        closestSeller = POTION_SELLERS[0];
       }
 
-      if (_0x2d5b74) {
-        console.log("[Potions][HEALER] selected=", _0x2f49bd?.name, "map=", _0x2f49bd?.map, "pos=", _0x2f49bd?.x + "," + _0x2f49bd?.y, "target=", _0x1cde0a, "from=", _0x3a1c75);
+      if (debugEnabled) {
+        console.log("[Potions][HEALER] selected=", closestSeller?.name, "map=", closestSeller?.map, "pos=", closestSeller?.x + "," + closestSeller?.y, "target=", targetPotionCount, "from=", currentLocation);
       }
 
       this.checkAborted();
-      await this.navigateToLocation(_0x2f49bd.map);
+      await this.navigateToLocation(closestSeller.map);
       this.checkAborted();
-      await this.waitForMapChange(_0x2f49bd.map);
+      await this.waitForMapChange(closestSeller.map);
       this.checkAborted();
       window.Engine.hero.autoGoTo({
-        x: _0x2f49bd.x,
-        y: _0x2f49bd.y
+        x: closestSeller.x,
+        y: closestSeller.y
       }, false);
-      await waitForPosition(_0x2f49bd.x, _0x2f49bd.y, 60000);
+      await waitForPosition(closestSeller.x, closestSeller.y, 60000);
       this.checkAborted();
 
-      if (_0x2d5b74) {
+      if (debugEnabled) {
         console.log("[Potions][HEALER] arrived map=", window.MargonemAPI.navigation.getCurrentLocation(), "hero=", {
           x: window.Engine?.hero?.x || window.Engine?.hero?.d?.x,
           y: window.Engine?.hero?.y || window.Engine?.hero?.d?.y
@@ -2475,76 +2475,76 @@ Object.assign(window.MargonemAPI, {
       window.Engine.hero.talkNearMob();
       await sleep(1000);
 
-      const _0x4ec2b6 = await Promise.race([waitForElement("div.dialogue-window.is-open"), sleep(8000).then(() => null)]);
-      if (!_0x4ec2b6) {
-        if (_0x2d5b74) {
+      const dialogueWindow = await Promise.race([waitForElement("div.dialogue-window.is-open"), sleep(8000).then(() => null)]);
+      if (!dialogueWindow) {
+        if (debugEnabled) {
           console.log("[Potions][HEALER] dialogue did not open");
         }
         return false;
       }
       this.checkAborted();
 
-      const _0x3e0f38 = Array.from(document.querySelectorAll("li.dialogue-window-answer.answer"));
-      const _0x2d0b8e = _0x3e0f38.find(_0x58fb8f => _0x58fb8f.classList.contains("line_shop")) || _0x3e0f38.find(_0x58fb8f => {
-        const _0x1d9e7a = (_0x58fb8f.textContent || "").toLowerCase();
-        return _0x1d9e7a.includes("sklep") || _0x1d9e7a.includes("handel") || _0x1d9e7a.includes("kup") || _0x1d9e7a.includes("sprzed");
+      const dialogueOptions = Array.from(document.querySelectorAll("li.dialogue-window-answer.answer"));
+      const shopOption = dialogueOptions.find(option => option.classList.contains("line_shop")) || dialogueOptions.find(option => {
+        const optionText = (option.textContent || "").toLowerCase();
+        return optionText.includes("sklep") || optionText.includes("handel") || optionText.includes("kup") || optionText.includes("sprzed");
       });
 
-      if (_0x2d5b74) {
-        console.log("[Potions][HEALER] dialogue options=", _0x3e0f38.map(_0x4d25d2 => (_0x4d25d2.textContent || "").trim()));
+      if (debugEnabled) {
+        console.log("[Potions][HEALER] dialogue options=", dialogueOptions.map(option => (option.textContent || "").trim()));
       }
 
-      if (!_0x2d0b8e) {
-        if (_0x2d5b74) {
+      if (!shopOption) {
+        if (debugEnabled) {
           console.log("[Potions][HEALER] no shop option found in dialogue");
         }
         return false;
       }
 
-      const _0x4bde51 = _0x2d0b8e.querySelector("span") || _0x2d0b8e;
-      _0x4bde51.click();
+      const shopButton = shopOption.querySelector("span") || shopOption;
+      shopButton.click();
 
-      const _0x5a2ea3 = await Promise.race([
+      const shopWindow = await Promise.race([
         waitForElement("div.alerts-layer.layer div.border-window.ui-draggable.window-on-peak"),
         waitForElement("div.border-window.ui-draggable.window-on-peak div.shop-content"),
         sleep(8000).then(() => null)
       ]);
-      if (!_0x5a2ea3) {
-        if (_0x2d5b74) {
+      if (!shopWindow) {
+        if (debugEnabled) {
           console.log("[Potions][HEALER] shop window did not open");
         }
         return false;
       }
 
       await sleep(1000);
-      await this.buingPots(_0x1cde0a);
+      await this.buingPots(targetPotionCount);
       return true;
     },
     buingPots: async function () {
-      const _0x275431 = window.Engine.hero.d.warrior_stats?.maxhp || 10000;
+      const maxHealth = window.Engine.hero.d.warrior_stats?.maxhp || 10000;
       await sleep(1000);
-      const _0x554deb = await wybierzIdNajlepszejPotki(_0x275431);
-      const _0x2b3f6e = window.Engine.shop.items?.[_0x554deb];
-      if (!_0x554deb || !_0x2b3f6e || !_0x2b3f6e._cachedStats || _0x2b3f6e._cachedStats.leczy === undefined) {
+      const bestPotionId = await wybierzIdNajlepszejPotki(maxHealth);
+      const potionData = window.Engine.shop.items?.[bestPotionId];
+      if (!bestPotionId || !potionData || !potionData._cachedStats || potionData._cachedStats.leczy === undefined) {
         if (window.MargonemAPI.state.exping_location?.potionsDebug) {
-          const _0x51b9f6 = window.Engine.shop.items ? Object.keys(window.Engine.shop.items).length : 0;
-          console.log("[Potions][BUY@HEALER] no healing potions in healer shop; potionId=", _0x554deb, "shopItems=", _0x51b9f6);
+          const shopItemCount = window.Engine.shop.items ? Object.keys(window.Engine.shop.items).length : 0;
+          console.log("[Potions][BUY@HEALER] no healing potions in healer shop; potionId=", bestPotionId, "shopItems=", shopItemCount);
         }
         window.Engine.shop.close();
         return;
       }
-      const _0x1b5cb5 = window.MargonemAPI.state.exping_location?.targetPotions || 0;
-      const _0x9d0b57 = policzLeczyPrzedmioty() || 0;
-      const _0x3b99b3 = Math.max(0, _0x1b5cb5 - _0x9d0b57);
-      const _0x383b43 = _0x2b3f6e?.pr || 0;
-      const _0x4fda1e = window.Engine.hero.d.gold || 0;
-      const _0x1a9b8a = _0x383b43 > 0 ? Math.max(0, Math.floor(_0x4fda1e / _0x383b43) - 1) : 45;
-      const _0x53a833 = _0x1b5cb5 > 0 ? Math.min(_0x3b99b3, _0x1a9b8a, 45) : window.MargonemAPI.znajdzIloscPotkow(_0x554deb);
+      const targetPotions = window.MargonemAPI.state.exping_location?.targetPotions || 0;
+      const currentPotionCount = policzLeczyPrzedmioty() || 0;
+      const potionsToBuy = Math.max(0, targetPotions - currentPotionCount);
+      const potionPrice = potionData?.pr || 0;
+      const playerGold = window.Engine.hero.d.gold || 0;
+      const maxAffordable = potionPrice > 0 ? Math.max(0, Math.floor(playerGold / potionPrice) - 1) : 45;
+      const buyAmount = targetPotions > 0 ? Math.min(potionsToBuy, maxAffordable, 45) : window.MargonemAPI.znajdzIloscPotkow(bestPotionId);
       if (window.MargonemAPI.state.exping_location?.potionsDebug) {
-        console.log("[Potions][BUY@HEALER] buy=", _0x53a833, "have=", _0x9d0b57, "target=", _0x1b5cb5, "potionId=", _0x554deb, "name=", _0x2b3f6e?.name);
+        console.log("[Potions][BUY@HEALER] buy=", buyAmount, "have=", currentPotionCount, "target=", targetPotions, "potionId=", bestPotionId, "name=", potionData?.name);
       }
-      for (let _0x51dede = 0; _0x51dede < (_0x53a833 || 0); _0x51dede++) {
-        await buyItem(_0x554deb);
+      for (let i = 0; i < (buyAmount || 0); i++) {
+        await buyItem(bestPotionId);
         await sleep(1000);
       }
       window.Engine.shop.basket.finalize();
@@ -2552,29 +2552,29 @@ Object.assign(window.MargonemAPI, {
       this.checkAborted();
       window.Engine.shop.close();
     },
-    notTuniaSelling: async function (_0x4d0070, _0x32eaca, _0x236a7e, _0x4e468d, _0x1b1122) {
-      const _0x20239d = {
-        x: _0x4d0070,
-        y: _0x32eaca
+    notTuniaSelling: async function (targetX, targetY, shopSelector, shopWindowSelector, sellButtonSelector) {
+      const targetPosition = {
+        x: targetX,
+        y: targetY
       };
-      window.Engine.hero.autoGoTo(_0x20239d, false);
-      await waitForPosition(_0x4d0070, _0x32eaca, 60000);
+      window.Engine.hero.autoGoTo(targetPosition, false);
+      await waitForPosition(targetX, targetY, 60000);
       window.Engine.hero.talkNearMob();
-      await waitForElement(_0x236a7e);
-      const _0x4fe021 = document.querySelector(_0x236a7e);
-      if (!_0x4fe021) {
+      await waitForElement(shopSelector);
+      const shopElement = document.querySelector(shopSelector);
+      if (!shopElement) {
         throw new Error("");
       }
-      _0x4fe021.click();
-      await waitForElement(_0x4e468d);
+      shopElement.click();
+      await waitForElement(shopWindowSelector);
       await sleep(1000);
-      for (let _0x5c3bf7 = 0; _0x5c3bf7 < 7; _0x5c3bf7++) {
+      for (let i = 0; i < 7; i++) {
         await sleep;
-        const _0x2389ea = document.querySelector(_0x1b1122);
-        if (!_0x2389ea) {
+        const sellButton = document.querySelector(sellButtonSelector);
+        if (!sellButton) {
           throw new Error("");
         }
-        _0x2389ea.click();
+        sellButton.click();
         await sleep(1000);
         window.Engine.shop.basket.finalize();
         await sleep(1000);
@@ -2592,50 +2592,50 @@ Object.assign(window.MargonemAPI, {
         await waitForPosition(8, 9, 60000);
         window.Engine.hero.talkNearMob();
         await waitForElement("li.dialogue-window-answer.answer.line_shop > span");
-        const _0x1931c9 = document.querySelector("li.dialogue-window-answer.answer.line_shop > span");
-        if (!_0x1931c9) {
+        const shopDialogOption = document.querySelector("li.dialogue-window-answer.answer.line_shop > span");
+        if (!shopDialogOption) {
           throw new Error("");
         }
-        _0x1931c9.click();
+        shopDialogOption.click();
         await waitForElement("body > div.game-window-positioner.default-cursor.eq-column-size-1.chat-size-1 > div.alerts-layer.layer > div.border-window.ui-draggable.window-on-peak > div.content > div.inner-content > div");
         await sleep(1000);
-        for (let _0xe22987 = 0; _0xe22987 < 7; _0xe22987++) {
+        for (let i = 0; i < 7; i++) {
           await sleep;
-          const _0x975a7c = document.querySelector("div.great-merchamp.btns-spacing > div:nth-child(1)");
-          if (!_0x975a7c) {
+          const sellAllButton = document.querySelector("div.great-merchamp.btns-spacing > div:nth-child(1)");
+          if (!sellAllButton) {
             throw new Error("");
           }
-          _0x975a7c.click();
+          sellAllButton.click();
           await sleep(1000);
           window.Engine.shop.basket.finalize();
           await sleep(1000);
         }
 
-        const _0x4bc61f = window.MargonemAPI.state.exping_location?.targetPotions || 0;
-        let _0x35a6e9 = false;
-        if (_0x4bc61f > 0) {
-          const _0x33bd4d = policzLeczyPrzedmioty() || 0;
-          const _0x2b43b8 = Math.max(0, _0x4bc61f - _0x33bd4d);
-          if (_0x2b43b8 > 0) {
-            const _0x1f60f8 = window.Engine.hero.d.warrior_stats?.maxhp || 10000;
-            const _0x10d40d = wybierzIdNajlepszejPotki(_0x1f60f8);
-            const _0x5690c4 = window.Engine.shop.items?.[_0x10d40d];
-            if (!_0x10d40d || !_0x5690c4 || !_0x5690c4._cachedStats || _0x5690c4._cachedStats.leczy === undefined) {
-              _0x35a6e9 = true;
+        const targetPotions = window.MargonemAPI.state.exping_location?.targetPotions || 0;
+        let needHealerFallback = false;
+        if (targetPotions > 0) {
+          const currentPotionCount = policzLeczyPrzedmioty() || 0;
+          const potionsToBuy = Math.max(0, targetPotions - currentPotionCount);
+          if (potionsToBuy > 0) {
+            const maxHealth = window.Engine.hero.d.warrior_stats?.maxhp || 10000;
+            const bestPotionId = wybierzIdNajlepszejPotki(maxHealth);
+            const potionData = window.Engine.shop.items?.[bestPotionId];
+            if (!bestPotionId || !potionData || !potionData._cachedStats || potionData._cachedStats.leczy === undefined) {
+              needHealerFallback = true;
               if (window.MargonemAPI.state.exping_location.potionsDebug) {
-                const _0x3d1f42 = window.Engine.shop.items ? Object.keys(window.Engine.shop.items).length : 0;
-                console.log("[Potions][BUY@TUNIA] no healing potions in Tunia shop; potionId=", _0x10d40d, "shopItems=", _0x3d1f42);
+                const shopItemCount = window.Engine.shop.items ? Object.keys(window.Engine.shop.items).length : 0;
+                console.log("[Potions][BUY@TUNIA] no healing potions in Tunia shop; potionId=", bestPotionId, "shopItems=", shopItemCount);
               }
             } else {
-            const _0x4c8f8b = _0x5690c4?.pr || 0;
-            const _0x1f83ed = window.Engine.hero.d.gold || 0;
-            const _0x23c61d = _0x4c8f8b > 0 ? Math.max(0, Math.floor(_0x1f83ed / _0x4c8f8b) - 1) : 45;
-            const _0x5ac1aa = Math.min(_0x2b43b8, _0x23c61d, 45);
+            const potionPrice = potionData?.pr || 0;
+            const playerGold = window.Engine.hero.d.gold || 0;
+            const maxAffordable = potionPrice > 0 ? Math.max(0, Math.floor(playerGold / potionPrice) - 1) : 45;
+            const buyAmount = Math.min(potionsToBuy, maxAffordable, 45);
             if (window.MargonemAPI.state.exping_location.potionsDebug) {
-              console.log("[Potions][BUY@TUNIA] buy=", _0x5ac1aa, "have=", _0x33bd4d, "target=", _0x4bc61f, "potionId=", _0x10d40d, "name=", _0x5690c4?.name);
+              console.log("[Potions][BUY@TUNIA] buy=", buyAmount, "have=", currentPotionCount, "target=", targetPotions, "potionId=", bestPotionId, "name=", potionData?.name);
             }
-            for (let _0x5b0fa9 = 0; _0x5b0fa9 < _0x5ac1aa; _0x5b0fa9++) {
-              await buyItem(_0x10d40d);
+            for (let i = 0; i < buyAmount; i++) {
+              await buyItem(bestPotionId);
               await sleep(1000);
             }
             window.Engine.shop.basket.finalize();
@@ -2654,15 +2654,15 @@ Object.assign(window.MargonemAPI, {
         }, false);
         await waitForPosition(20, 20, 60000);
 
-        if (_0x35a6e9) {
+        if (needHealerFallback) {
           if (window.MargonemAPI.state.exping_location?.potionsDebug) {
             console.log("[Potions][TUNIA->HEALER] fallback triggered, calling buyPotionsAtHealer");
           }
           try {
             await this.buyPotionsAtHealer(window.MargonemAPI.state.exping_location?.targetPotions || 0);
-          } catch (_0x331b3a) {
+          } catch (err) {
             if (window.MargonemAPI.state.exping_location?.potionsDebug) {
-              console.log("[Potions][TUNIA->HEALER] buyPotionsAtHealer error:", _0x331b3a?.message || _0x331b3a);
+              console.log("[Potions][TUNIA->HEALER] buyPotionsAtHealer error:", err?.message || err);
             }
           }
           await this.navigateToLocation("Kwieciste Przejście");
@@ -2674,58 +2674,58 @@ Object.assign(window.MargonemAPI, {
           await waitForPosition(20, 20, 60000);
         }
         return true;
-      } catch (_0x5718aa) {
+      } catch (error) {
         if (window.MargonemAPI.state.exping_location?.potionsDebug) {
-          console.log("[Potions][TUNIA] tuniaSelling threw error:", _0x5718aa?.message || _0x5718aa);
+          console.log("[Potions][TUNIA] tuniaSelling threw error:", error?.message || error);
         }
         // Even if tuniaSelling fails, try healer fallback if target > 0
-        const _0x3dcf71 = window.MargonemAPI.state.exping_location?.targetPotions || 0;
-        const _0x2a9b3e = policzLeczyPrzedmioty() || 0;
-        if (_0x3dcf71 > 0 && _0x2a9b3e < _0x3dcf71) {
+        const targetPotions = window.MargonemAPI.state.exping_location?.targetPotions || 0;
+        const currentPotionCount = policzLeczyPrzedmioty() || 0;
+        if (targetPotions > 0 && currentPotionCount < targetPotions) {
           if (window.MargonemAPI.state.exping_location?.potionsDebug) {
-            console.log("[Potions][TUNIA] error fallback to healer, have=", _0x2a9b3e, "target=", _0x3dcf71);
+            console.log("[Potions][TUNIA] error fallback to healer, have=", currentPotionCount, "target=", targetPotions);
           }
           try {
-            await this.buyPotionsAtHealer(_0x3dcf71);
-          } catch (_0x4b2e3a) {}
+            await this.buyPotionsAtHealer(targetPotions);
+          } catch (err) {}
           try {
             await this.navigateToLocation("Kwieciste Przejście");
             await this.waitForMapChange("Kwieciste Przejście");
-          } catch (_0x5c3b1e) {}
+          } catch (err) {}
         }
         return false;
       }
     },
-    findBestLocation: async function (_0x16e57f, _0x56d396) {
+    findBestLocation: async function (currentLocation, spotList) {
       this.checkAborted();
-      const _0xefbcc5 = await Promise.all(_0x56d396.map(async _0x34997f => {
+      const locationDistances = await Promise.all(spotList.map(async spotEntry => {
         this.checkAborted();
-        const [_0x5b33d0, _0x7b3382] = Object.entries(_0x34997f)[0];
+        const [mapName, insideMap] = Object.entries(spotEntry)[0];
         try {
-          const _0x1a224a = await window.MargonemAPI.navigation.findShortestPath(_0x16e57f, _0x5b33d0);
+          const pathResult = await window.MargonemAPI.navigation.findShortestPath(currentLocation, mapName);
           this.checkAborted();
-          const _0x109e57 = {
-            map: _0x5b33d0,
-            inside: _0x7b3382,
-            distance: _0x1a224a.distance || Infinity
+          const locationData = {
+            map: mapName,
+            inside: insideMap,
+            distance: pathResult.distance || Infinity
           };
-          return _0x109e57;
-        } catch (_0x17c169) {
-          const _0x1a0c15 = {
-            map: _0x5b33d0,
-            inside: _0x7b3382,
+          return locationData;
+        } catch (err) {
+          const locationData = {
+            map: mapName,
+            inside: insideMap,
             distance: Infinity
           };
-          return _0x1a0c15;
+          return locationData;
         }
       }));
-      const _0x500504 = {
+      const initialValue = {
         distance: Infinity
       };
-      return _0xefbcc5.reduce((_0x541ce7, _0x26c0e9) => _0x26c0e9.distance < _0x541ce7.distance ? _0x26c0e9 : _0x541ce7, _0x500504);
+      return locationDistances.reduce((closest, current) => current.distance < closest.distance ? current : closest, initialValue);
     },
-    handleRegularMapExping: async function (_0x2ab902, _0x1b6f35) {
-      const _0x20203a = window.MargonemAPI.state.exping_location;
+    handleRegularMapExping: async function (minLevel, maxLevel) {
+      const expingState = window.MargonemAPI.state.exping_location;
       this.checkAborted();
       try {
         // Get available maps from selectedMaps
@@ -2738,7 +2738,7 @@ Object.assign(window.MargonemAPI, {
         }
         
         // Main exping loop - continues until aborted
-        while (!_0x20203a.is_aborted) {
+        while (!expingState.is_aborted) {
           this.checkAborted();
           
           const currentMap = window.MargonemAPI.navigation.getCurrentLocation();
@@ -2755,7 +2755,7 @@ Object.assign(window.MargonemAPI, {
             try {
               // Record visit and fight on current location
               this.recordMapVisit(currentMap);
-              const fightResult = await this.fightOnCurrentLocation(_0x2ab902, _0x1b6f35);
+              const fightResult = await this.fightOnCurrentLocation(minLevel, maxLevel);
               this.checkAborted();
               if (fightResult) {
                 console.log("[Exping] Mapa wyczyszczona:", currentMap);
@@ -2785,117 +2785,117 @@ Object.assign(window.MargonemAPI, {
               // Record that we visited this map
               this.recordMapVisit(nextMap);
               
-              const _0x55ea88 = await this.fightOnCurrentLocation(_0x2ab902, _0x1b6f35);
+              const fightSuccess = await this.fightOnCurrentLocation(minLevel, maxLevel);
               this.checkAborted();
-              if (_0x55ea88) {
+              if (fightSuccess) {
                 console.log("[Exping] Mapa wyczyszczona:", nextMap);
               }
-            } catch (_0x47a56d) {
+            } catch (err) {
               console.log("[Exping] Błąd na mapie, kontynuuję:", nextMap);
               continue;
             }
           }
           
-          _0x20203a.iteration.count++;
+          expingState.iteration.count++;
         }
-      } catch (_0x24ef67) {
-        throw _0x24ef67;
+      } catch (error) {
+        throw error;
       }
     },
-    navigateToLocation: async function (_0x13fa31) {
+    navigateToLocation: async function (targetLocation) {
       this.checkAborted();
-      const _0x28e956 = 30;
-      let _0x338f55 = 0;
-      while (_0x338f55 < _0x28e956) {
+      const maxRetries = 30;
+      let retryCount = 0;
+      while (retryCount < maxRetries) {
         this.checkAborted();
         try {
-          await window.MargonemAPI.navigation.goToLocation(_0x13fa31);
+          await window.MargonemAPI.navigation.goToLocation(targetLocation);
           this.checkAborted();
-          const _0x2b6c36 = await this.waitForMapChange(_0x13fa31);
+          const mapChanged = await this.waitForMapChange(targetLocation);
           this.checkAborted();
-          if (_0x2b6c36) {
+          if (mapChanged) {
             return true;
           }
-        } catch (_0x15673a) {}
-        _0x338f55++;
-        await new Promise(_0x2444e0 => setTimeout(_0x2444e0, 2000));
+        } catch (err) {}
+        retryCount++;
+        await new Promise(resolve => setTimeout(resolve, 2000));
         this.checkAborted();
       }
       throw new Error();
     },
-    fightOnCurrentLocation: async function (_0x10962b, _0x2940a0) {
+    fightOnCurrentLocation: async function (minLevel, maxLevel) {
       this.checkAborted();
-      const _0x41a134 = window.MargonemAPI.navigation.getCurrentLocation();
+      const currentLocation = window.MargonemAPI.navigation.getCurrentLocation();
       try {
-        const _0x4db310 = await this.checkForMobs(_0x10962b, _0x2940a0);
+        const hasMobs = await this.checkForMobs(minLevel, maxLevel);
         this.checkAborted();
-        if (!_0x4db310) {
+        if (!hasMobs) {
           return false;
         }
-        const _0x3ee73f = {
-          min: _0x10962b,
-          max: _0x2940a0
+        const levelRange = {
+          min: minLevel,
+          max: maxLevel
         };
-        const _0x56f573 = {
-          levelRange: _0x3ee73f
+        const fightOptions = {
+          levelRange: levelRange
         };
-        await window.MargonemAPI.combat.startFight(_0x56f573);
+        await window.MargonemAPI.combat.startFight(fightOptions);
         this.checkAborted();
-        const _0x44589e = await this.waitForMapClear();
+        const mapCleared = await this.waitForMapClear();
         this.checkAborted();
-        if (!_0x44589e) {}
+        if (!mapCleared) {}
         window.MargonemAPI.combat.stopFight();
         return true;
-      } catch (_0x4da2df) {
+      } catch (error) {
         window.MargonemAPI.combat.stopFight();
-        throw _0x4da2df;
+        throw error;
       }
     },
-    checkForMobs: async function (_0x290d84, _0x3a4572) {
+    checkForMobs: async function (minLevel, maxLevel) {
       this.checkAborted();
       try {
-        for (let _0x31e909 = 1; _0x31e909 <= 3; _0x31e909++) {
+        for (let attempt = 1; attempt <= 3; attempt++) {
           this.checkAborted();
-          await new Promise(_0x1c0691 => setTimeout(_0x1c0691, 1000));
+          await new Promise(resolve => setTimeout(resolve, 1000));
           this.checkAborted();
-          const _0x234b83 = window.MargonemAPI.getAllMobs() || [];
+          const allMobs = window.MargonemAPI.getAllMobs() || [];
           this.checkAborted();
-          const _0x545dfc = _0x234b83.filter(_0x5c522b => {
-            const _0x172396 = _0x5c522b.lvl || 0;
-            return _0x172396 >= _0x290d84 && _0x172396 <= _0x3a4572;
+          const validMobs = allMobs.filter(mob => {
+            const mobLevel = mob.lvl || 0;
+            return mobLevel >= minLevel && mobLevel <= maxLevel;
           });
-          if (_0x545dfc.length > 0) {
+          if (validMobs.length > 0) {
             return true;
           }
         }
         return false;
-      } catch (_0x2a3779) {
+      } catch (err) {
         return false;
       }
     },
-    waitForMapChange: async function (_0x1dc912) {
+    waitForMapChange: async function (targetMap) {
       this.checkAborted();
-      const _0x54b18b = 30000;
-      const _0x3ab536 = Date.now();
-      while (Date.now() - _0x3ab536 < _0x54b18b) {
+      const timeout = 30000;
+      const startTime = Date.now();
+      while (Date.now() - startTime < timeout) {
         if (window.MargonemAPI.state.exping_location.is_aborted) {
           return false;
         }
         this.checkAborted();
-        const _0x9dd982 = window.MargonemAPI.navigation.getCurrentLocation();
-        if (_0x9dd982 === _0x1dc912) {
+        const currentMap = window.MargonemAPI.navigation.getCurrentLocation();
+        if (currentMap === targetMap) {
           return true;
         }
-        await new Promise(_0x57c518 => setTimeout(_0x57c518, 1000));
+        await new Promise(resolve => setTimeout(resolve, 1000));
         this.checkAborted();
       }
       return false;
     },
     waitForMapClear: async function () {
       this.checkAborted();
-      const _0x29567e = 300000;
-      const _0x20acf3 = Date.now();
-      while (Date.now() - _0x20acf3 < _0x29567e) {
+      const timeout = 300000;
+      const startTime = Date.now();
+      while (Date.now() - startTime < timeout) {
         if (window.MargonemAPI.state.exping_location.is_aborted) {
           return false;
         }
@@ -2905,123 +2905,123 @@ Object.assign(window.MargonemAPI, {
           window.MargonemAPI.state.exping_location.last_map_clean_time = Date.now();
           return true;
         }
-        await new Promise(_0xd7076e => setTimeout(_0xd7076e, 1000));
+        await new Promise(resolve => setTimeout(resolve, 1000));
         this.checkAborted();
       }
       throw new Error("");
     },
     stopExping: function () {
       try {
-        const _0x4dd3b8 = window.MargonemAPI.state;
-        const _0x21ca31 = window.MargonemAPI.state.exping_location;
+        const state = window.MargonemAPI.state;
+        const expingLocation = window.MargonemAPI.state.exping_location;
         clearInterval(window.MargonemAPI.state.exping_location.death_cam);
         clearInterval(window.MargonemAPI.state.exping_location.teleport_if_player);
         clearInterval(window.MargonemAPI.state.exping_location.potion_checker);
         clearInterval(window.MargonemAPI.state.exping_location.bag_full);
         window.MargonemAPI.state.exping_location.is_aborted = true;
         window.MargonemAPI.state.exping_location._potionRefillInProgress = false;
-        if (_0x4dd3b8.timers) {
-          Object.values(_0x4dd3b8.timers).forEach(_0x350bca => {
-            if (_0x350bca) {
-              clearTimeout(_0x350bca);
-              clearInterval(_0x350bca);
+        if (state.timers) {
+          Object.values(state.timers).forEach(timer => {
+            if (timer) {
+              clearTimeout(timer);
+              clearInterval(timer);
             }
           });
-          _0x4dd3b8.timers = {};
+          state.timers = {};
         }
         if (window.MargonemAPI.navigation) {
           window.MargonemAPI.navigation.stopNavigation(false);
-          if (_0x4dd3b8.navigation) {
-            clearInterval(_0x4dd3b8.navigation.pathCheckInterval);
-            _0x4dd3b8.navigation.isNavigating = false;
-            _0x4dd3b8.navigation.currentPath = null;
-            _0x4dd3b8.navigation.currentPathIndex = 0;
-            _0x4dd3b8.navigation.targetLocation = null;
-            _0x4dd3b8.navigation.lastMoveTime = null;
+          if (state.navigation) {
+            clearInterval(state.navigation.pathCheckInterval);
+            state.navigation.isNavigating = false;
+            state.navigation.currentPath = null;
+            state.navigation.currentPathIndex = 0;
+            state.navigation.targetLocation = null;
+            state.navigation.lastMoveTime = null;
           }
         }
         try {
           window.MargonemAPI.combat.stopFight();
-          _0x4dd3b8.autoFightActive = false;
-          _0x4dd3b8.autoFightInProgress = false;
-          _0x4dd3b8.selectedNicks = [];
-          _0x4dd3b8.lastAttemptedMobs = [];
-          _0x4dd3b8.currentTargetId = null;
-          _0x4dd3b8.blockedMobs.clear();
-          _0x4dd3b8.map_cleaned = false;
-        } catch (_0x2b2e08) {}
+          state.autoFightActive = false;
+          state.autoFightInProgress = false;
+          state.selectedNicks = [];
+          state.lastAttemptedMobs = [];
+          state.currentTargetId = null;
+          state.blockedMobs.clear();
+          state.map_cleaned = false;
+        } catch (err) {}
         try {
           if (window.MargonemAPI.combat.recoverySystem) {
             window.MargonemAPI.combat.recoverySystem.stopMonitoring();
           }
-        } catch (_0x3338b7) {}
-        if (_0x4dd3b8.pendingStopActions) {
-          _0x4dd3b8.pendingStopActions.clear();
+        } catch (err) {}
+        if (state.pendingStopActions) {
+          state.pendingStopActions.clear();
         }
-        if (_0x4dd3b8.activeIntervals) {
-          _0x4dd3b8.activeIntervals.forEach(_0x4288c1 => {
-            clearInterval(_0x4288c1);
+        if (state.activeIntervals) {
+          state.activeIntervals.forEach(interval => {
+            clearInterval(interval);
           });
-          _0x4dd3b8.activeIntervals.clear();
+          state.activeIntervals.clear();
         }
-        if (_0x4dd3b8.activeTimeouts) {
-          _0x4dd3b8.activeTimeouts.forEach(_0x3f7b21 => {
-            clearTimeout(_0x3f7b21);
+        if (state.activeTimeouts) {
+          state.activeTimeouts.forEach(timeout => {
+            clearTimeout(timeout);
           });
-          _0x4dd3b8.activeTimeouts.clear();
+          state.activeTimeouts.clear();
         }
-        if (_0x21ca31) {
-          _0x21ca31.master_map = null;
-          _0x21ca31.current_expowisko = null;
-          _0x21ca31.current_gateway = null;
-          _0x21ca31.last_map_clean_time = null;
-          _0x21ca31.finished_gateways = [];
-          _0x21ca31.bag_check = null;
-          if (_0x21ca31.sublocation_data) {
-            _0x21ca31.sublocation_data.mapped = false;
-            _0x21ca31.sublocation_data.connections.clear();
-            _0x21ca31.sublocation_data.optimal_path = [];
-            _0x21ca31.sublocation_data.visited.clear();
+        if (expingLocation) {
+          expingLocation.master_map = null;
+          expingLocation.current_expowisko = null;
+          expingLocation.current_gateway = null;
+          expingLocation.last_map_clean_time = null;
+          expingLocation.finished_gateways = [];
+          expingLocation.bag_check = null;
+          if (expingLocation.sublocation_data) {
+            expingLocation.sublocation_data.mapped = false;
+            expingLocation.sublocation_data.connections.clear();
+            expingLocation.sublocation_data.optimal_path = [];
+            expingLocation.sublocation_data.visited.clear();
           }
-          if (_0x21ca31.iteration) {
-            _0x21ca31.iteration.count = 0;
-            _0x21ca31.iteration.visited_maps.clear();
-            _0x21ca31.iteration.visited_gateways.clear();
-            _0x21ca31.iteration.path = [];
-            _0x21ca31.iteration.completed = false;
+          if (expingLocation.iteration) {
+            expingLocation.iteration.count = 0;
+            expingLocation.iteration.visited_maps.clear();
+            expingLocation.iteration.visited_gateways.clear();
+            expingLocation.iteration.path = [];
+            expingLocation.iteration.completed = false;
           }
-          if (_0x21ca31.movement) {
-            _0x21ca31.movement.in_progress = false;
-            _0x21ca31.movement.target = null;
-            _0x21ca31.movement.start_time = null;
+          if (expingLocation.movement) {
+            expingLocation.movement.in_progress = false;
+            expingLocation.movement.target = null;
+            expingLocation.movement.start_time = null;
           }
         }
         clearInterval(window.MargonemAPI.state.exping_location.bag_full);
         try {
-          const _0x98b09d = window.Engine;
-          if (_0x98b09d && _0x98b09d.hero) {
-            const _0x125cbc = Math.floor(_0x98b09d.hero.x || _0x98b09d.hero.d && _0x98b09d.hero.d.x);
-            const _0x1ad2d4 = Math.floor(_0x98b09d.hero.y || _0x98b09d.hero.d && _0x98b09d.hero.d.y);
-            const _0x29a43e = {
-              x: _0x125cbc,
-              y: _0x1ad2d4
+          const engine = window.Engine;
+          if (engine && engine.hero) {
+            const heroX = Math.floor(engine.hero.x || engine.hero.d && engine.hero.d.x);
+            const heroY = Math.floor(engine.hero.y || engine.hero.d && engine.hero.d.y);
+            const heroPosition = {
+              x: heroX,
+              y: heroY
             };
-            _0x98b09d.hero.autoGoTo(_0x29a43e);
+            engine.hero.autoGoTo(heroPosition);
           }
-        } catch (_0x57fd07) {}
-        for (const _0x4f6df1 in window) {
-          if (typeof window[_0x4f6df1] === "number") {
-            if (_0x4f6df1.includes("interval") || _0x4f6df1.includes("timeout")) {
-              clearInterval(window[_0x4f6df1]);
-              clearTimeout(window[_0x4f6df1]);
+        } catch (err) {}
+        for (const key in window) {
+          if (typeof window[key] === "number") {
+            if (key.includes("interval") || key.includes("timeout")) {
+              clearInterval(window[key]);
+              clearTimeout(window[key]);
             }
           }
         }
         return true;
-      } catch (_0xabb203) {
+      } catch (error) {
         try {
           this.resetState();
-        } catch (_0x1fb22c) {}
+        } catch (err) {}
         return false;
       }
     },
@@ -3065,168 +3065,168 @@ Object.assign(window.MargonemAPI, {
       openSet: null,
       closedSet: null
     },
-    debug: function (..._0x4e2baf) {
+    debug: function (...args) {
       if (window.MargonemAPI.DEBUG) {}
     },
     Node: class {
-      constructor(_0x50d022, _0x26cedf, _0x253f66 = 0, _0x500c43 = 0) {
-        this.x = _0x50d022;
-        this.y = _0x26cedf;
-        this.g = _0x253f66;
-        this.h = _0x500c43;
-        this.f = _0x253f66 + _0x500c43;
+      constructor(x, y, g = 0, h = 0) {
+        this.x = x;
+        this.y = y;
+        this.g = g;
+        this.h = h;
+        this.f = g + h;
         this.parent = null;
-        this.key = _0x50d022 + "," + _0x26cedf;
+        this.key = x + "," + y;
       }
     },
     initializeCollisionGrid: function () {
-      const _0xa8671d = window.Engine;
-      if (!_0xa8671d?.map) {
+      const engine = window.Engine;
+      if (!engine?.map) {
         return;
       }
-      const _0x243525 = _0xa8671d.map.d.name;
-      if (_0x243525 === this.cache.lastMapName && this.cache.collisionGrid) {
+      const mapName = engine.map.d.name;
+      if (mapName === this.cache.lastMapName && this.cache.collisionGrid) {
         return;
       }
-      const _0x5a0e3d = window.MargonemAPI.scanMapCollisions();
-      if (!_0x5a0e3d) {
+      const collisionData = window.MargonemAPI.scanMapCollisions();
+      if (!collisionData) {
         return;
       }
-      const _0x57f759 = _0x5a0e3d.width;
-      const _0x1ba2b4 = _0x5a0e3d.height;
-      const _0x7a4fa7 = new Uint8Array(_0x57f759 * _0x1ba2b4);
-      for (let _0x2b78b6 = 0; _0x2b78b6 < _0x1ba2b4; _0x2b78b6++) {
-        for (let _0x1839f8 = 0; _0x1839f8 < _0x57f759; _0x1839f8++) {
-          _0x7a4fa7[_0x2b78b6 * _0x57f759 + _0x1839f8] = _0x5a0e3d.collisions[_0x2b78b6][_0x1839f8].collision ? 1 : 0;
+      const width = collisionData.width;
+      const height = collisionData.height;
+      const grid = new Uint8Array(width * height);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          grid[y * width + x] = collisionData.collisions[y][x].collision ? 1 : 0;
         }
       }
-      this.cache.collisionGrid = _0x7a4fa7;
-      this.cache.gridWidth = _0x57f759;
-      this.cache.gridHeight = _0x1ba2b4;
-      this.cache.lastMapName = _0x243525;
+      this.cache.collisionGrid = grid;
+      this.cache.gridWidth = width;
+      this.cache.gridHeight = height;
+      this.cache.lastMapName = mapName;
       this.cache.pathCache.clear();
       this.cache.nodeCache.clear();
-      return _0x7a4fa7;
+      return grid;
     },
-    checkCollision: function (_0x47a7c5, _0x2141b0) {
+    checkCollision: function (x, y) {
       const {
-        gridWidth: _0x16244c,
-        collisionGrid: _0x42d19a
+        gridWidth: gridWidth,
+        collisionGrid: collisionGrid
       } = this.cache;
-      return _0x42d19a[_0x2141b0 * _0x16244c + _0x47a7c5] === 1;
+      return collisionGrid[y * gridWidth + x] === 1;
     },
-    findPath: function (_0x1acace, _0x5eece1, _0x468b0f, _0x5eb6af) {
+    findPath: function (startX, startY, endX, endY) {
       if (!this.cache.collisionGrid) {
         this.initializeCollisionGrid();
         if (!this.cache.collisionGrid) {
           return null;
         }
       }
-      const _0x11c606 = _0x1acace + "," + _0x5eece1 + "-" + _0x468b0f + "," + _0x5eb6af;
-      const _0x3fa420 = this.cache.pathCache.get(_0x11c606);
-      if (_0x3fa420) {
-        return _0x3fa420;
+      const cacheKey = startX + "," + startY + "-" + endX + "," + endY;
+      const cachedPath = this.cache.pathCache.get(cacheKey);
+      if (cachedPath) {
+        return cachedPath;
       }
       const {
-        gridWidth: _0x505751,
-        gridHeight: _0x4e56ec
+        gridWidth: width,
+        gridHeight: height
       } = this.cache;
-      if (_0x1acace < 0 || _0x5eece1 < 0 || _0x468b0f < 0 || _0x5eb6af < 0 || _0x1acace >= _0x505751 || _0x5eece1 >= _0x4e56ec || _0x468b0f >= _0x505751 || _0x5eb6af >= _0x4e56ec) {
+      if (startX < 0 || startY < 0 || endX < 0 || endY < 0 || startX >= width || startY >= height || endX >= width || endY >= height) {
         return null;
       }
-      const _0x1fc9d2 = new Map();
-      const _0x12090f = new Set();
-      const _0x43c8b7 = new this.Node(_0x1acace, _0x5eece1, 0, Math.abs(_0x468b0f - _0x1acace) + Math.abs(_0x5eb6af - _0x5eece1));
-      _0x1fc9d2.set(_0x43c8b7.key, _0x43c8b7);
-      const _0x562d7e = {
+      const openSet = new Map();
+      const closedSet = new Set();
+      const startNode = new this.Node(startX, startY, 0, Math.abs(endX - startX) + Math.abs(endY - startY));
+      openSet.set(startNode.key, startNode);
+      const dirUp = {
         x: 0,
         y: -1
       };
-      const _0x14521a = {
+      const dirLeft = {
         x: -1,
         y: 0
       };
-      const _0x4f10c0 = [_0x562d7e, {
+      const neighbors = [dirUp, {
         x: 1,
         y: 0
       }, {
         x: 0,
         y: 1
-      }, _0x14521a];
-      while (_0x1fc9d2.size > 0) {
-        let _0x34d021 = null;
-        let _0x2e09a6 = Infinity;
-        for (const [_0x5b3c53, _0x277287] of _0x1fc9d2) {
-          if (_0x277287.f < _0x2e09a6) {
-            _0x2e09a6 = _0x277287.f;
-            _0x34d021 = _0x277287;
+      }, dirLeft];
+      while (openSet.size > 0) {
+        let current = null;
+        let lowestF = Infinity;
+        for (const [nodeKey, node] of openSet) {
+          if (node.f < lowestF) {
+            lowestF = node.f;
+            current = node;
           }
         }
-        if (_0x34d021.x === _0x468b0f && _0x34d021.y === _0x5eb6af) {
-          const _0x722ccf = [];
-          while (_0x34d021) {
-            const _0xe4f362 = {
-              x: _0x34d021.x,
-              y: _0x34d021.y
+        if (current.x === endX && current.y === endY) {
+          const path = [];
+          while (current) {
+            const point = {
+              x: current.x,
+              y: current.y
             };
-            _0x722ccf.unshift(_0xe4f362);
-            _0x34d021 = _0x34d021.parent;
+            path.unshift(point);
+            current = current.parent;
           }
-          this.cache.pathCache.set(_0x11c606, _0x722ccf);
-          return _0x722ccf;
+          this.cache.pathCache.set(cacheKey, path);
+          return path;
         }
-        _0x1fc9d2.delete(_0x34d021.key);
-        _0x12090f.add(_0x34d021.key);
-        for (const _0x2447da of _0x4f10c0) {
-          const _0x4d16cb = _0x34d021.x + _0x2447da.x;
-          const _0x45a2cd = _0x34d021.y + _0x2447da.y;
-          const _0x4f3502 = _0x4d16cb + "," + _0x45a2cd;
-          if (_0x4d16cb < 0 || _0x45a2cd < 0 || _0x4d16cb >= _0x505751 || _0x45a2cd >= _0x4e56ec || this.checkCollision(_0x4d16cb, _0x45a2cd) && (_0x4d16cb !== _0x468b0f || _0x45a2cd !== _0x5eb6af) || _0x12090f.has(_0x4f3502)) {
+        openSet.delete(current.key);
+        closedSet.add(current.key);
+        for (const direction of neighbors) {
+          const neighborX = current.x + direction.x;
+          const neighborY = current.y + direction.y;
+          const neighborKey = neighborX + "," + neighborY;
+          if (neighborX < 0 || neighborY < 0 || neighborX >= width || neighborY >= height || this.checkCollision(neighborX, neighborY) && (neighborX !== endX || neighborY !== endY) || closedSet.has(neighborKey)) {
             continue;
           }
-          const _0x3fdb4f = _0x34d021.g + 1;
-          const _0x49a50f = _0x1fc9d2.get(_0x4f3502);
-          if (_0x49a50f) {
-            if (_0x3fdb4f < _0x49a50f.g) {
-              _0x49a50f.g = _0x3fdb4f;
-              _0x49a50f.f = _0x3fdb4f + _0x49a50f.h;
-              _0x49a50f.parent = _0x34d021;
+          const tentativeG = current.g + 1;
+          const existingNode = openSet.get(neighborKey);
+          if (existingNode) {
+            if (tentativeG < existingNode.g) {
+              existingNode.g = tentativeG;
+              existingNode.f = tentativeG + existingNode.h;
+              existingNode.parent = current;
             }
           } else {
-            const _0x5f3a30 = new this.Node(_0x4d16cb, _0x45a2cd, _0x3fdb4f, Math.abs(_0x468b0f - _0x4d16cb) + Math.abs(_0x5eb6af - _0x45a2cd));
-            _0x5f3a30.parent = _0x34d021;
-            _0x1fc9d2.set(_0x4f3502, _0x5f3a30);
+            const newNode = new this.Node(neighborX, neighborY, tentativeG, Math.abs(endX - neighborX) + Math.abs(endY - neighborY));
+            newNode.parent = current;
+            openSet.set(neighborKey, newNode);
           }
         }
       }
-      this.cache.pathCache.set(_0x11c606, null);
+      this.cache.pathCache.set(cacheKey, null);
       return null;
     },
-    calculateRealDistance: function (_0x3c084c, _0x14b750, _0x3d12f3, _0x1366d3) {
-      const _0x18bf02 = this.findPath(_0x3c084c, _0x14b750, _0x3d12f3, _0x1366d3);
-      if (_0x18bf02) {
-        return _0x18bf02.length - 1;
+    calculateRealDistance: function (startX, startY, endX, endY) {
+      const path = this.findPath(startX, startY, endX, endY);
+      if (path) {
+        return path.length - 1;
       } else {
         return Infinity;
       }
     },
-    findPathWithBackHandling: function (_0x292f56, _0x289c4a, _0x76d290, _0x1c6367) {
+    findPathWithBackHandling: function (startX, startY, endX, endY) {
       try {
-        const _0x58e04c = window.Engine;
-        if (_0x58e04c && _0x58e04c.hero) {
-          const _0x311fa5 = Math.floor(parseFloat(_0x58e04c.hero.d.x || 0));
-          const _0x48ca71 = Math.floor(parseFloat(_0x58e04c.hero.d.y || 0));
-          const _0x1da9e5 = Math.floor(parseFloat(_0x58e04c.hero.lastServerX || _0x58e04c.hero.d.x || 0));
-          const _0x12f611 = Math.floor(parseFloat(_0x58e04c.hero.lastServerY || _0x58e04c.hero.d.y || 0));
-          if (Math.abs(_0x311fa5 - _0x1da9e5) > 0 || Math.abs(_0x48ca71 - _0x12f611) > 0) {
-            console.log("[MargonemAPI] Position mismatch detected: Local(" + _0x311fa5 + "," + _0x48ca71 + ") vs Server(" + _0x1da9e5 + "," + _0x12f611 + ")");
-            _0x292f56 = _0x1da9e5;
-            _0x289c4a = _0x12f611;
+        const engine = window.Engine;
+        if (engine && engine.hero) {
+          const localX = Math.floor(parseFloat(engine.hero.d.x || 0));
+          const localY = Math.floor(parseFloat(engine.hero.d.y || 0));
+          const serverX = Math.floor(parseFloat(engine.hero.lastServerX || engine.hero.d.x || 0));
+          const serverY = Math.floor(parseFloat(engine.hero.lastServerY || engine.hero.d.y || 0));
+          if (Math.abs(localX - serverX) > 0 || Math.abs(localY - serverY) > 0) {
+            console.log("[MargonemAPI] Position mismatch detected: Local(" + localX + "," + localY + ") vs Server(" + serverX + "," + serverY + ")");
+            startX = serverX;
+            startY = serverY;
           }
         }
-        return this.findPath(_0x292f56, _0x289c4a, _0x76d290, _0x1c6367);
-      } catch (_0x9f4744) {
-        console.error("Error in findPathWithBackHandling:", _0x9f4744);
+        return this.findPath(startX, startY, endX, endY);
+      } catch (error) {
+        console.error("Error in findPathWithBackHandling:", error);
         return null;
       }
     }
@@ -3258,129 +3258,129 @@ Object.assign(window.MargonemAPI, {
       mobs: window.MargonemAPI.state.allMobs,
       fightActive: window.MargonemAPI.state.autoFightActive,
       selectedMobs: window.MargonemAPI.state.selectedNicks,
-      blockedMobs: Array.from(window.MargonemAPI.state.blockedMobs.entries()).map(([_0xdb968c, _0x404088]) => ({
-        id: _0xdb968c,
-        nick: _0x404088.nick,
-        blockedAt: _0x404088.timestamp
+      blockedMobs: Array.from(window.MargonemAPI.state.blockedMobs.entries()).map(([mobId, mobData]) => ({
+        id: mobId,
+        nick: mobData.nick,
+        blockedAt: mobData.timestamp
       }))
     };
   },
   getAllGateways: function () {
-    const _0x39afb2 = window.Engine;
-    if (!_0x39afb2 || !_0x39afb2.map || !_0x39afb2.map.gateways) {
+    const engine = window.Engine;
+    if (!engine || !engine.map || !engine.map.gateways) {
       return [];
     }
-    const _0x3f0a9f = _0x39afb2.map.gateways.getList();
-    return _0x3f0a9f.map(_0x4ebeb5 => ({
-      name: _0x4ebeb5.tip[0],
-      id: _0x4ebeb5.d.id,
-      available: _0x4ebeb5.available,
-      x: _0x4ebeb5.d.x,
-      y: _0x4ebeb5.d.y
+    const gatewayList = engine.map.gateways.getList();
+    return gatewayList.map(gateway => ({
+      name: gateway.tip[0],
+      id: gateway.d.id,
+      available: gateway.available,
+      x: gateway.d.x,
+      y: gateway.d.y
     }));
   },
   getAllMobs: function () {
-    const _0x4cb680 = window.Engine;
-    if (!_0x4cb680 || !_0x4cb680.npcs) {
+    const engine = window.Engine;
+    if (!engine || !engine.npcs) {
       return [];
     }
-    const _0x57552b = _0x4cb680.map && (_0x4cb680.map.d?.name || _0x4cb680.map.name);
-    if (_0x57552b && _0x57552b !== window.MargonemAPI.state.lastMapName) {
+    const mapName = engine.map && (engine.map.d?.name || engine.map.name);
+    if (mapName && mapName !== window.MargonemAPI.state.lastMapName) {
       window.MargonemAPI.state.allMobs = [];
-      window.MargonemAPI.state.lastMapName = _0x57552b;
+      window.MargonemAPI.state.lastMapName = mapName;
       window.MargonemAPI.combat.clearBlockedMobs();
       window.MargonemAPI.state.selectedNicks = [];
-      const _0x1f3130 = document.querySelector("#mobCheckboxes");
-      if (_0x1f3130) {
-        _0x1f3130.innerHTML = "";
+      const mobCheckboxes = document.querySelector("#mobCheckboxes");
+      if (mobCheckboxes) {
+        mobCheckboxes.innerHTML = "";
       }
     }
-    const _0x2bd5b4 = _0x4cb680.npcs.check();
-    window.MargonemAPI.state.npcs = _0x2bd5b4;
-    const _0x424f21 = [];
-    for (const _0x3384aa in _0x2bd5b4) {
-      const _0x4f3355 = _0x2bd5b4[_0x3384aa];
-      if (_0x4f3355 && _0x4f3355.d && (_0x4f3355.d.type === 2 || _0x4f3355.d.type === 3)) {
-        _0x424f21.push({
-          id: _0x4f3355.d.id,
-          nick: _0x4f3355.d.nick,
-          x: Math.floor(parseFloat(_0x4f3355.d.x)),
-          y: Math.floor(parseFloat(_0x4f3355.d.y)),
-          lvl: _0x4f3355.d.lvl,
-          type: _0x4f3355.d.type,
-          wt: _0x4f3355.d.wt
+    const npcList = engine.npcs.check();
+    window.MargonemAPI.state.npcs = npcList;
+    const mobs = [];
+    for (const npcId in npcList) {
+      const npc = npcList[npcId];
+      if (npc && npc.d && (npc.d.type === 2 || npc.d.type === 3)) {
+        mobs.push({
+          id: npc.d.id,
+          nick: npc.d.nick,
+          x: Math.floor(parseFloat(npc.d.x)),
+          y: Math.floor(parseFloat(npc.d.y)),
+          lvl: npc.d.lvl,
+          type: npc.d.type,
+          wt: npc.d.wt
         });
       }
     }
-    window.MargonemAPI.state.allMobs = _0x424f21;
-    return _0x424f21;
+    window.MargonemAPI.state.allMobs = mobs;
+    return mobs;
   },
-  checkCollision: function (_0x51183e, _0x25c964) {
-    const _0x21085d = window.Engine;
-    if (!_0x21085d || !_0x21085d.map || !_0x21085d.map.col) {
+  checkCollision: function (x, y) {
+    const engine = window.Engine;
+    if (!engine || !engine.map || !engine.map.col) {
       return null;
     }
-    const _0x3a6460 = _0x21085d.map.d.x;
-    const _0x2880ca = _0x21085d.map.d.y;
-    if (_0x51183e < 0 || _0x25c964 < 0 || _0x51183e >= _0x3a6460 || _0x25c964 >= _0x2880ca) {
+    const mapWidth = engine.map.d.x;
+    const mapHeight = engine.map.d.y;
+    if (x < 0 || y < 0 || x >= mapWidth || y >= mapHeight) {
       return {
         collision: true,
         reason: "out_of_bounds",
         value: 4
       };
     }
-    const _0x50abd8 = _0x21085d.map.col.check(_0x51183e, _0x25c964);
+    const collisionValue = engine.map.col.check(x, y);
     return {
-      collision: _0x50abd8 !== 0,
+      collision: collisionValue !== 0,
       reason: "collision_check",
-      value: _0x50abd8,
+      value: collisionValue,
       details: {
-        blocked: Boolean(_0x50abd8 & 1),
-        water: Boolean(_0x50abd8 & 2),
-        elevation: Boolean(_0x50abd8 & 4),
-        mob: Boolean(_0x50abd8 & 8),
-        npc: Boolean(_0x50abd8 & 16),
-        player: Boolean(_0x50abd8 & 32)
+        blocked: Boolean(collisionValue & 1),
+        water: Boolean(collisionValue & 2),
+        elevation: Boolean(collisionValue & 4),
+        mob: Boolean(collisionValue & 8),
+        npc: Boolean(collisionValue & 16),
+        player: Boolean(collisionValue & 32)
       }
     };
   },
   scanMapCollisions: function () {
-    const _0x57fbf7 = window.Engine;
-    if (!_0x57fbf7 || !_0x57fbf7.map || !_0x57fbf7.map.col) {
+    const engine = window.Engine;
+    if (!engine || !engine.map || !engine.map.col) {
       return null;
     }
-    const _0xfb9185 = _0x57fbf7.map.d.x;
-    const _0x5795d5 = _0x57fbf7.map.d.y;
-    const _0x498540 = new Array(_0x5795d5);
-    for (let _0x4e7ed3 = 0; _0x4e7ed3 < _0x5795d5; _0x4e7ed3++) {
-      _0x498540[_0x4e7ed3] = new Array(_0xfb9185);
-      for (let _0xb69b4d = 0; _0xb69b4d < _0xfb9185; _0xb69b4d++) {
-        _0x498540[_0x4e7ed3][_0xb69b4d] = window.MargonemAPI.checkCollision(_0xb69b4d, _0x4e7ed3);
+    const width = engine.map.d.x;
+    const height = engine.map.d.y;
+    const collisions = new Array(height);
+    for (let y = 0; y < height; y++) {
+      collisions[y] = new Array(width);
+      for (let x = 0; x < width; x++) {
+        collisions[y][x] = window.MargonemAPI.checkCollision(x, y);
       }
     }
     return {
-      width: _0xfb9185,
-      height: _0x5795d5,
-      collisions: _0x498540,
+      width: width,
+      height: height,
+      collisions: collisions,
       summary: {
-        total: _0xfb9185 * _0x5795d5,
-        blocked: _0x498540.flat().filter(_0x2f3210 => _0x2f3210.collision).length,
-        walkable: _0x498540.flat().filter(_0x3c4ec4 => !_0x3c4ec4.collision).length
+        total: width * height,
+        blocked: collisions.flat().filter(tile => tile.collision).length,
+        walkable: collisions.flat().filter(tile => !tile.collision).length
       }
     };
   },
-  znajdzIloscPotkow: function (_0x2a5517) {
+  znajdzIloscPotkow: function (itemId) {
     if (!window.Engine || !window.Engine.shop || !window.Engine.shop.items) {
       return;
     }
-    const _0x2f97d2 = window.Engine.shop.items;
-    const _0x3d75b6 = _0x2f97d2[_0x2a5517];
-    const _0x1badcd = window.Engine.hero.d.gold;
-    let _0x569183 = parseInt(_0x1badcd / _0x3d75b6.pr) - 1;
-    if (_0x569183 > 45) {
+    const shopItems = window.Engine.shop.items;
+    const item = shopItems[itemId];
+    const heroGold = window.Engine.hero.d.gold;
+    let potionCount = parseInt(heroGold / item.pr) - 1;
+    if (potionCount > 45) {
       return 45;
     }
-    return _0x569183;
+    return potionCount;
   },
 
   // ====== FUNKCJA KUPOWANIA POTEK U TUNII (przez klikanie DOM) ======
