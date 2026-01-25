@@ -1,0 +1,61 @@
+{
+    "manifest_version": 3,
+    "name": "MargoSzpont NI",
+    "version": "1.0.0",
+    "description": "Bot do gry Margonem.pl - Nowy Interfejs (NI)",
+    "permissions": [
+        "storage",
+        "activeTab",
+        "scripting",
+        "debugger"
+    ],
+    "host_permissions": [
+        "*://*.margonem.pl/*"
+    ],
+    "action": {
+        "default_popup": "popup/popup.html",
+        "default_icon": {
+            "16": "assets/icon16.png",
+            "48": "assets/icon48.png",
+            "128": "assets/icon128.png"
+        }
+    },
+    "icons": {
+        "16": "assets/icon16.png",
+        "48": "assets/icon48.png",
+        "128": "assets/icon128.png"
+    },
+    "background": {
+        "service_worker": "background/service-worker.js"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "*://*.margonem.pl/*"
+            ],
+            "js": [
+                "content/injector.js",
+                "content/captcha_solver.js"
+            ],
+            "run_at": "document_idle"
+        }
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "src/logic.js",
+                "src/core/config.js",
+                "src/data/e2_data.js",
+                "src/data/map_data.js",
+                "src/navigation/movement.js",
+                "src/e2/controller.js",
+                "src/utils/helpers.js",
+                "src/ui/bot.js",
+                "lib/*"
+            ],
+            "matches": [
+                "*://*.margonem.pl/*"
+            ]
+        }
+    ]
+}

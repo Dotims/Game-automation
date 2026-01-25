@@ -2,6 +2,7 @@ const PF = require('pathfinding');
 const logger = require('../utils/logger');
 const { CONSTANTS } = require('../config');
 const { sleep } = require('../utils/sleep');
+const browserEvals = require('../core/browser_evals');
 
 let stuckCounter = 0;
 let lastHeroPos = { x: 0, y: 0 };
@@ -338,15 +339,18 @@ const movement = {
              
              pathfindFailCounter = 0;
              lastFailedTargetId = null;
+             
+             // Desync loop detection
+             let desyncLoopCount = 0;
+             let lastDesyncPos = null;
 
              // Optimized Burst Mode
-             // Reduced to 7 to ensure we check for combat/mobs more frequently
-             const stepsToTake = Math.min(path.length - 1, 7); 
+             // Unlimited steps for smooth movement (User Request)
+             let stepsToTake = path.length - 1; 
              let currentX = startX;
              let currentY = startY;
 
              // Dynamic Key Press Duration
-             // Fix for "Turning instead of moving":
              // The FIRST step in a direction needs a longer hold (~250ms) to register as a move.
              // Subsequent steps (holding) can be faster (~170ms).
              const currentPing = Math.min(gameState.ping || 50, 1000); // safety cap
@@ -397,6 +401,137 @@ const movement = {
                      
                      currentX = nextStep[0];
                      currentY = nextStep[1];
+
+                     // 🛡️ ACTIVE POSITION VERIFICATION (Every 3 steps, skip step 0)
+                     if (i > 0 && i % 3 === 0) {
+                         try {
+                             // Fetch Position AND Fresh Obstacles (Mobs can move!)
+                            const scanData = await browserEvals.getMovementScanData(page);
+                             
+                             // CAPTCHA PRIORITY CHECK - Abort immediately if detected!
+                             if (scanData.captcha) {
+                                  if (activeKey) await page.keyboard.up(activeKey);
+                                  logger.warn(`🤖 CAPTCHA detected during movement! Aborting to main loop...`);
+                                  return 'captcha'; // Main loop handles CAPTCHA
+                             }
+                             
+                             // STOP BUTTON CHECK - Abort if user clicked ZATRZYMAJ
+                             const botStopped = await browserEvals.isBotStopped(page);
+                             if (botStopped) {
+                                  if (activeKey) await page.keyboard.up(activeKey);
+                                  logger.info(`⏹️ STOP detected during movement. Aborting...`);
+                                  return 'stopped'; // Main loop handles pause
+                             }
+                             
+                             // 0. CRITICAL: Check if map changed (Teleport/TP Scroll)
+                             if (scanData.mapId !== gameState.map.id) {
+                                  if (activeKey) await page.keyboard.up(activeKey);
+                                  logger.warn(`🌍 Map changed manually! (${gameState.map.id} -> ${scanData.mapId}). Aborting path.`);
+                                  return 'fail'; // Main loop will pick up new map
+                             }
+
+                             const realPos = { x: scanData.x, y: scanData.y };
+                             const distSync = Math.abs(realPos.x - currentX) + Math.abs(realPos.y - currentY);
+                             
+                             if (distSync > 1) {
+                                 logger.warn(`⚠️ Desync (${distSync} tiles). Refreshing map & re-routing from [${realPos.x},${realPos.y}]...`);
+                                 
+                                 // DESYNC LOOP DETECTION
+                                 // If we desync at the same position repeatedly, we're stuck - need page refresh
+                                 const posKey = `${realPos.x},${realPos.y}`;
+                                 if (lastDesyncPos && Math.abs(realPos.x - lastDesyncPos.x) <= 2 && Math.abs(realPos.y - lastDesyncPos.y) <= 2) {
+                                     desyncLoopCount++;
+                                     if (desyncLoopCount >= 6) {
+                                         logger.error(`🔄 DESYNC LOOP DETECTED! Stuck at [${realPos.x},${realPos.y}] for ${desyncLoopCount} re-routes. Requesting page refresh...`);
+                                         if (activeKey) await page.keyboard.up(activeKey);
+                                         return 'desync_loop'; // Signal main loop to refresh page
+                                     }
+                                 } else {
+                                     desyncLoopCount = 1;
+                                 }
+                                 lastDesyncPos = realPos;
+                                 
+                                 // 1. Rebuild Grid from Static Map (fresh state)
+                                 const correctionGrid = ensureGrid(gameState).clone();
+                                 
+                                 // 2. Apply FRESH Obstacles (The mob that blocked us!)
+                                 if (scanData.obstacles) {
+                                     for (const o of scanData.obstacles) {
+                                         if (correctionGrid.isWalkableAt(o.x, o.y)) {
+                                             correctionGrid.setWalkableAt(o.x, o.y, false);
+                                         }
+                                     }
+                                 }
+                                 
+                                 // 3. Ensure Target/Start are Unlock (Standard Logic)
+                                 if (finalTarget.isGateway) correctionGrid.setWalkableAt(endX, endY, true);
+                                 correctionGrid.setWalkableAt(realPos.x, realPos.y, true); 
+                                 
+                                 // 4. Find Path
+                                 const newPath = finder.findPath(realPos.x, realPos.y, endX, endY, correctionGrid);
+                                 
+                                 if (newPath && newPath.length > 0) {
+                                     logger.success(`   ✅ Found detour around obstacle! (${newPath.length} steps)`);
+                                     path = newPath;
+                                     stepsToTake = path.length - 1; 
+                                     i = 0; 
+                                     currentX = realPos.x;
+                                     currentY = realPos.y;
+                                     
+                                     // If direction changed, we might need to toggle keys, but the next loop iter handles it.
+                                     continue;
+                                 } else {
+                                     logger.warn(`🛑 Blocked by mob/wall! No path found. Aborting.`);
+                                     if (activeKey) await page.keyboard.up(activeKey);
+                                     return 'fail'; // Let main loop handle it (maybe attack?)
+                                 }
+                             }
+                         } catch (e) { /* Ignore evaluate errors */ }
+                     }
+                     
+                     // 🔍 PROACTIVE PATH SCAN (Every 12 steps)
+                     // Check if mobs appeared on our remaining path and recalculate before we hit them
+                     if (i > 0 && i % 12 === 0 && i < stepsToTake - 2) {
+                         try {
+                             const pathScan = await browserEvals.getPathScanData(page);
+                             
+                             // Check if any mob is on our remaining path (next 10 steps)
+                             const remainingPath = path.slice(i + 1, Math.min(i + 11, path.length));
+                             let mobOnPath = false;
+                             
+                             for (const step of remainingPath) {
+                                 for (const obs of pathScan.obstacles) {
+                                     if (obs.x === step[0] && obs.y === step[1]) {
+                                         mobOnPath = true;
+                                         break;
+                                     }
+                                 }
+                                 if (mobOnPath) break;
+                             }
+                             
+                             if (mobOnPath) {
+                                 // logger.log(`🔍 Mob detected ahead! Recalculating path...`);
+                                 const scanGrid = ensureGrid(gameState).clone();
+                                 for (const o of pathScan.obstacles) {
+                                     if (scanGrid.isWalkableAt(o.x, o.y)) {
+                                         scanGrid.setWalkableAt(o.x, o.y, false);
+                                     }
+                                 }
+                                 if (finalTarget.isGateway) scanGrid.setWalkableAt(endX, endY, true);
+                                 scanGrid.setWalkableAt(pathScan.heroX, pathScan.heroY, true);
+                                 
+                                 const betterPath = finder.findPath(pathScan.heroX, pathScan.heroY, endX, endY, scanGrid);
+                                 if (betterPath && betterPath.length > 0) {
+                                     path = betterPath;
+                                     stepsToTake = path.length - 1;
+                                     i = 0;
+                                     currentX = pathScan.heroX;
+                                     currentY = pathScan.heroY;
+                                     continue;
+                                 }
+                             }
+                         } catch (e) { /* Ignore */ }
+                     }
                  }
              }
              

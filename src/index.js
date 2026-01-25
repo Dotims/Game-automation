@@ -14,9 +14,25 @@ const config = require('./config');
 const logger = require('./utils/logger');
 const ui = require('./game/ui');
 const gameState = require('./game/gameState');
+const captcha = require('./game/captcha');
+const browserEvals = require('./core/browser_evals');
+// Security Utilities
+const { decrypt, getSelfHash } = require('./utils/crypto');
+
+// Encrypted Constants (AES-256)
+const MARGONEM_DOMAIN_ENC = '990cd8417f115b07982dbb9dd97915ed:74f97713fd8d5affb2bd91fbf0eb2df4';
+
+// --- SELF-INTEGRITY CHECK ---
+(function verifyIntegrity() {
+    const hash = getSelfHash();
+    if (hash) {
+        // In production, fetch this from secure server
+        // console.log(`[SECURITY] Binary Hash: ${hash}`);
+        // if (hash !== EXPECTED_HASH) process.exit(1);
+    }
+})();
 const actions = require('./game/actions');
 const movement = require('./game/movement');
-const captcha = require('./game/captcha');
 const HUNTING_SPOTS = require('./data/hunting_spots');
 const { CONSTANTS } = require('./config');
 const mapNav = require('./game/map_navigation');
@@ -28,6 +44,25 @@ const TRAVEL_OVERRIDES = require('./data/travel_overrides');
 const GATEWAY_OVERRIDES = require('./data/gateway_overrides');
 const MONSTERS = require('./data/monsters');
 const { sleep } = require('./utils/sleep');
+const license = require('./license');
+const security = require('./security');
+
+// ============================================
+// SECURITY: Start anti-debugging protection
+// ============================================
+security.startAntiDebug();
+
+// Verify binary integrity (only works when packaged with pkg)
+const integrityCheck = security.verifyBinaryIntegrity();
+if (!integrityCheck.valid) {
+    console.error('\n⛔ SECURITY VIOLATION: Binary has been modified!');
+    console.error('   The executable file appears to be tampered with.');
+    console.error('   Please download the original version.\n');
+    process.exit(1);
+}
+if (integrityCheck.hash) {
+    console.log(`🔒 Binary Hash: ${integrityCheck.hash.substring(0, 16)}...`);
+}
 
 // Global Flags
 // Global Flags
@@ -53,9 +88,9 @@ async function main() {
     // --- WAIT FOR USER TO NAVIGATE TO GAME (Proxy/Login) ---
     logger.log('⏳ Waiting for Margonem game to be active in browser...');
     while (true) {
-        if (page.url().includes('margonem.pl') && !page.url().includes('login')) {
+        if (page.url().includes(decrypt(MARGONEM_DOMAIN_ENC)) && !page.url().includes('login')) {
             // Basic check if map is loaded (optional, but good)
-            const mapLoaded = await page.evaluate(() => typeof map !== 'undefined' && map.id);
+            const mapLoaded = await browserEvals.isMapLoaded(page);
             if (mapLoaded) {
                 logger.success('✅ Margonem game detected! Starting bot...');
                 break;
@@ -68,7 +103,7 @@ async function main() {
         for (const ctx of allContexts) {
             allPages = allPages.concat(ctx.pages());
         }
-        const detectedGamePages = allPages.filter(p => p.url().includes('margonem.pl') && !p.url().includes('login'));
+        const detectedGamePages = allPages.filter(p => p.url().includes(decrypt(MARGONEM_DOMAIN_ENC)) && !p.url().includes('login'));
 
         const targetNick = process.env.CHARACTER_NICK; // Optional: Specific nick to target
         let breakOuter = false;
@@ -163,6 +198,10 @@ async function main() {
     let positionHistory = [];
     let sameTargetAttackCount = 0; // NEW: Counter for consecutive attacks on same target
     let lastAttackTargetId = null;
+    let precomputedNextTarget = null; // Fast Path: Next mob calculated during movement
+    let blindMoveFailCount = 0; // Track consecutive blind move failures (desync after attack)
+    let blindMoveCooldownUntil = 0; // Timestamp when blind move can be re-enabled
+    let lastBlindMoveTargetId = null; // Track which mob we blind-moved from
 
     // --- Cached Map Data ---
     let cachedMapId = null;
@@ -194,10 +233,57 @@ async function main() {
     let mapChangeTimestamps = []; // Track last N map changes with timestamps
     let smartSkipDisabledUntil = 0; // Timestamp when Smart Skip can be re-enabled
 
+    // Gateway stuck loop detection (game loading/reloading issue)
+    let gatewayStuckTracker = {
+        lastGateway: null,        // Name of last targeted gateway
+        lastDistance: null,       // Distance to gateway on last attempt
+        sameCount: 0,             // Count of identical (gateway+distance) situations
+        waitingUntil: 0           // Timestamp when waiting period ends (if triggered)
+    };
+
+    // Non-hunting map stuck detection (when bot gets lost outside configured maps)
+    let nonHuntingStuckTracker = {
+        stuckSince: null,         // Timestamp when first detected on non-hunting map
+        lastMapName: null,        // Name of the non-hunting map
+        attemptCount: 0           // Number of failed return attempts
+    };
+
     while (true) {
+        // Check Global Stop Flag (from config panel)
+        if (global.BOT_SHOULD_STOP) {
+            // Only log once
+            if (!global.stopLogged) {
+                logger.log('🛑 Bot stopped by user request.');
+                global.stopLogged = true;
+            }
+            await sleep(1000);
+            continue; // Spin wait
+        } else {
+            global.stopLogged = false;
+        }
+
+        const loopStart = Date.now(); // ⏱️ TIMING DIAGNOSTIC
+
         try {
             // Inject UI (returns current config state)
-            const uiState = await ui.injectUI(page, config.DEFAULT_CONFIG, HUNTING_SPOTS, allMapNames, MONSTERS); // Cleaned
+            // Validate license from stored key
+            let licenseInfo = null;
+            const storedKey = await browserEvals.getStoredLicenseKey(page);
+            
+            if (storedKey) {
+                licenseInfo = await license.validateLicense(storedKey);
+                
+                // Log only on status changes
+                if (!licenseInfo.valid && !global.lastLicenseWarn) {
+                    logger.warn(`🔐 License: ${licenseInfo.reason}`);
+                    global.lastLicenseWarn = true;
+                } else if (licenseInfo.valid && global.lastLicenseWarn) {
+                    logger.success(`✅ License activated! Days remaining: ${licenseInfo.info.daysRemaining}`);
+                    global.lastLicenseWarn = false;
+                }
+            }
+            
+            const uiState = await ui.injectUI(page, config.DEFAULT_CONFIG, HUNTING_SPOTS, allMapNames, MONSTERS, licenseInfo);
             
             const mode = uiState.mode || 'exp';
             const transportTarget = uiState.transportMap;
@@ -206,6 +292,17 @@ async function main() {
                 logger.error('🛑 FATAL SECURITY WARNING: Bot inputs detected as UNTRUSTED/FAKE!');
                 logger.error('   The game or browser is flagging our inputs. Stopping for safety.');
                 await sleep(5000);
+                continue;
+            }
+
+            // LICENSE CHECK - Block bot if no valid license
+            if (!uiState.licenseValid) {
+                // Only log occasionally to avoid spam
+                if (!global.lastLicenseLog || Date.now() - global.lastLicenseLog > 30000) {
+                    logger.warn('🔐 Bot locked. Waiting for valid license activation...');
+                    global.lastLicenseLog = Date.now();
+                }
+                await sleep(1000);
                 continue;
             }
 
@@ -261,7 +358,12 @@ async function main() {
                 skippedMobIds: Array.from(skippedMobs.keys()) 
             };
             
+            // ⏱️ TIMING DIAGNOSTIC
+            const stateStart = Date.now();
             const state = await gameState.getGameState(page, currentConfig);
+            const stateTime = Date.now() - stateStart;
+            if (stateTime > 200) logger.warn(`⚠️ SLOW GameState Read: ${stateTime}ms`);
+
             if (!state) {
                  await sleep(500);
                  continue; // Loading...
@@ -344,16 +446,31 @@ async function main() {
                      const timeToWait = waitSeconds - reloadThreshold;
                      logger.warn(`💀 Unconscious. Respawn in ${waitSeconds}s. Waiting ${timeToWait}s to Auto-Reload (monitoring Captcha)...`);
                      
-                     // Wait with Captcha Check
+                     // Wait with Captcha Check AND UI State Check (STOP button)
                      const wakeTime = Date.now() + (timeToWait * 1000);
+                     let userStopped = false;
                      while (Date.now() < wakeTime) {
                          try {
+                             // Check if user clicked STOP
+                             const currentUIState = await ui.injectUI(page, config.DEFAULT_CONFIG, HUNTING_SPOTS, allMapNames, MONSTERS, licenseInfo);
+                             if (!currentUIState.active) {
+                                 logger.info('⏹️ User clicked STOP during respawn wait. Pausing...');
+                                 userStopped = true;
+                                 break;
+                             }
+                             
                              if (await captcha.solve(page)) {
                                  logger.info('🤖 CAPTCHA solved while waiting for respawn.');
                              }
                          } catch (e) {}
                          await sleep(1000); // Check every second
                      }
+                     
+                     // If user stopped, skip reload and let main loop handle pause
+                     if (userStopped) {
+                         continue;
+                     }
+                     
                      logger.log(`🔄 Auto-Reloading page (Respawn in ~${reloadThreshold}s)...`);
                      try {
                          await page.reload({ waitUntil: 'domcontentloaded' });
@@ -363,9 +480,18 @@ async function main() {
                      await sleep(5000); 
                      continue; 
                  } else {
-                     logger.warn(`💀 Unconscious. Respawn in ${waitSeconds}s. Waiting...`);
-                     const sleepTime = Math.min(waitSeconds * 1000 + 1000, 5000); 
-                     await sleep(sleepTime); 
+                     // Short wait - still check UI state
+                     const shortWaitEnd = Date.now() + Math.min(waitSeconds * 1000 + 1000, 5000);
+                     while (Date.now() < shortWaitEnd) {
+                         try {
+                             const currentUIState = await ui.injectUI(page, config.DEFAULT_CONFIG, HUNTING_SPOTS, allMapNames, MONSTERS, licenseInfo);
+                             if (!currentUIState.active) {
+                                 logger.info('⏹️ User clicked STOP during respawn wait. Pausing...');
+                                 break;
+                             }
+                         } catch (e) {}
+                         await sleep(500);
+                     }
                      continue;
                  }
             }
@@ -434,16 +560,7 @@ async function main() {
                 let arrivalTarget = null;
                 
                 // 1. Search for Zakonnik
-                const zakonnik = await page.evaluate(() => {
-                     if (!g || !g.npc) return null;
-                     for (let id in g.npc) {
-                         const n = g.npc[id];
-                         if (n.nick && n.nick.includes('Zakonnik Planu Astralnego')) {
-                             return { x: n.x, y: n.y, nick: n.nick, id: n.id };
-                         }
-                     }
-                     return null;
-                });
+                const zakonnik = await browserEvals.findZakonnik(page);
 
                 if (zakonnik) {
                      arrivalTarget = { ...zakonnik, type: 'npc' };
@@ -495,13 +612,14 @@ async function main() {
                      // --- MOB FOUND! ---
                      // Log only if it's a new mob ID or enough time passed (optional, but ID check is better for unique mobs)
                      if (lastEngagedMobId !== targetMob.id) {
-                         logger.log(`👹 E2 DETECTED: [${targetMob.nick}] at (${targetMob.x}, ${targetMob.y})! Engaging...`);
+                         logger.log(`👹 E2 DETECTED: [${targetMob.nick}] at (${targetMob.x}, ${targetMob.y})!${uiState.e2Attack ? ' Engaging...' : ' (Attack OFF - Idle mode)'}`);
                          lastEngagedMobId = targetMob.id;
                      }
                      
                      const distToMob = Math.hypot(targetMob.x - state.hero.x, targetMob.y - state.hero.y);
                      
-                     if (distToMob <= 1.5) {
+                     // Only attack if e2Attack is enabled
+                     if (uiState.e2Attack && distToMob <= 1.5) {
                          // ATTACK
                          await sleep(Math.floor(Math.random() * 150) + 50); // 50-200ms human delay
                          const result = await actions.attack(page, targetMob, lastAttackTime);
@@ -509,11 +627,19 @@ async function main() {
                          lastActionTime = Date.now(); // Reset AFK timer
                          await sleep(Math.floor(Math.random() * 400) + 800); // 800-1200ms throttle
                          continue;
-                     } else {
-                         // APPROACH
+                     } else if (uiState.e2Attack && distToMob > 1.5) {
+                         // APPROACH (only when attack is enabled)
                          await actions.move(page, state, { x: targetMob.x, y: targetMob.y, nick: targetMob.nick });
-                         // Removed sleep(400) for fluid movement
                          continue;
+                     } else {
+                         // E2Attack OFF - just stay near the mob (idle mode)
+                         // Anti-AFK will be handled by the standard anti-AFK logic below
+                         if (distToMob > 3.0) {
+                             // Get closer to the mob but don't attack
+                             await actions.move(page, state, { x: targetMob.x, y: targetMob.y, nick: targetMob.nick });
+                             continue;
+                         }
+                         // Otherwise just idle near mob - fall through to anti-AFK logic
                      }
                  } else {
                      // --- MOB NOT FOUND ---
@@ -733,12 +859,7 @@ async function main() {
                  if (domState.currentMapName === 'Dom Tunii') {
                       logger.success("✅ Entered Dom Tunii.");
                       
-                      const tunia = await page.evaluate(() => {
-                           for (let id in g.npc) { // Type 1 check handled by raw iteration
-                               if (g.npc[id].nick === 'Tunia Frupotius') return g.npc[id];
-                           }
-                           return null;
-                      });
+                      const tunia = await browserEvals.findTunia(page);
                       
                       if (tunia) {
                            logger.log("💰 Found Tunia Frupotius. Initiating Trade...");
@@ -941,6 +1062,13 @@ async function main() {
                 targetSwitchCount = 0;
                 noAttackCounter = 0;
                 positionHistory = [];
+                precomputedNextTarget = null; // Clear fast path target
+                
+                // Reset gateway stuck tracker on map change
+                gatewayStuckTracker.lastGateway = null;
+                gatewayStuckTracker.lastDistance = null;
+                gatewayStuckTracker.sameCount = 0;
+                gatewayStuckTracker.waitingUntil = 0;
                 
                 // Set cooldown - wait 2.5s before making gateway decisions
                 mapChangedAt = Date.now();
@@ -1067,6 +1195,17 @@ async function main() {
             if (mapCooldownActive && !state.target) {
                 await sleep(500);
                 continue; // Wait for mobs to load
+            }
+            
+            // --- GATEWAY STUCK LOOP DETECTION ---
+            // If we're currently in a recovery wait period, just wait
+            if (gatewayStuckTracker.waitingUntil > Date.now()) {
+                const remaining = Math.round((gatewayStuckTracker.waitingUntil - Date.now()) / 1000);
+                if (remaining % 10 === 0 || remaining <= 5) { // Log every 10s or last 5s
+                    logger.log(`⏳ Gateway stuck recovery: Waiting ${remaining}s for game to stabilize...`);
+                }
+                await sleep(1000);
+                continue;
             }
             
             let finalTarget = resupplyTarget || state.traversalTarget || state.target;
@@ -1309,16 +1448,136 @@ async function main() {
                          continue;
                      }
                      
-                     // ATTACK!
-                     await sleep(Math.floor(Math.random() * 150) + 50); // 50-200ms human delay
+                     // ========== BLIND MOVE FAILURE DETECTION ==========
+                     // If we're attacking the same mob we just blind-moved from, it means kill failed
+                     if (lastBlindMoveTargetId && finalTarget.id === lastBlindMoveTargetId) {
+                         blindMoveFailCount++;
+                         if (blindMoveFailCount >= 2) {
+                             // Too many failures - disable blind move for 10 seconds
+                             blindMoveCooldownUntil = Date.now() + 10000;
+                             logger.warn(`⚠️ Blind Move disabled for 10s (mob didn't die ${blindMoveFailCount}x)`);
+                             blindMoveFailCount = 0;
+                         }
+                     } else {
+                         // Different mob - reset counter
+                         blindMoveFailCount = 0;
+                     }
+                     lastBlindMoveTargetId = null; // Reset after check
+                     
+                     // Check if blind move is in cooldown
+                     const blindMoveEnabled = Date.now() > blindMoveCooldownUntil;
+                     
+                     // ATTACK! (EXP Mode)
+                     if (blindMoveEnabled) {
+                         await sleep(Math.floor(Math.random() * 30)); // 0-30ms (fast)
+                     } else {
+                         await sleep(Math.floor(Math.random() * 100) + 50); // 50-150ms (careful)
+                     }
+                     
                      const res = await actions.attack(page, finalTarget, lastAttackTime);
                      lastAttackTime = res;
                      lastActionTime = Date.now(); // Reset AFK timer
-                     await sleep(Math.floor(Math.random() * 400) + 800); // 800-1200ms throttle
+                     
+                     // ========== BLIND MOVE OPTIMIZATION ==========
+                     // Only use blind move if enabled and we have precomputed target
+                     if (blindMoveEnabled && precomputedNextTarget && precomputedNextTarget.id !== finalTarget.id) {
+                         // Remember which mob we're leaving (to detect failure later)
+                         lastBlindMoveTargetId = finalTarget.id;
+                         // Don't await fully - just fire and continue
+                         actions.move(page, state, precomputedNextTarget).catch(() => {});
+                         precomputedNextTarget = null;
+                         await sleep(Math.floor(Math.random() * 50) + 30); // 30-80ms micro-pause
+                         continue;
+                     }
+                     
+                     // No blind move - use throttle (slower when in cooldown)
+                     if (blindMoveEnabled) {
+                         await sleep(Math.floor(Math.random() * 200) + 100); // 100-300ms
+                     } else {
+                         await sleep(Math.floor(Math.random() * 400) + 400); // 400-800ms (careful mode)
+                     }
                 } 
                 else {
+                    // --- GATEWAY STUCK PATTERN DETECTION ---
+                    // Track if we're repeatedly trying to go to the same gateway without distance change
+                    if (finalTarget.isGateway || state.traversalTarget) {
+                        const gwName = finalTarget.name || finalTarget.nick || 'gateway';
+                        const currentDist = Math.hypot(finalTarget.x - state.hero.x, finalTarget.y - state.hero.y);
+                        
+                        // Check if same gateway with same distance (within 0.5 tolerance)
+                        const isSameGateway = (gatewayStuckTracker.lastGateway === gwName);
+                        const isSameDistance = gatewayStuckTracker.lastDistance !== null && 
+                            Math.abs(gatewayStuckTracker.lastDistance - currentDist) < 0.5;
+                        
+                        if (isSameGateway && isSameDistance) {
+                            gatewayStuckTracker.sameCount++;
+                            
+                            // After 3 identical attempts, trigger recovery wait
+                            // DISABLED: User requested to disable this waiting logic
+                            /*
+                            if (gatewayStuckTracker.sameCount >= 3) {
+                                const waitTime = 30000 + Math.floor(Math.random() * 20001); // 30-50s
+                                logger.warn(`🔄 GATEWAY STUCK DETECTED! Same gateway [${gwName}] at ${currentDist.toFixed(1)}m for ${gatewayStuckTracker.sameCount} times.`);
+                                logger.warn(`⏳ Waiting ${Math.round(waitTime/1000)}s for game to reload/stabilize...`);
+                                
+                                gatewayStuckTracker.waitingUntil = Date.now() + waitTime;
+                                gatewayStuckTracker.sameCount = 0; // Reset for next cycle
+                                
+                                // Clear escape target to prevent immediate re-engagement
+                                escapeTarget = null;
+                                
+                                await sleep(1000);
+                                continue;
+                            }
+                            */
+                        } else {
+                            // Different gateway or significant distance change - reset tracker
+                            gatewayStuckTracker.sameCount = 1;
+                        }
+                        
+                        // Update tracker state
+                        gatewayStuckTracker.lastGateway = gwName;
+                        gatewayStuckTracker.lastDistance = currentDist;
+                    } else {
+                        // Not targeting a gateway - reset tracker
+                        gatewayStuckTracker.sameCount = 0;
+                        gatewayStuckTracker.lastGateway = null;
+                        gatewayStuckTracker.lastDistance = null;
+                    }
+                    
+                    // ========== PRE-COMPUTE NEXT TARGET (during movement) ==========
+                    // If we're moving to a mob, pre-calculate the next mob so we can
+                    // use it immediately after attacking (Fast Path optimization)
+                    if (finalTarget.type === 'mob' && finalTarget.dist > 1.5) {
+                        // Don't await - let this run while we move
+                        browserEvals.findNextMob(page, { 
+                            currentTargetId: finalTarget.id, 
+                            heroX: finalTarget.x, // Use target position (where hero will be after moving)
+                            heroY: finalTarget.y,
+                            minLvl: currentConfig.minLvl || 1,
+                            maxLvl: currentConfig.maxLvl || 999
+                        }).then(nextMob => {
+                            if (nextMob) {
+                                precomputedNextTarget = nextMob;
+                            }
+                        }).catch(() => {}); // Ignore errors
+                    }
+                    
                     // Start of Move
                     const moveResult = await actions.move(page, state, finalTarget);
+                    
+                    // Handle DESYNC LOOP - bot stuck at same position, needs page refresh
+                    if (moveResult === 'desync_loop') {
+                        logger.error('🔄 Performing Ctrl+F5 page refresh to recover from desync loop...');
+                        try {
+                            await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+                            logger.success('✅ Page reloaded successfully. Resuming in 5s...');
+                            await sleep(2000);
+                        } catch (reloadErr) {
+                            logger.error(`❌ Reload failed: ${reloadErr.message}`);
+                        }
+                        continue;
+                    }
                     
                     // Handle unreachable gateway/target - try to find alternative
                     if (moveResult === 'skip_target' && finalTarget.isGateway) {
@@ -1388,8 +1647,34 @@ async function main() {
                          const isOnHuntingMap = mapsList.some(m => m.toLowerCase() === state.currentMapName.toLowerCase());
                          
                          if (!isOnHuntingMap) {
+                             // Track how long we've been stuck on non-hunting map
+                             if (nonHuntingStuckTracker.lastMapName !== state.currentMapName) {
+                                 // New non-hunting map - reset tracker
+                                 nonHuntingStuckTracker.stuckSince = Date.now();
+                                 nonHuntingStuckTracker.lastMapName = state.currentMapName;
+                                 nonHuntingStuckTracker.attemptCount = 0;
+                             }
+                             
+                             nonHuntingStuckTracker.attemptCount++;
+                             const stuckDuration = Date.now() - nonHuntingStuckTracker.stuckSince;
+                             
+                             // EMERGENCY RELOAD: If stuck on non-hunting map for 45+ seconds with 10+ attempts
+                             if (stuckDuration > 45000 && nonHuntingStuckTracker.attemptCount >= 10) {
+                                 logger.error(`🔄 EMERGENCY RELOAD: Stuck on [${state.currentMapName}] for ${Math.round(stuckDuration/1000)}s with ${nonHuntingStuckTracker.attemptCount} failed attempts. Reloading...`);
+                                 nonHuntingStuckTracker.stuckSince = null;
+                                 nonHuntingStuckTracker.attemptCount = 0;
+                                 nonHuntingStuckTracker.lastMapName = null;
+                                 try {
+                                     await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+                                     await sleep(5000); // Wait for page to stabilize
+                                 } catch (e) {
+                                     logger.warn(`Reload failed: ${e.message}`);
+                                 }
+                                 continue;
+                             }
+                             
                              // We are LOST on a non-hunting map! Return to ANY hunting map immediately
-                             logger.warn(`🚨 ON NON-HUNTING MAP [${state.currentMapName}]! Returning to hunt area...`);
+                             logger.warn(`🚨 ON NON-HUNTING MAP [${state.currentMapName}]! Returning to hunt area... (attempt ${nonHuntingStuckTracker.attemptCount})`);
                              
                              // Find any gateway that leads to a hunting map
                              const huntGateway = state.gateways.find(g => {
@@ -1429,6 +1714,11 @@ async function main() {
                                  // Skip the rest of cyclic logic - just escape
                                  continue;
                              }
+                         } else {
+                             // We're on a hunting map - reset the stuck tracker
+                             nonHuntingStuckTracker.stuckSince = null;
+                             nonHuntingStuckTracker.attemptCount = 0;
+                             nonHuntingStuckTracker.lastMapName = null;
                          }
                          
                          // Determine FINAL destination
@@ -1544,17 +1834,61 @@ async function main() {
             // Loop delay - RESTORED for stability
             
         } catch (error) {
-            logger.error('❌ Main loop error:', error);
-            // logger.error(error.stack);
-            
-            if (error.message && error.message.includes('Target closed')) {
-                logger.error('❌ Browser closed. Exiting...');
-                process.exit(1);
+            // Handle browser disconnect/closed gracefully
+            const errMsg = error.message || '';
+            if (errMsg.includes('Target page, context or browser has been closed') || 
+                errMsg.includes('Session closed') || 
+                errMsg.includes('Navigating frame was detached') ||
+                errMsg.includes('Execution context was destroyed')) {
+                
+                if (!global.disconnectLogged) {
+                    logger.warn('🔌 Browser connection lost (Page/Context closed). Waiting for reconnect...');
+                    global.disconnectLogged = true;
+                }
+                
+                // AUTO-RECONNECT: Wait 3 seconds and try to reconnect
+                logger.info('🔄 Attempting to reconnect in 3 seconds...');
+                await sleep(3000);
+                
+                try {
+                    // Try to reconnect to browser
+                    const extReq = global.externalRequire || require;
+                    const { chromium } = extReq('playwright');
+                    const cdpPort = process.env.CDP_PORT || '9222';
+                    const newBrowser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`);
+                    const contexts = newBrowser.contexts();
+                    const context = contexts.length > 0 ? contexts[0] : await newBrowser.newContext();
+                    const pages = context.pages();
+                    
+                    // Find Margonem page
+                    let newPage = pages.find(p => p.url().includes('margonem'));
+                    
+                    if (newPage) {
+                        logger.success('✅ Reconnected to Margonem page!');
+                        page = newPage; // Update page reference
+                        global.disconnectLogged = false;
+                        continue; // Continue the main loop
+                    } else {
+                        logger.info('⏳ Waiting for Margonem page...');
+                        continue; // Keep waiting
+                    }
+                } catch (reconnectError) {
+                    // Reconnect failed - keep trying
+                    logger.info('⏳ Browser not ready, retrying...');
+                    continue;
+                }
             }
-            
+
+            logger.error(`❌ Main loop error: ${errMsg}`);
+            // Log stack only if it's NOT a known trivial error
+            if (!errMsg.includes('Target page')) {
+                console.error(error);
+            }
+            // Prevent rapid fail loop
             await sleep(2000);
         }
     }
 }
 
-main();
+// Export main for worker to await (don't auto-run)
+module.exports = main;

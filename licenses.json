@@ -1,0 +1,22 @@
+{
+  "keys": {
+    "MARGO-A1A8423D8B241DAF": {
+      "user": "sprawdzam",
+      "expiresAt": "2026-01-10T03:19:05.454Z",
+      "active": true,
+      "createdAt": "2026-01-07T03:19:05.454Z"
+    },
+    "MARGO-33E4251DD33ADD07": {
+      "user": "sprawdzam",
+      "expiresAt": "2026-01-10T00:48:39.902Z",
+      "active": true,
+      "createdAt": "2026-01-08T00:48:39.902Z"
+    },
+    "MARGO-A0EEDDAE0503BB19": {
+      "user": "sprawdzam",
+      "expiresAt": "2026-01-11T01:03:27.057Z",
+      "active": true,
+      "createdAt": "2026-01-10T01:03:27.057Z"
+    }
+  }
+}

@@ -7,7 +7,8 @@ const BLOCKED_MAPS = {
     "Złudny Trakt": { minLevel: 170 },
     "Ukwiecona Skarpa": { minLevel: 170 },
     "Urwisko Zdrewniałych": { minLevel: 218 },
-    "Mglisty Las": { minLevel: 200 }
+    "Mglisty Las": { minLevel: 200 },
+    "Niecka Xiuh Atl": { minLevel: 200 }
 };
 
 /**

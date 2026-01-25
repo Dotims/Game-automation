@@ -1,12 +1,41 @@
 {
-  "name": "margo-bot-stealth",
-  "version": "1.0.0",
-  "main": "index.js",
+  "name": "margoszpont",
+  "version": "2.2.1",
+  "main": "start.js",
+  "bin": "start.js",
+  "scripts": {
+    "start": "node start.js",
+    "dev": "node index.js",
+    "obfuscate": "node build/obfuscate.js",
+    "build:protected": "node build/build-exe.js",
+    "build:sea": "node build/build-sea.js",
+    "build:winrar": "node build/build-winrar.js",
+    "build:launcher": "node build/build-launcher.js",
+    "build:launcher:debug": "node build/build-launcher.js --debug",
+    "build": "npm run build:sea && npm run build:launcher",
+    "build:debug": "npm run build:sea && npm run build:launcher:debug",
+    "build:prod": "npm run build:sea && npm run build:launcher"
+  },
+  "pkg": {
+    "assets": [
+      "src/**/*"
+    ],
+    "outputPath": "dist"
+  },
   "dependencies": {
     "ghost-cursor": "^1.4.1",
     "pathfinding": "^0.4.18",
     "playwright": "^1.40.0",
     "playwright-extra": "^4.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2"
+  },
+  "devDependencies": {
+    "bytenode": "^1.5.7",
+    "caxa": "^3.0.1",
+    "esbuild": "^0.27.2",
+    "javascript-obfuscator": "^5.1.0",
+    "pkg": "^5.8.1",
+    "rcedit": "^4.0.1",
+    "tar": "^7.5.2"
   }
 }

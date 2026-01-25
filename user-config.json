@@ -1,0 +1,20 @@
+{
+  "browserPath": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+  "profiles": [
+    {
+      "id": "mk7l7e8lij7gh",
+      "name": "Bot #1",
+      "userDataPath": "C:\\Users\\rados\\AppData\\Local\\BraveSoftware\\Brave-Browser\\User Data",
+      "profileDir": "Default",
+      "enabled": true
+    },
+    {
+      "id": "mk7l7e8lhpdex",
+      "name": "Bot #2",
+      "userDataPath": "C:\\Users\\rados\\AppData\\Local\\BraveSoftware\\Brave-Browser\\User Data Bot2",
+      "profileDir": "Profile 1",
+      "enabled": true
+    }
+  ],
+  "configured": true
+}

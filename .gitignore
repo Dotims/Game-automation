@@ -1,3 +1,37 @@
-node_modules
+# Dependencies
+node_modules/
+license-api/node_modules/
+license-api/.vercel/
 
-"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe" --remote-debugging-port=9222 --user-data-dir="C:\Users\rados\AppData\Local\BraveSoftware\Brave-Browser\User Data"
+# Build & Dist
+dist/
+dist_new/
+build-sea/
+build-bytecode/
+build-launcher/
+dist-obfuscated/
+
+# Temporary Build Files
+*.exe
+*.jsc
+sea-config.json
+sea-prep.blob
+*.log
+npm-debug.log*
+
+# Secrets & Local Config
+licenses.json
+secret.txt
+temp_enc.txt
+user-config.json
+
+# Debug scripts
+test_crypto_debug.js
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Support code (development assets)
+margobot-extension-ni/assets/support_code/
+margobot-extension-si/assets/support_code/

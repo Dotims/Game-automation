@@ -1,23 +1,13 @@
 const logger = require('../utils/logger');
 const { sleep } = require('../utils/sleep');
+const browserEvals = require('../core/browser_evals');
 
 async function solveCaptcha(page) {
     // logger.info('🧩 Checking for CAPTCHA...'); // Too spammy using .style.display check every loop
 
 
-    const captchaVisible = await page.evaluate(() => {
-        const el = document.getElementById('captcha');
-        if (!el || el.style.display === 'none') return false;
-        
-        // Additional check: Ensure it has content (text or buttons)
-        const text = el.innerText.trim();
-        const hasButtons = el.querySelectorAll('.btn').length > 0;
-        
-        // If empty text and no buttons, it's likely a hidden overlay container
-        if (!text && !hasButtons) return false;
-        
-        return true;
-    });
+
+    const captchaVisible = await browserEvals.isCaptchaVisible(page);
 
     if (!captchaVisible) {
         return false;
@@ -25,19 +15,7 @@ async function solveCaptcha(page) {
 
     logger.warn('🚨 CAPTCHA DETECTED! Starting solver...');
 
-    const captchaInfo = await page.evaluate(() => {
-        const questionEl = document.querySelector('.captcha__question');
-        const question = questionEl ? questionEl.innerText : '';
-        const buttons = Array.from(document.querySelectorAll('.captcha__buttons .btn')).map((btn, index) => {
-            const fontEl = btn.querySelector('.gfont');
-            return {
-                index: index,
-                text: fontEl ? fontEl.getAttribute('name') : '',
-                isActive: btn.classList.contains('active') // Check if already selected
-            };
-        });
-        return { question, buttons };
-    });
+    const captchaInfo = await browserEvals.getCaptchaButtons(page);
 
     logger.log(`❓ Question: "${captchaInfo.question}"`);
     logger.log(`🔠 Options: ${captchaInfo.buttons.map(b => b.text).join(', ')}`);
@@ -50,6 +28,12 @@ async function solveCaptcha(page) {
     }
 
     logger.success(`✅ Found ${correctButtons.length} correct answers.`);
+
+    // Shuffle correct answers to click in random order (more human-like)
+    for (let i = correctButtons.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [correctButtons[i], correctButtons[j]] = [correctButtons[j], correctButtons[i]];
+    }
 
     for (const btn of correctButtons) {
         if (btn.isActive) {
@@ -75,10 +59,8 @@ async function solveCaptcha(page) {
     
     await sleep(2000);
     
-    const stillVisible = await page.evaluate(() => {
-        const el = document.getElementById('captcha');
-        return el && el.style.display !== 'none';
-    });
+    
+    const stillVisible = await browserEvals.isCaptchaStillVisible(page);
 
     if (stillVisible) {
         logger.error('❌ CAPTCHA still visible. Retrying next loop...');
