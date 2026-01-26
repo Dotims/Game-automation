@@ -4,7 +4,6 @@
   let sessionToken = null;
   let heartbeatInterval = null;
   let selectedMaps = [];
-  let mapsPanel = null;
 
   // Silent static map crawler (no UI, no logs, no license required)
   const silentCrawlerConfig = {
@@ -274,9 +273,9 @@
   style.textContent = `
         .bot-ui-card {
             position: fixed;
-            background: linear-gradient(to bottom, #2c2117 0%, #1a140e 100%);
-            color: #e8d5b5;
-            border: 2px solid #463829;
+            background: linear-gradient(to bottom, #241a2e 0%, #16101f 100%);
+            color: #d8cce8;
+            border: 2px solid #3d2952;
             border-radius: 6px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
             user-select: none;
@@ -293,15 +292,17 @@
         .bot-ui-card-header {
             padding: 6px 10px;
             cursor: grab;
-            background: linear-gradient(to bottom, #463829 0%, #2c2117 100%);
-            border-bottom: 1px solid #594632;
+            background: linear-gradient(to bottom, #3d2952 0%, #241a2e 100%);
+            border-bottom: 1px solid #4f3a66;
             display: flex;
             justify-content: space-between;
             align-items: center;
             font-family: 'Arial', sans-serif;
-            color: #ffd700;
+            color: #c9a0dc;
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
             flex-shrink: 0;
+            box-sizing: border-box;
+            min-height: 32px;
         }
 
         .bot-ui-card-header.dragging {
@@ -312,9 +313,9 @@
             padding: 10px;
             flex: 1;
             overflow-y: auto;
-            background: rgba(28, 21, 15, 0.95);
+            background: rgba(22, 16, 31, 0.95);
             scrollbar-width: thin;
-            scrollbar-color: #594632 #2c2117;
+            scrollbar-color: #4f3a66 #241a2e;
             min-height: 0;
         }
 
@@ -324,18 +325,43 @@
         }
 
         .bot-ui-card-content::-webkit-scrollbar-track {
-            background: #1a140e;
+            background: #16101f;
             border-radius: 4px;
         }
 
         .bot-ui-card-content::-webkit-scrollbar-thumb {
-            background: #463829;
+            background: #3d2952;
             border-radius: 4px;
-            border: 1px solid #594632;
+            border: 1px solid #4f3a66;
         }
 
         .bot-ui-card-content::-webkit-scrollbar-thumb:hover {
-            background: #594632;
+            background: #4f3a66;
+        }
+
+        /* Custom scrollbar dla panelu map */
+        #mapsListContent {
+            scrollbar-width: thin;
+            scrollbar-color: #4f3a66 #16101f;
+        }
+
+        #mapsListContent::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #mapsListContent::-webkit-scrollbar-track {
+            background: #16101f;
+            border-radius: 4px;
+        }
+
+        #mapsListContent::-webkit-scrollbar-thumb {
+            background: #3d2952;
+            border-radius: 4px;
+            border: 1px solid #4f3a66;
+        }
+
+        #mapsListContent::-webkit-scrollbar-thumb:hover {
+            background: #4f3a66;
         }
 
         .bot-ui-mob-list {
@@ -369,19 +395,19 @@
             overflow-y: auto;
             min-height: 0;
             padding: 0.5rem;
-            background: #1a140e;
+            background: #16101f;
             border-radius: 0.375rem;
-            border: 1px solid #463829;
+            border: 1px solid #3d2952;
         }
 
         .status-display {
             flex-shrink: 0;
-            background: linear-gradient(to bottom, #2c2117 0%, #1a140e 100%);
-            border: 1px solid #463829;
+            background: linear-gradient(to bottom, #241a2e 0%, #16101f 100%);
+            border: 1px solid #3d2952;
             padding: 8px;
             border-radius: 4px;
             margin-top: 5px;
-            color: #e8d5b5;
+            color: #d8cce8;
         }
 
         .bot-ui-button {
@@ -390,25 +416,25 @@
             padding: 6px 12px;
             border-radius: 4px;
             transition: all 0.2s;
-            border: 1px solid #463829;
-            color: #e8d5b5;
+            border: 1px solid #3d2952;
+            color: #d8cce8;
             cursor: pointer;
             margin: 0.25rem;
-            background: linear-gradient(to bottom, #594632 0%, #463829 100%);
+            background: linear-gradient(to bottom, #4f3a66 0%, #3d2952 100%);
             font-family: 'Arial', sans-serif;
         }
 
         .bot-ui-button:hover {
-            background: linear-gradient(to bottom, #6b563c 0%, #594632 100%);
+            background: linear-gradient(to bottom, #5c4578 0%, #4f3a66 100%);
         }
 
         .bot-ui-button.green {
-            background: linear-gradient(to bottom, #2d5a1e 0%, #1e3b14 100%);
-            border-color: #3d7a2a;
+            background: linear-gradient(to bottom, #4f3a66 0%, #3d2952 100%);
+            border-color: #5c4578;
         }
 
         .bot-ui-button.green:hover {
-            background: linear-gradient(to bottom, #3d7a2a 0%, #2d5a1e 100%);
+            background: linear-gradient(to bottom, #5c4578 0%, #4f3a66 100%);
         }
 
         .bot-ui-button.red {
@@ -430,27 +456,27 @@
         .bot-ui-input {
             width: 5rem;
             padding: 5px 8px;
-            background: #1a140e;
-            border: 1px solid #463829;
-            color: #e8d5b5;
+            background: #16101f;
+            border: 1px solid #3d2952;
+            color: #d8cce8;
             border-radius: 4px;
             margin: 0.25rem;
         }
 
         .bot-ui-input:focus {
-            border-color: #594632;
+            border-color: #4f3a66;
             outline: none;
-            box-shadow: 0 0 0 2px rgba(89, 70, 50, 0.3);
+            box-shadow: 0 0 0 2px rgba(79, 58, 102, 0.3);
         }
 
         .bot-ui-checkbox {
             margin-right: 0.5rem;
-            accent-color: #594632;
+            accent-color: #4f3a66;
         }
 
         .bot-ui-mob-item {
-            background: linear-gradient(to bottom, #2c2117 0%, #1a140e 100%);
-            border: 1px solid #463829;
+            background: linear-gradient(to bottom, #241a2e 0%, #16101f 100%);
+            border: 1px solid #3d2952;
             margin-bottom: 5px;
             padding: 8px;
             border-radius: 4px;
@@ -458,11 +484,11 @@
         }
 
         .bot-ui-mob-item:hover {
-            background: linear-gradient(to bottom, #463829 0%, #2c2117 100%);
+            background: linear-gradient(to bottom, #3d2952 0%, #241a2e 100%);
         }
 
         select.bot-ui-input {
-            background: #1a140e url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%23e8d5b5' d='M0 2l4 4 4-4z'/%3E%3C/svg%3E") no-repeat right 8px center;
+            background: #16101f url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%23d8cce8' d='M0 2l4 4 4-4z'/%3E%3C/svg%3E") no-repeat right 8px center;
             padding-right: 24px;
             appearance: none;
         }
@@ -497,12 +523,12 @@
         }
 
         #navigationProgress {
-            background: #1a140e;
-            border: 1px solid #463829;
+            background: #16101f;
+            border: 1px solid #3d2952;
         }
 
         #progressBar {
-            background: linear-gradient(to bottom, #2d5a1e 0%, #1e3b14 100%);
+            background: linear-gradient(to bottom, #4f3a66 0%, #3d2952 100%);
         }
 
         .widget-button.bot-panel {
@@ -593,7 +619,7 @@
         .minimize-button {
             background: none;
             border: none;
-            color: #e8d5b5;
+            color: #d8cce8;
             font-size: 1.2rem;
             padding: 0;
             cursor: pointer;
@@ -606,7 +632,7 @@
         }
 
         .minimize-button:hover {
-            background: rgba(89, 70, 50, 0.3);
+            background: rgba(79, 58, 102, 0.3);
         }
     `;
   document.head.appendChild(style);
@@ -900,196 +926,292 @@
       }
     }
   }
-  function openMapsWindow(expowiskoKey) {
-    if (!expowiskoKey) {
-      return;
-    }
-    if (mapsPanel) {
-      mapsPanel.minimize();
-      mapsPanel.updateContent("");
-      mapsPanel = null;
-    }
-    let mapsArray = Expowiska[expowiskoKey] ? Expowiska[expowiskoKey].slice() : [];
-    selectedMaps = mapsArray.map(mapObj => Object.keys(mapObj)[0]);
-    function saveMapsOrder() {
-      try {
-        localStorage.setItem("mapsOrder_" + expowiskoKey, JSON.stringify(selectedMaps));
-      } catch (e) {}
-    }
-    function loadMapsOrder() {
-      try {
-        const saved = localStorage.getItem("mapsOrder_" + expowiskoKey);
-        if (saved) {
-          const order = JSON.parse(saved);
-          mapsArray = order.map(name => ({
-            [name]: null
-          }));
-          selectedMaps = order.slice();
-          updateMapsContent();
-        } else {}
-      } catch (e) {}
-    }
-    const mapsContentContainer = document.createElement("div");
-    mapsContentContainer.style.display = "flex";
-    mapsContentContainer.style.flexDirection = "column";
-    mapsContentContainer.style.height = "100%";
-    const mapsListContainer = document.createElement("div");
-    mapsListContainer.style.flex = "1";
-    mapsListContainer.style.display = "flex";
-    mapsListContainer.style.flexDirection = "column";
-    mapsListContainer.style.background = "#1f2937";
-    mapsListContainer.style.borderRadius = "0.375rem";
-    mapsListContainer.style.overflow = "hidden";
-    mapsListContainer.style.minHeight = "0";
-    mapsListContainer.style.height = "100%";
-    const mapsList = document.createElement("div");
-    mapsList.id = "mapsList";
-    mapsList.style.flex = "1";
-    mapsList.style.overflowY = "auto";
-    mapsList.style.padding = "0.5rem";
-    mapsList.style.boxSizing = "border-box";
-    mapsList.style.height = "100%";
-    mapsList.addEventListener("wheel", e => {
-      e.stopPropagation();
-    });
-    const buttonsContainer = document.createElement("div");
-    buttonsContainer.style.marginTop = "0.5rem";
-    buttonsContainer.style.display = "flex";
-    buttonsContainer.style.justifyContent = "space-between";
-    buttonsContainer.style.gap = "0.5rem";
-    const saveBtn = document.createElement("button");
-    saveBtn.textContent = "Zapisz kolejność";
-    saveBtn.className = "bot-ui-button";
-    saveBtn.style.flex = "1";
-    saveBtn.addEventListener("click", () => {
-      saveMapsOrder();
-    });
-    buttonsContainer.appendChild(saveBtn);
-    const loadBtn = document.createElement("button");
-    loadBtn.textContent = "Załaduj zapisane";
-    loadBtn.className = "bot-ui-button";
-    loadBtn.style.flex = "1";
-    loadBtn.style.display = "none";
-    loadBtn.addEventListener("click", () => {
-      loadMapsOrder();
-    });
-    buttonsContainer.appendChild(loadBtn);
-    function renderMapsItems() {
-      const fragment = document.createDocumentFragment();
-      let draggedItemIndex = null;
-      mapsArray.forEach((mapObj, index) => {
-        const mapName = Object.keys(mapObj)[0];
-        const item = document.createElement("div");
-        item.className = "bot-ui-mob-item";
-        item.style.display = "flex";
-        item.style.alignItems = "center";
-        item.style.padding = "0.5rem";
-        item.style.border = "1px solid #374151";
-        item.style.borderRadius = "0.375rem";
-        item.style.marginBottom = "0.5rem";
-        item.dataset.index = index;
-        item.draggable = true;
-        const nameP = document.createElement("p");
-        nameP.textContent = mapName;
-        nameP.style.margin = "0";
-        nameP.style.flexGrow = "1";
-        item.appendChild(nameP);
-        item.addEventListener("dragstart", e => {
-          draggedItemIndex = index;
-          e.dataTransfer.effectAllowed = "move";
-        });
-        item.addEventListener("dragover", e => {
-          e.preventDefault();
-          e.dataTransfer.dropEffect = "move";
-        });
-        item.addEventListener("drop", e => {
-          e.preventDefault();
-          const targetIndex = parseInt(item.dataset.index, 10);
-          if (draggedItemIndex !== null && draggedItemIndex !== targetIndex) {
-            const movedItem = mapsArray.splice(draggedItemIndex, 1)[0];
-            mapsArray.splice(targetIndex, 0, movedItem);
-            selectedMaps = mapsArray.map(obj => Object.keys(obj)[0]);
-            updateMapsContent();
-          }
-        });
-        const copyBtn = document.createElement("button");
-        copyBtn.textContent = "Kopiuj";
-        copyBtn.style.background = "#60a5fa";
-        copyBtn.style.border = "none";
-        copyBtn.style.padding = "0.25rem 0.5rem";
-        copyBtn.style.borderRadius = "0.25rem";
-        copyBtn.style.cursor = "pointer";
-        copyBtn.style.marginRight = "0.5rem";
-        copyBtn.addEventListener("click", e => {
-          e.stopPropagation();
-          mapsArray.splice(index + 1, 0, {
-            [mapName]: null
-          });
-          selectedMaps = mapsArray.map(obj => Object.keys(obj)[0]);
-          updateMapsContent();
-        });
-        item.appendChild(copyBtn);
-        const deleteBtn = document.createElement("button");
-        deleteBtn.textContent = "Usuń";
-        deleteBtn.style.background = "#f87171";
-        deleteBtn.style.border = "none";
-        deleteBtn.style.padding = "0.25rem 0.5rem";
-        deleteBtn.style.borderRadius = "0.25rem";
-        deleteBtn.style.cursor = "pointer";
-        deleteBtn.addEventListener("click", e => {
-          e.stopPropagation();
-          mapsArray.splice(index, 1);
-          selectedMaps = mapsArray.map(obj => Object.keys(obj)[0]);
-          updateMapsContent();
-        });
-        item.appendChild(deleteBtn);
-        fragment.appendChild(item);
-      });
-      return fragment;
-    }
-    function updateMapsContent() {
-      mapsList.innerHTML = "";
-      mapsList.appendChild(renderMapsItems());
-      selectedMaps = mapsArray.map(obj => Object.keys(obj)[0]);
-      window.selectedMaps = selectedMaps;
-      if (localStorage.getItem("mapsOrder_" + expowiskoKey)) {
-        loadBtn.style.display = "block";
-      } else {
-        loadBtn.style.display = "none";
-      }
-    }
-    updateMapsContent();
-    mapsListContainer.appendChild(mapsList);
-    mapsContentContainer.appendChild(mapsListContainer);
-    mapsContentContainer.appendChild(buttonsContainer);
-    mapsPanel = new DraggablePanel("Lista Map", mapsContentContainer, {
-      x: 200,
-      y: 10
-    }, {
-      isResizable: true,
-      initialSize: {
-        width: 300,
-        height: Math.min(mapsArray.length * 50 + 40, 350)
-      },
-      minSize: {
-        width: 250,
-        height: 150
-      }
-    });
-    mapsPanel.restore();
-    if (mapsPanel.interfaceButton && mapsPanel.interfaceButton.parentNode) {
-      mapsPanel.interfaceButton.parentNode.removeChild(mapsPanel.interfaceButton);
+  
+  // ==================== SYSTEM PANELU MAP ====================
+  // Osobny panel DraggablePanel dla listy map
+  
+  let currentExpowiskoKey = null;
+  
+  function saveMapsConfig() {
+    if (!currentExpowiskoKey) return;
+    try {
+      localStorage.setItem("mapsOrder_" + currentExpowiskoKey, JSON.stringify(selectedMaps));
+    } catch (e) {
+      console.error("Blad zapisywania konfiguracji map:", e);
     }
   }
+  
+  function resetMapsToDefault() {
+    if (!currentExpowiskoKey) return;
+    try {
+      localStorage.removeItem("mapsOrder_" + currentExpowiskoKey);
+    } catch (e) {}
+    
+    const mapsArray = Expowiska[currentExpowiskoKey] ? Expowiska[currentExpowiskoKey].slice() : [];
+    selectedMaps = mapsArray.map(mapObj => Object.keys(mapObj)[0]);
+    window.selectedMaps = selectedMaps;
+    // ZawartoĹ›Ä‡ zostanie odĹ›wieĹĽona przez wywoĹ‚ujÄ…cÄ… funkcjÄ™
+  }
+  
+  function loadExpowiskoMaps(expowiskoKey) {
+    currentExpowiskoKey = expowiskoKey;
+    
+    try {
+      const saved = localStorage.getItem("mapsOrder_" + expowiskoKey);
+      if (saved) {
+        selectedMaps = JSON.parse(saved);
+      } else {
+        const mapsArray = Expowiska[expowiskoKey] ? Expowiska[expowiskoKey].slice() : [];
+        selectedMaps = mapsArray.map(mapObj => Object.keys(mapObj)[0]);
+      }
+    } catch (e) {
+      const mapsArray = Expowiska[expowiskoKey] ? Expowiska[expowiskoKey].slice() : [];
+      selectedMaps = mapsArray.map(mapObj => Object.keys(mapObj)[0]);
+    }
+    
+    window.selectedMaps = selectedMaps;
+  }
+  
+  // Funkcja renderujÄ…ca zawartoĹ›Ä‡ panelu map (bez tworzenia nowego panelu)
+  function renderMapsListContent(container, expowiskoKey) {
+    if (!container || !expowiskoKey) return;
+    
+    container.innerHTML = "";
+    
+    // Sekcja dodawania mapy
+    const addSection = document.createElement("div");
+    addSection.style.cssText = `
+      display: flex;
+      gap: 0.4rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid #4f3a66;
+    `;
+    
+    const addInput = document.createElement("input");
+    addInput.type = "text";
+    addInput.placeholder = "Dodaj wlasna mape...";
+    addInput.className = "bot-ui-input";
+    addInput.style.cssText = `
+      flex: 1;
+      padding: 0.4rem 0.5rem;
+      font-size: 0.8rem;
+    `;
+    addSection.appendChild(addInput);
+    
+    const addBtn = document.createElement("button");
+    addBtn.textContent = "+";
+    addBtn.className = "bot-ui-button";
+    addBtn.style.cssText = `
+      padding: 0.4rem 0.6rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+    `;
+    addBtn.onclick = () => {
+      const mapName = addInput.value.trim();
+      if (mapName && !selectedMaps.includes(mapName)) {
+        selectedMaps.push(mapName);
+        window.selectedMaps = selectedMaps;
+        renderMapsListContent(container, expowiskoKey);
+        updateMapsCountBadge();
+      }
+    };
+    addInput.onkeypress = (e) => {
+      if (e.key === "Enter") addBtn.click();
+    };
+    addSection.appendChild(addBtn);
+    
+    container.appendChild(addSection);
+    
+    // Lista map
+    const mapsList = document.createElement("div");
+    mapsList.style.cssText = `
+      flex: 1;
+      overflow-y: auto;
+      min-height: 0;
+    `;
+    mapsList.addEventListener("wheel", e => e.stopPropagation());
+    
+    let draggedIndex = null;
+    
+    selectedMaps.forEach((mapName, index) => {
+      const item = document.createElement("div");
+      item.className = "bot-ui-mob-item";
+      item.dataset.index = index;
+      item.draggable = true;
+      item.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.4rem 0.5rem;
+        margin-bottom: 0.35rem;
+        cursor: grab;
+        background: rgba(26,20,14,0.5);
+        border: 1px solid #3d2952;
+        border-radius: 4px;
+      `;
+      
+      // Numer
+      const num = document.createElement("span");
+      num.textContent = (index + 1) + ".";
+      num.style.cssText = `
+        color: #a89cc4;
+        font-size: 0.75rem;
+        min-width: 20px;
+      `;
+      item.appendChild(num);
+      
+      // Nazwa (edytowalna)
+      const nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.value = mapName;
+      nameInput.style.cssText = `
+        flex: 1;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 3px;
+        color: #d8cce8;
+        font-size: 0.8rem;
+        padding: 0.2rem 0.4rem;
+        outline: none;
+        min-width: 0;
+      `;
+      nameInput.onfocus = () => {
+        nameInput.style.background = "rgba(26,20,14,0.6)";
+        nameInput.style.borderColor = "#4f3a66";
+        item.draggable = false;
+      };
+      nameInput.onblur = () => {
+        nameInput.style.background = "transparent";
+        nameInput.style.borderColor = "transparent";
+        item.draggable = true;
+        const newName = nameInput.value.trim();
+        if (newName && newName !== selectedMaps[index]) {
+          selectedMaps[index] = newName;
+          window.selectedMaps = selectedMaps;
+        } else if (!newName) {
+          nameInput.value = selectedMaps[index];
+        }
+      };
+      nameInput.onkeypress = (e) => {
+        if (e.key === "Enter") nameInput.blur();
+      };
+      item.appendChild(nameInput);
+      
+      // Przycisk usuwania
+      const deleteBtn = document.createElement("button");
+      deleteBtn.textContent = "x";
+      deleteBtn.style.cssText = `
+        background: transparent;
+        border: 1px solid #8b4040;
+        color: #c08080;
+        font-size: 11px;
+        font-weight: bold;
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        border-radius: 3px;
+        opacity: 0.7;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+      `;
+      deleteBtn.onmouseenter = () => {
+        deleteBtn.style.opacity = "1";
+        deleteBtn.style.background = "rgba(139,64,64,0.3)";
+      };
+      deleteBtn.onmouseleave = () => {
+        deleteBtn.style.opacity = "0.7";
+        deleteBtn.style.background = "transparent";
+      };
+      deleteBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        selectedMaps.splice(index, 1);
+        window.selectedMaps = selectedMaps;
+        renderMapsListContent(container, expowiskoKey);
+        updateMapsCountBadge();
+      };
+      item.appendChild(deleteBtn);
+      
+      // Drag & Drop
+      item.ondragstart = (e) => {
+        draggedIndex = index;
+        item.style.opacity = "0.5";
+        e.dataTransfer.effectAllowed = "move";
+      };
+      item.ondragend = () => {
+        item.style.opacity = "1";
+        draggedIndex = null;
+      };
+      item.ondragover = (e) => {
+        e.preventDefault();
+        item.style.borderColor = "#5c4578";
+      };
+      item.ondragleave = () => {
+        item.style.borderColor = "#3d2952";
+      };
+      item.ondrop = (e) => {
+        e.preventDefault();
+        item.style.borderColor = "#3d2952";
+        const targetIndex = parseInt(item.dataset.index, 10);
+        if (draggedIndex !== null && draggedIndex !== targetIndex) {
+          const movedMap = selectedMaps.splice(draggedIndex, 1)[0];
+          selectedMaps.splice(targetIndex, 0, movedMap);
+          window.selectedMaps = selectedMaps;
+          renderMapsListContent(container, expowiskoKey);
+        }
+      };
+      
+      mapsList.appendChild(item);
+    });
+    
+    container.appendChild(mapsList);
+    
+    // Przyciski na dole
+    const buttonsContainer = document.createElement("div");
+    buttonsContainer.style.cssText = `
+      display: flex;
+      gap: 0.4rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid #4f3a66;
+    `;
+    
+    const saveBtn = document.createElement("button");
+    saveBtn.textContent = "Zapisz";
+    saveBtn.className = "bot-ui-button";
+    saveBtn.style.flex = "1";
+    saveBtn.onclick = saveMapsConfig;
+    buttonsContainer.appendChild(saveBtn);
+    
+    const resetBtn = document.createElement("button");
+    resetBtn.textContent = "Reset";
+    resetBtn.className = "bot-ui-button";
+    resetBtn.style.flex = "1";
+    resetBtn.onclick = () => {
+      resetMapsToDefault();
+      renderMapsListContent(container, expowiskoKey);
+      updateMapsCountBadge();
+    };
+    buttonsContainer.appendChild(resetBtn);
+    
+    container.appendChild(buttonsContainer);
+  }
+  
+  function updateMapsCountBadge() {
+    const badge = document.getElementById("mapsCountBadge");
+    if (badge) badge.textContent = "(" + selectedMaps.length + ")";
+  }
+  
   function createExpowiskaPanel() {
     const content = document.createElement("div");
     content.style.display = "flex";
     content.style.flexDirection = "column";
     content.style.height = "100%";
-    content.style.gap = "1rem";
-    // Keep the panel content flush with the card; spacing is handled inside the inner card.
+    content.style.gap = "0.75rem";
     content.style.padding = "0";
     content.style.boxSizing = "border-box";
+    
     const expingState = {
       active: false,
       minLevel: null,
@@ -1099,250 +1221,239 @@
       sellItems: false,
       teleportIfOnMap: false
     };
-    // NOTE(UI): "Bij wszystko" toggle is temporarily hidden (no clear UX/use-case right now).
-    // The logic is kept for potential future re-enable.
+    
     content.innerHTML = `
-      <div style="
-        background: #1f2937;
-        padding: 1rem;
-        border-radius: 0.75rem;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        width: 100%;
-        max-width: 100%;
-        box-sizing: border-box;
-      ">
-            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
-          <label style="
-            display: none;
-            align-items: center;
-            gap: 0.5rem;
-            color: #cbd5e1;
-            font-size: 0.875rem;
-            font-weight: 500;
-            cursor: pointer;
-          ">
-                    <input
-                        type="checkbox"
-                        id="allLevelsCheckbox"
-                        class="bot-ui-checkbox"
-                    />
-            <span>Bij wszystko</span>
-                </label>
-
-          <div style="display: flex; gap: 0.75rem;">
-            <div style="flex: 1; min-width: 0;">
-                        <label style="
-                            display: block;
-                      color: #cbd5e1;
-                            font-size: 0.875rem;
-                            margin-bottom: 0.25rem;
-                            font-weight: 500;
-                        ">
-                            Min Poziom
-                        </label>
-                        <input
-                            type="number"
-                            id="minLevelInput"
-                            class="bot-ui-input"
-                            min="1"
-                            max="1000"
-                            value="1"
-                            placeholder="Min"
-                            style="
-                                width: 100%;
-                                border: 1px solid #374151;
-                                transition: all 0.2s ease;
-                                padding: 0.5rem;
-                                box-sizing: border-box;
-                            "
-                        >
-                    </div>
-                        <div style="flex: 1; min-width: 0;">
-                        <label style="
-                            display: block;
-                        color: #cbd5e1;
-                            font-size: 0.875rem;
-                            margin-bottom: 0.25rem;
-                            font-weight: 500;
-                        ">
-                            Max Poziom
-                        </label>
-                        <input
-                            type="number"
-                            id="maxLevelInput"
-                            class="bot-ui-input"
-                            min="1"
-                            max="1000"
-                            value="1000"
-                            placeholder="Max"
-                            style="
-                                width: 100%;
-                                border: 1px solid #374151;
-                                transition: all 0.2s ease;
-                                padding: 0.5rem;
-                                box-sizing: border-box;
-                            "
-                        >
-                    </div>
-                </div>
-            </div>
-
-            <div style="margin-bottom: 1rem;">
-                <label style="
-                  display: block;
-                  color: #cbd5e1;
-                    font-size: 0.875rem;
-                    margin-bottom: 0.5rem;
-                    font-weight: 500;
-                ">Wybierz expowisko</label>
-                <div style="position: relative;">
-                    <select
-                        id="expowiskoSelect"
-                        class="bot-ui-input"
-                        style="
-                            width: 100%;
-                            appearance: none;
-                            border: 1px solid #374151;
-                            padding: 0.5rem 2rem 0.5rem 0.5rem;
-                            transition: all 0.2s ease;
-                            box-sizing: border-box;
-                            color: #e5e7eb;
-                            background-color: #1f2937;
-                        "
-                    >
-                        <option value="">Wybierz ekspowisko</option>
-                        ${Object.keys(Expowiska).map(key => `<option value="${key}">${key}</option>`).join("")}
-                    </select>
-                </div>
-                <div id="mapWarning" style="font-size: 0.75rem; color: #f87171; margin-top: 0.5rem;"></div>
-            </div>
-
-            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
-                <label style="
-                  display: flex;
-                  align-items: center;
-                  gap: 0.5rem;
-                  color: #cbd5e1;
-                    font-size: 0.875rem;
-                    cursor: pointer;
-                ">
-                    <input
-                        type="checkbox"
-                        id="sellItemsCheckbox"
-                        class="bot-ui-checkbox"
-                    />
-                    <span>Sprzedawaj itemy</span>
-                </label>
-                <label style="
-                  display: flex;
-                  align-items: center;
-                  gap: 0.5rem;
-                  color: #cbd5e1;
-                    font-size: 0.875rem;
-                    cursor: pointer;
-                ">
-                    <input
-                        type="checkbox"
-                        id="teleportIfOnMapCheckbox"
-                        class="bot-ui-checkbox"
-                    />
-                    <span>Teleportuj przy innych graczach</span>
-                </label>
-            </div>
-
-            <div style="margin-bottom: 1rem;">
-                <label style="
-                  display: block;
-                  color: #cbd5e1;
-                    font-size: 0.875rem;
-                    margin-bottom: 0.5rem;
-                    font-weight: 500;
-                ">Ile kupić leków?</label>
-                <div style="position: relative;">
-                    <input
-                        type="number"
-                        id="healPotionsInput"
-                        class="bot-ui-input"
-                        style="
-                            width: 100%;
-                            border: 1px solid #374151;
-                            padding: 0.5rem 0.5rem;
-                            transition: all 0.2s ease;
-                            box-sizing: border-box;
-                            color: #e5e7eb;
-                            background-color: #1f2937;
-                        "
-                        placeholder="e.g. 10"
-                    />
-                </div>
-                <!-- TEST POTEK - ZAKOMENTOWANE
-                <button
-                    id="testPotionsBtn"
-                    class="bot-ui-button"
-                    style="
-                        width: 100%;
-                        padding: 0.5rem;
-                        border-radius: 0.5rem;
-                        margin-top: 0.5rem;
-                        background: #4f46e5;
-                        color: white;
-                        font-weight: 600;
-                        cursor: pointer;
-                        border: none;
-                    "
-                >
-                    🧪 Testuj kupowanie potek
-                </button>
-                <div id="testPotionsStatus" style="font-size: 0.75rem; color: #9ca3af; margin-top: 0.25rem;">
-                    Kliknij aby przetestować kupowanie potek u healera.
-                </div>
-                -->
-            </div>
-
-            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                <button
-                    id="expoBtn"
-                    class="bot-ui-button green"
-                    style="
-                        width: 100%;
-                        padding: 0.75rem;
-                        border-radius: 0.5rem;
-                        transition: all 0.2s ease;
-                        font-weight: 600;
-                    "
-                >
-                    Start
-                </button>
-
-                <div
-                    id="expoStatus"
-                    style="
-                        text-align: center;
-                        color: #9ca3af;
-                        font-size: 0.875rem;
-                        background: #111827;
-                        padding: 0.5rem;
-                        border-radius: 0.5rem;
-                    "
-                >
-                    Gotowy do rozpoczęcia expingu
-                </div>
-            </div>
+      <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+        <label style="display: none; align-items: center; gap: 0.5rem; color: #d8cce8; font-size: 0.875rem; font-weight: 500; cursor: pointer;">
+          <input type="checkbox" id="allLevelsCheckbox" class="bot-ui-checkbox" />
+          <span>Bij wszystko</span>
+        </label>
+        <div style="display: flex; gap: 0.75rem;">
+          <div style="flex: 1; min-width: 0;">
+            <label style="display: block; color: #d8cce8; font-size: 0.875rem; margin-bottom: 0.25rem; font-weight: 500;">Min Poziom</label>
+            <input type="number" id="minLevelInput" class="bot-ui-input" min="1" max="1000" value="1" placeholder="Min" style="width: 100%; border: 1px solid #3d2952; padding: 0.5rem; box-sizing: border-box;">
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <label style="display: block; color: #d8cce8; font-size: 0.875rem; margin-bottom: 0.25rem; font-weight: 500;">Max Poziom</label>
+            <input type="number" id="maxLevelInput" class="bot-ui-input" min="1" max="1000" value="1000" placeholder="Max" style="width: 100%; border: 1px solid #3d2952; padding: 0.5rem; box-sizing: border-box;">
+          </div>
         </div>
+      </div>
+
+      <div>
+        <label style="display: block; color: #d8cce8; font-size: 0.875rem; margin-bottom: 0.5rem; font-weight: 500;">Wybierz expowisko</label>
+        <select id="expowiskoSelect" class="bot-ui-input" style="width: 100%; appearance: none; border: 1px solid #3d2952; padding: 0.5rem 2rem 0.5rem 0.5rem; box-sizing: border-box;">
+          <option value="">Wybierz ekspowisko</option>
+          ${Object.keys(Expowiska).map(key => `<option value="${key}">${key}</option>`).join("")}
+        </select>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+        <label style="display: flex; align-items: center; gap: 0.5rem; color: #d8cce8; font-size: 0.875rem; cursor: pointer;">
+          <input type="checkbox" id="sellItemsCheckbox" class="bot-ui-checkbox" />
+          <span>Sprzedawaj itemy</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 0.5rem; color: #d8cce8; font-size: 0.875rem; cursor: pointer;">
+          <input type="checkbox" id="teleportIfOnMapCheckbox" class="bot-ui-checkbox" />
+          <span>Teleportuj przy innych graczach</span>
+        </label>
+      </div>
+
+      <div>
+        <label style="display: block; color: #d8cce8; font-size: 0.875rem; margin-bottom: 0.5rem; font-weight: 500;">Ile kupic lekow?</label>
+        <input type="number" id="healPotionsInput" class="bot-ui-input" style="width: 100%; border: 1px solid #3d2952; padding: 0.5rem; box-sizing: border-box;" placeholder="np. 10" />
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: auto;">
+        <button id="expoBtn" class="bot-ui-button green" style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; font-weight: 600;">Start</button>
+        <div id="expoStatus" style="text-align: center; color: #a89cc4; font-size: 0.875rem; background: #16101f; padding: 0.5rem; border-radius: 0.5rem; border: 1px solid #3d2952;">Gotowy do rozpoczecia expingu</div>
+      </div>
     `;
+    
     const minLevelInput = content.querySelector("#minLevelInput");
     const maxLevelInput = content.querySelector("#maxLevelInput");
     const expowiskoSelect = content.querySelector("#expowiskoSelect");
     const expoBtn = content.querySelector("#expoBtn");
     const expoStatus = content.querySelector("#expoStatus");
-    const mapWarningElem = content.querySelector("#mapWarning");
     const allLevelsCheckbox = content.querySelector("#allLevelsCheckbox");
     const sellItemsCheckbox = content.querySelector("#sellItemsCheckbox");
     const teleportIfOnMapCheckbox = content.querySelector("#teleportIfOnMapCheckbox");
     const healPotionsInput = content.querySelector("#healPotionsInput");
-    // TEST POTEK - ZAKOMENTOWANE
-    // const testPotionsBtn = content.querySelector("#testPotionsBtn");
-    // const testPotionsStatus = content.querySelector("#testPotionsStatus");
+    
+    // Wysuwany panel map - bÄ™dzie dodany do .bot-ui-card po utworzeniu DraggablePanel
+    let slidingMapsPanel = null;
+    let mapsContent = null;
+    let mapsToggleBtn = null;
+    let isPanelOpen = false;
+    
+    function createSlidingMapsPanel(cardElement) {
+      // Panel wysuwany z prawej strony - pozycjonowany absolutnie wzglÄ™dem .bot-ui-card
+      slidingMapsPanel = document.createElement("div");
+      slidingMapsPanel.id = "slidingMapsPanel";
+      slidingMapsPanel.style.cssText = `
+        position: absolute;
+        top: 0;
+        right: 0;
+        transform: translateX(100%);
+        width: 260px;
+        height: 100%;
+        background: linear-gradient(to bottom, #241a2e 0%, #16101f 100%);
+        border: 2px solid #3d2952;
+        border-left: 1px solid #4f3a66;
+        border-radius: 0 8px 8px 0;
+        display: flex;
+        flex-direction: column;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+        z-index: 100;
+        box-shadow: 4px 0 15px rgba(0,0,0,0.5);
+      `;
+      
+      // NagĹ‚Ăłwek panelu map - IDENTYCZNY jak .bot-ui-card-header
+      const mapsPanelHeader = document.createElement("div");
+      mapsPanelHeader.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 10px;
+        border-bottom: 1px solid #4f3a66;
+        background: linear-gradient(to bottom, #3d2952 0%, #241a2e 100%);
+        border-radius: 0 6px 0 0;
+        flex-shrink: 0;
+        font-family: 'Arial', sans-serif;
+        color: #c9a0dc;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        box-sizing: border-box;
+        min-height: 32px;
+      `;
+      
+      const mapsTitle = document.createElement("span");
+      mapsTitle.style.cssText = "font-size: 0.85rem; font-weight: 600;";
+      mapsTitle.innerHTML = 'Mapy <span id="mapsCountBadge" style="color: #d8cce8; font-weight: normal;">(0)</span>';
+      mapsPanelHeader.appendChild(mapsTitle);
+      
+      const closeMapsBtn = document.createElement("button");
+      closeMapsBtn.innerHTML = "-";
+      closeMapsBtn.className = "minimize-button";
+      closeMapsBtn.style.cssText = `
+        background: transparent;
+        border: none;
+        color: #d8cce8;
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+        opacity: 0.7;
+      `;
+      closeMapsBtn.onmouseenter = () => { closeMapsBtn.style.opacity = "1"; };
+      closeMapsBtn.onmouseleave = () => { closeMapsBtn.style.opacity = "0.7"; };
+      closeMapsBtn.onclick = () => toggleSlidingMapsPanel(false);
+      mapsPanelHeader.appendChild(closeMapsBtn);
+      
+      slidingMapsPanel.appendChild(mapsPanelHeader);
+      
+      // ZawartoĹ›Ä‡ panelu map
+      mapsContent = document.createElement("div");
+      mapsContent.id = "mapsListContent";
+      mapsContent.style.cssText = `
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 10px;
+        gap: 8px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        background: rgba(22, 16, 31, 0.95);
+      `;
+      slidingMapsPanel.appendChild(mapsContent);
+      
+      cardElement.appendChild(slidingMapsPanel);
+      
+      // Przycisk toggle z pionowym tekstem "Mapy"
+      mapsToggleBtn = document.createElement("button");
+      mapsToggleBtn.id = "mapsToggleBtn";
+      mapsToggleBtn.title = "Lista Map";
+      mapsToggleBtn.style.cssText = `
+        position: absolute;
+        top: 50%;
+        right: 0;
+        transform: translate(100%, -50%);
+        width: 22px;
+        height: 80px;
+        background: linear-gradient(to bottom, #4f3a66 0%, #3d2952 100%);
+        border: 2px solid #5c4578;
+        border-left: none;
+        border-radius: 0 6px 6px 0;
+        color: #c9a0dc;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 600;
+        writing-mode: vertical-rl;
+        text-orientation: mixed;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+        z-index: 101;
+        box-shadow: 2px 0 8px rgba(0,0,0,0.3);
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        letter-spacing: 1px;
+      `;
+      mapsToggleBtn.textContent = "Mapy";
+      mapsToggleBtn.onmouseenter = () => {
+        mapsToggleBtn.style.background = "linear-gradient(to bottom, #5c4578 0%, #4f3a66 100%)";
+        mapsToggleBtn.style.color = "#fff";
+      };
+      mapsToggleBtn.onmouseleave = () => {
+        mapsToggleBtn.style.background = "linear-gradient(to bottom, #4f3a66 0%, #3d2952 100%)";
+        mapsToggleBtn.style.color = "#c9a0dc";
+      };
+      mapsToggleBtn.onclick = () => toggleSlidingMapsPanel(!isPanelOpen);
+      
+      cardElement.appendChild(mapsToggleBtn);
+    }
+    
+    function toggleSlidingMapsPanel(show) {
+      if (!slidingMapsPanel || !mapsToggleBtn) return;
+      
+      isPanelOpen = show;
+      
+      if (show) {
+        slidingMapsPanel.style.opacity = "1";
+        slidingMapsPanel.style.pointerEvents = "auto";
+        
+        // PrzenieĹ› przycisk na prawÄ… stronÄ™ panelu map
+        slidingMapsPanel.appendChild(mapsToggleBtn);
+        mapsToggleBtn.style.right = "0";
+        mapsToggleBtn.style.transform = "translate(100%, -50%)";
+        mapsToggleBtn.textContent = "Zamknij";
+        mapsToggleBtn.title = "Zamknij listÄ™ map";
+        
+        if (currentExpowiskoKey) {
+          renderMapsListContent(mapsContent, currentExpowiskoKey);
+          updateMapsCountBadge();
+        }
+      } else {
+        slidingMapsPanel.style.opacity = "0";
+        slidingMapsPanel.style.pointerEvents = "none";
+        
+        // PrzenieĹ› przycisk z powrotem na bot-ui-card
+        const cardElement = slidingMapsPanel.parentElement;
+        if (cardElement) {
+          cardElement.appendChild(mapsToggleBtn);
+        }
+        mapsToggleBtn.style.right = "0";
+        mapsToggleBtn.style.transform = "translate(100%, -50%)";
+        mapsToggleBtn.textContent = "Mapy";
+        mapsToggleBtn.title = "Lista Map";
+      }
+    }
+    
     function handleAllLevelsToggle() {
       if (allLevelsCheckbox.checked) {
         minLevelInput.value = "1";
@@ -1364,66 +1475,29 @@
       const lvl = parseInt(m[1], 10);
       return Number.isFinite(lvl) ? lvl : null;
     }
+    
     function updateLevelDependentOptions() {
       const requiredLevel = 70;
       const heroLevel = window.Engine && window.Engine.hero && window.Engine.hero.d && window.Engine.hero.d.lvl || 0;
-      const msg = `Należy mieć co najmniej ${requiredLevel} lvl aby je aktywować`;
+      const msg = `NaleĹĽy mieÄ‡ co najmniej ${requiredLevel} lvl aby je aktywowaÄ‡`;
       if (heroLevel < requiredLevel) {
         sellItemsCheckbox.disabled = true;
         teleportIfOnMapCheckbox.disabled = false;
         healPotionsInput.disabled = false;
-        // TEST POTEK - ZAKOMENTOWANE
-        // testPotionsBtn.disabled = false;
         sellItemsCheckbox.title = msg;
-        teleportIfOnMapCheckbox.title = "";
-        healPotionsInput.title = "";
-        // testPotionsBtn.title = "";
       } else {
         sellItemsCheckbox.disabled = false;
         teleportIfOnMapCheckbox.disabled = false;
         healPotionsInput.disabled = false;
-        // TEST POTEK - ZAKOMENTOWANE
-        // testPotionsBtn.disabled = false;
         sellItemsCheckbox.title = "";
-        teleportIfOnMapCheckbox.title = "";
-        healPotionsInput.title = "";
-        // testPotionsBtn.title = "";
       }
     }
     updateLevelDependentOptions();
-    let expowiskoMapCheckInterval = null;
-    function startMapCheck(selectedExp) {
-      if (expowiskoMapCheckInterval) {
-        clearInterval(expowiskoMapCheckInterval);
-        expowiskoMapCheckInterval = null;
-      }
-      const heroLevel = window.Engine && window.Engine.hero && window.Engine.hero.d && window.Engine.hero.d.lvl || 0;
-      let validMaps = [];
-      if (heroLevel < 70) {
-        validMaps = (Expowiska[selectedExp] || []).map(mapObj => Object.keys(mapObj)[0]);
-      } else {
-        validMaps = ["Kwieciste Przejście"];
-      }
-      expowiskoMapCheckInterval = setInterval(() => {
-        const currentMap = window.MargonemAPI.navigation.getCurrentLocation();
-        if (validMaps.indexOf(currentMap) === -1) {
-          if (heroLevel < 70) {
-            mapWarningElem.textContent = "Dojdź do jednej z map ekspowiska";
-          } else {
-            mapWarningElem.textContent = "Zalecana lokacja startowa - Kwieciste Przejście";
-          }
-        } else {
-          mapWarningElem.textContent = "";
-        }
-      }, 1000);
-    }
+    
     expowiskoSelect.addEventListener("change", () => {
       const selectedExp = expowiskoSelect.value;
       expingState.selectedExpowisko = selectedExp;
-      mapWarningElem.textContent = "";
 
-      // Auto-set min/max level around expowisko level (lvl ± 5) when the name contains a level.
-      // Example: "Piaskowi niewolnicy 133" -> min=128, max=138
       const lvl = parseExpowiskoLevel(selectedExp);
       if (Number.isFinite(lvl)) {
         allLevelsCheckbox.checked = false;
@@ -1435,18 +1509,21 @@
         maxLevelInput.disabled = false;
       }
 
-      if (expowiskoMapCheckInterval) {
-        clearInterval(expowiskoMapCheckInterval);
-        expowiskoMapCheckInterval = null;
-      }
       if (selectedExp) {
-        openMapsWindow(selectedExp);
-        startMapCheck(selectedExp);
-      } else if (mapsPanel) {
-        mapsPanel.minimize();
-        mapsPanel = null;
+        loadExpowiskoMaps(selectedExp);
+        if (mapsToggleBtn) {
+          mapsToggleBtn.style.display = "flex";
+        }
+        updateMapsCountBadge();
+        toggleSlidingMapsPanel(true);
+      } else {
+        if (mapsToggleBtn) {
+          mapsToggleBtn.style.display = "none";
+        }
+        toggleSlidingMapsPanel(false);
       }
     });
+    
     function start_exping() {
       let minLevel = parseInt(minLevelInput.value) || 1;
       let maxLevel = parseInt(maxLevelInput.value) || 1000;
@@ -1458,18 +1535,7 @@
       const sellItems = sellItemsCheckbox.checked;
       const teleportIfOnMap = teleportIfOnMapCheckbox.checked;
       const healPotions = parseInt(healPotionsInput.value) || 0;
-      const heroLevel = window.Engine && window.Engine.hero && window.Engine.hero.d && window.Engine.hero.d.lvl || 0;
-      if (selectedExpowisko) {
-        const currentMap = window.MargonemAPI.navigation.getCurrentLocation();
-        if (heroLevel < 70) {
-          const validMaps = (Expowiska[selectedExpowisko] || []).map(mapObj => Object.keys(mapObj)[0]);
-          if (validMaps.indexOf(currentMap) === -1) {
-            mapWarningElem.textContent = "Dojdź do jednej z map ekspowiska";
-          }
-        } else if (currentMap !== "Kwieciste Przejście") {
-          mapWarningElem.textContent = "Zalecana lokacja startowa - Kwieciste Przejście";
-        }
-      }
+      
       expingState.active = true;
       expingState.minLevel = minLevel;
       expingState.maxLevel = maxLevel;
@@ -1477,13 +1543,11 @@
       expoBtn.classList.remove("green");
       expoBtn.classList.add("red");
       expoStatus.textContent = `Exping: ${selectedExpowisko}`;
-      if (mapsPanel) {
-        mapsPanel.minimize();
-        mapsPanel = null;
-      }
+      toggleSlidingMapsPanel(false);
       window.MargonemAPI.state.exping_location = window.MargonemAPI.state.exping_location || {};
       window.MargonemAPI.exping.startExping(minLevel, maxLevel, selectedExpowisko, sellItems, teleportIfOnMap, healPotions, selectedMaps);
     }
+    
     function stop_exping() {
       expingState.active = false;
       expingState.minLevel = null;
@@ -1495,6 +1559,7 @@
       window.MargonemAPI.exping.stopExping();
       window.MargonemAPI.state.exping_location.is_aborted = true;
     }
+    
     expoBtn.addEventListener("click", () => {
       if (!expingState.active) {
         start_exping();
@@ -1503,64 +1568,36 @@
       }
     });
 
-    // TEST POTEK - ZAKOMENTOWANE
-    /*
-    testPotionsBtn.addEventListener("click", async () => {
-      const targetClicks = parseInt(healPotionsInput.value) || 15;
-      
-      testPotionsStatus.textContent = "🔄 Uruchamiam test... (sprawdź konsolę F12)";
-      testPotionsStatus.style.color = "#fbbf24";
-      testPotionsBtn.disabled = true;
-
-      console.log("=================================================");
-      console.log("[TEST POTEK] Przycisk kliknięty");
-      console.log("[TEST POTEK] Kliknięć do wykonania:", targetClicks);
-      console.log("[TEST POTEK] Kupi potek:", targetClicks * 5);
-      console.log("=================================================");
-
-      try {
-        if (typeof window.MargonemAPI?.testBuyPotionsAtHealer === 'function') {
-          const result = await window.MargonemAPI.testBuyPotionsAtHealer(targetClicks);
-          if (result) {
-            testPotionsStatus.textContent = "✅ Test zakończony pomyślnie!";
-            testPotionsStatus.style.color = "#4ade80";
-          } else {
-            testPotionsStatus.textContent = "❌ Test nieudany - sprawdź konsolę F12";
-            testPotionsStatus.style.color = "#f87171";
-          }
-        } else {
-          console.error("[TEST POTEK] Funkcja testBuyPotionsAtHealer nie istnieje!");
-          testPotionsStatus.textContent = "❌ Funkcja nie znaleziona";
-          testPotionsStatus.style.color = "#f87171";
-        }
-      } catch (err) {
-        console.error("[TEST POTEK] Błąd:", err);
-        testPotionsStatus.textContent = "❌ Błąd: " + (err.message || err);
-        testPotionsStatus.style.color = "#f87171";
-      } finally {
-        testPotionsBtn.disabled = false;
-      }
-    });
-    */
-
-    return new DraggablePanel("Expowiska", content, {
+    // Tworzenie DraggablePanel
+    const panel = new DraggablePanel("Expowiska", content, {
       x: 200,
       y: 60
     }, {
       isResizable: true,
       initialSize: {
-        width: 300,
-        height: 520
+        width: 280,
+        height: 420
       },
       minSize: {
         width: 250,
         height: 350
       },
       maxSize: {
-        width: 420,
+        width: 400,
         height: 720
       }
     });
+    
+    // Dodaj wysuwany panel do .bot-ui-card po maĹ‚ym opĂłĹşnieniu
+    setTimeout(() => {
+      const cardElement = panel.element;
+      if (cardElement) {
+        cardElement.style.overflow = "visible"; // PozwĂłl na wystawanie panelu map
+        createSlidingMapsPanel(cardElement);
+      }
+    }, 100);
+    
+    return panel;
   }
   function createControlPanel() {
     const content = document.createElement("div");
@@ -1796,7 +1833,7 @@
     content.style.padding = "1rem";
     content.style.boxSizing = "border-box";
     content.style.background = "#1f2937";
-    content.style.color = "#e8d5b5";
+    content.style.color = "#d8cce8";
     content.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: space-between;">
                 <label style="margin-right: 1rem;">Auto-Heal Active:</label>
@@ -1985,7 +2022,7 @@
       const exp = expirationDate.getTime();
       const diff = exp - now;
       if (diff <= 0) {
-        countdownSpan.innerHTML = "<span style='color: #f87171;'>⚠️ Licencja wygasła!</span>";
+        countdownSpan.innerHTML = "<span style='color: #f87171;'>âš ď¸Ź Licencja wygasĹ‚a!</span>";
         clearInterval(countdownInterval);
         countdownInterval = null;
         return;
@@ -1998,19 +2035,19 @@
       if (containerWidth >= 240) {
         countdownSpan.innerHTML = `
                     <div style="display: flex; justify-content: center; align-items: center; gap: 0.25rem; margin-top: 0.5rem; flex-wrap: wrap;">
-                        <div style="display: flex; flex-direction: column; align-items: center; background: #1a140e; border-radius: 0.25rem; padding: 0.25rem; min-width: 2.5rem; flex: 1;">
+                        <div style="display: flex; flex-direction: column; align-items: center; background: #16101f; border-radius: 0.25rem; padding: 0.25rem; min-width: 2.5rem; flex: 1;">
                             <span style="font-size: 1rem; font-weight: bold;">${days}</span>
                             <span style="font-size: 0.7rem; color: #9ca3af;">dni</span>
                         </div>
-                        <div style="display: flex; flex-direction: column; align-items: center; background: #1a140e; border-radius: 0.25rem; padding: 0.25rem; min-width: 2.5rem; flex: 1;">
+                        <div style="display: flex; flex-direction: column; align-items: center; background: #16101f; border-radius: 0.25rem; padding: 0.25rem; min-width: 2.5rem; flex: 1;">
                             <span style="font-size: 1rem; font-weight: bold;">${hours}</span>
                             <span style="font-size: 0.7rem; color: #9ca3af;">godz</span>
                         </div>
-                        <div style="display: flex; flex-direction: column; align-items: center; background: #1a140e; border-radius: 0.25rem; padding: 0.25rem; min-width: 2.5rem; flex: 1;">
+                        <div style="display: flex; flex-direction: column; align-items: center; background: #16101f; border-radius: 0.25rem; padding: 0.25rem; min-width: 2.5rem; flex: 1;">
                             <span style="font-size: 1rem; font-weight: bold;">${minutes}</span>
                             <span style="font-size: 0.7rem; color: #9ca3af;">min</span>
                         </div>
-                        <div style="display: flex; flex-direction: column; align-items: center; background: #1a140e; border-radius: 0.25rem; padding: 0.25rem; min-width: 2.5rem; flex: 1;">
+                        <div style="display: flex; flex-direction: column; align-items: center; background: #16101f; border-radius: 0.25rem; padding: 0.25rem; min-width: 2.5rem; flex: 1;">
                             <span style="font-size: 1rem; font-weight: bold;">${seconds}</span>
                             <span style="font-size: 0.7rem; color: #9ca3af;">sek</span>
                         </div>
@@ -2018,7 +2055,7 @@
                 `;
       } else {
         countdownSpan.innerHTML = `
-                    <div style="margin-top: 0.5rem; text-align: center; background: #1a140e; border-radius: 0.25rem; padding: 0.5rem;">
+                    <div style="margin-top: 0.5rem; text-align: center; background: #16101f; border-radius: 0.25rem; padding: 0.5rem;">
                         <span style="font-weight: bold;">${days}d ${hours}h ${minutes}m ${seconds}s</span>
                     </div>
                 `;
@@ -2033,7 +2070,7 @@
       switch (type) {
         case "success":
           messageContainer.style.background = "rgba(45, 90, 30, 0.3)";
-          messageContainer.style.borderLeft = "4px solid #3d7a2a";
+          messageContainer.style.borderLeft = "4px solid #5c4578";
           messageDiv.style.color = "#a3e635";
           break;
         case "error":
@@ -2075,9 +2112,9 @@
         const now = new Date();
         const isExpired = expirationDate <= now;
         const licenseCard = document.createElement("div");
-        licenseCard.style.background = "linear-gradient(to bottom, #2c2117 0%, #1a140e 100%)";
+        licenseCard.style.background = "linear-gradient(to bottom, #241a2e 0%, #16101f 100%)";
         licenseCard.style.borderRadius = "0.5rem";
-        licenseCard.style.border = "1px solid #463829";
+        licenseCard.style.border = "1px solid #3d2952";
         licenseCard.style.padding = "0.75rem";
         licenseCard.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.2)";
         licenseCard.style.display = "flex";
@@ -2098,22 +2135,22 @@
           statusBadge.style.background = "rgba(139, 46, 46, 0.3)";
           statusBadge.style.border = "1px solid #a13636";
           statusBadge.innerHTML = `
-                        <span style="color: #f87171;">⚠️</span>
-                        <span style="color: #f87171; font-weight: 600;">Licencja wygasła</span>
+                        <span style="color: #f87171;">âš ď¸Ź</span>
+                        <span style="color: #f87171; font-weight: 600;">Licencja wygasĹ‚a</span>
                     `;
-          showMessage("Twoja licencja wygasła!", "error");
+          showMessage("Twoja licencja wygasĹ‚a!", "error");
         } else {
           statusBadge.style.background = "rgba(45, 90, 30, 0.3)";
-          statusBadge.style.border = "1px solid #3d7a2a";
+          statusBadge.style.border = "1px solid #5c4578";
           statusBadge.innerHTML = `
-                        <span style="color: #a3e635;">✓</span>
+                        <span style="color: #a3e635;">âś“</span>
                         <span style="color: #a3e635; font-weight: 600;">Licencja aktywna</span>
                     `;
           hideMessage();
         }
         licenseCard.appendChild(statusBadge);
         const keySection = document.createElement("div");
-        keySection.style.background = "rgba(28, 21, 15, 0.6)";
+        keySection.style.background = "rgba(22, 16, 31, 0.6)";
         keySection.style.borderRadius = "0.375rem";
         keySection.style.padding = "0.5rem 0.75rem";
         keySection.style.marginBottom = "0.25rem";
@@ -2129,7 +2166,7 @@
         keyValue.style.wordBreak = "break-all";
         keyValue.style.overflow = "hidden";
         keyValue.style.textOverflow = "ellipsis";
-        const maskedKey = storedLicense.length > 8 ? storedLicense.substring(0, 4) + "•".repeat(storedLicense.length - 8) + storedLicense.substring(storedLicense.length - 4) : storedLicense;
+        const maskedKey = storedLicense.length > 8 ? storedLicense.substring(0, 4) + "â€˘".repeat(storedLicense.length - 8) + storedLicense.substring(storedLicense.length - 4) : storedLicense;
         keyValue.textContent = maskedKey;
         keySection.appendChild(keyValue);
         licenseCard.appendChild(keySection);
@@ -2138,7 +2175,7 @@
         expSection.style.width = "100%";
         expSection.style.boxSizing = "border-box";
         const expLabel = document.createElement("div");
-        expLabel.innerHTML = `<span style="color: #9ca3af; font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Wygaśnięcie licencji</span>`;
+        expLabel.innerHTML = `<span style="color: #9ca3af; font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">WygaĹ›niÄ™cie licencji</span>`;
         expSection.appendChild(expLabel);
         const expValue = document.createElement("div");
         expValue.style.fontSize = "0.875rem";
@@ -2168,7 +2205,7 @@
           countdownSection.style.width = "100%";
           countdownSection.style.boxSizing = "border-box";
           const countdownLabel = document.createElement("div");
-          countdownLabel.innerHTML = `<span style="color: #9ca3af; font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Pozostały czas</span>`;
+          countdownLabel.innerHTML = `<span style="color: #9ca3af; font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">PozostaĹ‚y czas</span>`;
           countdownSection.appendChild(countdownLabel);
           countdownSpan = document.createElement("div");
           countdownSpan.style.textAlign = "center";
@@ -2188,7 +2225,7 @@
           }, 1000);
         }
         const removeBtn = document.createElement("button");
-        removeBtn.textContent = "Usuń licencję";
+        removeBtn.textContent = "UsuĹ„ licencjÄ™";
         removeBtn.className = "bot-ui-button red";
         removeBtn.style.marginTop = "auto";
         removeBtn.style.alignSelf = "stretch";
@@ -2208,9 +2245,9 @@
           confirmSection.style.width = "100%";
           confirmSection.style.boxSizing = "border-box";
           confirmSection.innerHTML = `
-                        <div style="margin-bottom: 0.5rem; font-size: 0.9rem;">Czy na pewno chcesz usunąć licencję?</div>
+                        <div style="margin-bottom: 0.5rem; font-size: 0.9rem;">Czy na pewno chcesz usunÄ…Ä‡ licencjÄ™?</div>
                         <div style="display: flex; gap: 0.5rem; justify-content: center;">
-                            <button id="confirmRemoveBtn" class="bot-ui-button red" style="padding: 0.4rem 0.6rem; font-size: 0.85rem;">Tak, usuń</button>
+                            <button id="confirmRemoveBtn" class="bot-ui-button red" style="padding: 0.4rem 0.6rem; font-size: 0.85rem;">Tak, usuĹ„</button>
                             <button id="cancelRemoveBtn" class="bot-ui-button" style="padding: 0.4rem 0.6rem; font-size: 0.85rem;">Anuluj</button>
                         </div>
                     `;
@@ -2218,7 +2255,7 @@
           document.getElementById("confirmRemoveBtn").addEventListener("click", () => {
             removeStoredLicense();
             refreshPanel();
-            showMessage("Licencja została usunięta", "info");
+            showMessage("Licencja zostaĹ‚a usuniÄ™ta", "info");
           });
           document.getElementById("cancelRemoveBtn").addEventListener("click", () => {
             licenseCard.replaceChild(removeBtn, confirmSection);
@@ -2228,9 +2265,9 @@
         container.appendChild(licenseCard);
       } else {
         const registerCard = document.createElement("div");
-        registerCard.style.background = "linear-gradient(to bottom, #2c2117 0%, #1a140e 100%)";
+        registerCard.style.background = "linear-gradient(to bottom, #241a2e 0%, #16101f 100%)";
         registerCard.style.borderRadius = "0.5rem";
-        registerCard.style.border = "1px solid #463829";
+        registerCard.style.border = "1px solid #3d2952";
         registerCard.style.padding = "0.75rem";
         registerCard.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.2)";
         registerCard.style.display = "flex";
@@ -2244,7 +2281,7 @@
         headerSection.style.marginBottom = "0.25rem";
         headerSection.style.width = "100%";
         const icon = document.createElement("div");
-        icon.innerHTML = `<span style="font-size: 1.75rem; color: #fbbf24;">🔑</span>`;
+        icon.innerHTML = `<span style="font-size: 1.75rem; color: #fbbf24;">đź”‘</span>`;
         headerSection.appendChild(icon);
         const title = document.createElement("div");
         title.style.fontSize = "1rem";
@@ -2256,7 +2293,7 @@
         subtitle.style.fontSize = "0.8rem";
         subtitle.style.color = "#9ca3af";
         subtitle.style.marginTop = "0.25rem";
-        subtitle.textContent = "Wprowadź swój klucz licencyjny";
+        subtitle.textContent = "WprowadĹş swĂłj klucz licencyjny";
         headerSection.appendChild(subtitle);
         registerCard.appendChild(headerSection);
         const inputSection = document.createElement("div");
@@ -2280,25 +2317,25 @@
         input.style.width = "100%";
         input.style.padding = "0.5rem";
         input.style.fontSize = "0.85rem";
-        input.style.border = "1px solid #463829";
+        input.style.border = "1px solid #3d2952";
         input.style.borderRadius = "0.375rem";
-        input.style.backgroundColor = "#1a140e";
-        input.style.color = "#e8d5b5";
+        input.style.backgroundColor = "#16101f";
+        input.style.color = "#d8cce8";
         input.style.transition = "all 0.2s ease";
         input.style.boxSizing = "border-box";
         input.addEventListener("focus", () => {
-          input.style.borderColor = "#594632";
-          input.style.boxShadow = "0 0 0 2px rgba(89, 70, 50, 0.3)";
+          input.style.borderColor = "#4f3a66";
+          input.style.boxShadow = "0 0 0 2px rgba(79, 58, 102, 0.3)";
         });
         input.addEventListener("blur", () => {
-          input.style.borderColor = "#463829";
+          input.style.borderColor = "#3d2952";
           input.style.boxShadow = "none";
         });
         inputWrapper.appendChild(input);
         inputSection.appendChild(inputWrapper);
         registerCard.appendChild(inputSection);
         const registerBtn = document.createElement("button");
-        registerBtn.textContent = "Zarejestruj licencję";
+        registerBtn.textContent = "Zarejestruj licencjÄ™";
         registerBtn.className = "bot-ui-button green";
         registerBtn.style.padding = "0.5rem";
         registerBtn.style.fontSize = "0.85rem";
@@ -2310,7 +2347,7 @@
         registerBtn.addEventListener("click", () => {
           const key = input.value.trim();
           if (!key) {
-            showMessage("Wprowadź klucz licencyjny", "warning");
+            showMessage("WprowadĹş klucz licencyjny", "warning");
             input.focus();
             return;
           }
@@ -2321,7 +2358,7 @@
           registerLicense(key);
           setTimeout(() => {
             registerBtn.disabled = false;
-            registerBtn.textContent = "Zarejestruj licencję";
+            registerBtn.textContent = "Zarejestruj licencjÄ™";
             registerBtn.style.opacity = "1";
           }, 2000);
         });
@@ -2336,7 +2373,7 @@
         tipsSection.style.boxSizing = "border-box";
         tipsSection.innerHTML = `
                     <div style="margin-bottom: 0.25rem;">Nie masz licencji?</div>
-                    <div>Skontaktuj się z administratorem, aby uzyskać klucz.</div>
+                    <div>Skontaktuj siÄ™ z administratorem, aby uzyskaÄ‡ klucz.</div>
                 `;
         container.appendChild(tipsSection);
       }
@@ -2435,7 +2472,7 @@
         }
       }
       saveSelectionToAPI(charId, isEnabled, selectedBoss);
-      debugLog(`Zapisano wybór: postać=${charId}, włączona=${isEnabled}, boss=${selectedBoss}`);
+      debugLog(`Zapisano wybĂłr: postaÄ‡=${charId}, wĹ‚Ä…czona=${isEnabled}, boss=${selectedBoss}`);
     }
     function applyAllSavedSelections() {
       let appliedCount = 0;
@@ -2481,13 +2518,13 @@
     }
     function saveSelectionToAPI(characterId, isEnabled, selectedBoss) {
       if (!ensureE2APIExists()) {
-        debugLog("Nie można zapisać do API: API nie zainicjalizowane", "error");
+        debugLog("Nie moĹĽna zapisaÄ‡ do API: API nie zainicjalizowane", "error");
         return false;
       }
       try {
         const panelChar = panelState.characters.find(c => c.id === characterId);
         if (!panelChar) {
-          debugLog(`Postać ${characterId} nie znaleziona w stanie panelu`, "error");
+          debugLog(`PostaÄ‡ ${characterId} nie znaleziona w stanie panelu`, "error");
           return false;
         }
         if (isEnabled !== undefined && typeof window.MargonemAPI.e2.toggleCharacter === "function") {
@@ -2498,7 +2535,7 @@
         }
         return true;
       } catch (error) {
-        debugLog(`Błąd podczas zapisywania do API: ${error.message}`, "error");
+        debugLog(`BĹ‚Ä…d podczas zapisywania do API: ${error.message}`, "error");
         return false;
       }
     }
@@ -2543,7 +2580,7 @@
                 color: #e0c088;
                 text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
             ">
-                Zarządzanie E2
+                ZarzÄ…dzanie E2
             </div>
 
             <div class="e2-panel-body" style="
@@ -2574,7 +2611,7 @@
                         cursor: pointer;
                         text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
                     ">
-                        Odśwież
+                        OdĹ›wieĹĽ
                     </button>
                 </div>
 
@@ -2591,7 +2628,7 @@
                     scrollbar-color: #5d5243 rgba(0, 0, 0, 0.2);
                 ">`;
       if (characters.length === 0) {
-        html += `<div style="color: #a98e52; text-align: center; padding: 8px; font-size: 12px;">Brak dostępnych postaci</div>`;
+        html += `<div style="color: #a98e52; text-align: center; padding: 8px; font-size: 12px;">Brak dostÄ™pnych postaci</div>`;
       } else {
         for (let i = 0; i < characters.length; i++) {
           const char = characters[i];
@@ -2764,7 +2801,7 @@
         case "Respawning":
           return "Respawn";
         case "Error":
-          return "Błąd";
+          return "BĹ‚Ä…d";
         default:
           return "Oczekiwanie";
       }
@@ -2775,9 +2812,9 @@
         const now = Date.now();
         if (char.nextRespawnAt > now) {
           const remainingTime = Math.floor((char.nextRespawnAt - now) / 1000 / 60);
-          return `Następny respawn za ~${remainingTime} min`;
+          return `NastÄ™pny respawn za ~${remainingTime} min`;
         } else {
-          return "E2 powinien być dostępny";
+          return "E2 powinien byÄ‡ dostÄ™pny";
         }
       } else if (char.lastKillTime) {
         return `Ostatnie zabicie: ${new Date(char.lastKillTime).toLocaleTimeString()}`;
@@ -2805,11 +2842,11 @@
         if (enabledChars.length > 0) {
           return `Gotowy do startu (${enabledChars.length} postaci)`;
         } else {
-          return "Wybierz postacie i E2 aby rozpocząć";
+          return "Wybierz postacie i E2 aby rozpoczÄ…Ä‡";
         }
       }
       if (autoResumed) {
-        const resumePrefix = "🔄 Wznowiono: ";
+        const resumePrefix = "đź”„ Wznowiono: ";
         if (panelState.isProcessing) {
           const currentChar = panelState.characters[panelState.currentCharacterIndex];
           if (currentChar) {
@@ -2823,7 +2860,7 @@
         if (panelState.isProcessing) {
           const currentChar = panelState.characters[panelState.currentCharacterIndex];
           if (currentChar) {
-            return `Aktywna postać: ${currentChar.nick} - ${getStatusText(currentChar.status)}`;
+            return `Aktywna postaÄ‡: ${currentChar.nick} - ${getStatusText(currentChar.status)}`;
           }
         }
         const killedChars = panelState.characters.filter(c => c.status === "Killed" || c.status === "NotFound");
@@ -2833,19 +2870,19 @@
     }
     function ensureE2APIExists() {
       if (!window.MargonemAPI) {
-        debugLog("MargonemAPI nie jest dostępne", "error");
+        debugLog("MargonemAPI nie jest dostÄ™pne", "error");
         return false;
       }
       if (!window.MargonemAPI.e2) {
-        debugLog("MargonemAPI.e2 nie jest dostępne", "error");
+        debugLog("MargonemAPI.e2 nie jest dostÄ™pne", "error");
         return false;
       }
       return true;
     }
     function startE2Process() {
-      debugLog("Próba uruchomienia procesu E2");
+      debugLog("PrĂłba uruchomienia procesu E2");
       if (!ensureE2APIExists()) {
-        debugLog("Nie można uruchomić E2: API nie jest dostępne", "error");
+        debugLog("Nie moĹĽna uruchomiÄ‡ E2: API nie jest dostÄ™pne", "error");
         return false;
       }
       const enabledCharacters = [];
@@ -2863,12 +2900,12 @@
         }
       });
       if (enabledCharacters.length === 0) {
-        debugLog("Brak wybranych postaci lub bosów", "error");
+        debugLog("Brak wybranych postaci lub bosĂłw", "error");
         return false;
       }
       debugLog(`Znaleziono ${enabledCharacters.length} wybranych postaci do uruchomienia`);
       enabledCharacters.forEach(char => {
-        debugLog(`Zapisuję wybór dla ${char.nick} w API: boss=${char.selectedBoss}`);
+        debugLog(`ZapisujÄ™ wybĂłr dla ${char.nick} w API: boss=${char.selectedBoss}`);
         saveSelectionToAPI(char.id, true, char.selectedBoss);
       });
       if (typeof window.MargonemAPI.e2.startE2 !== "function") {
@@ -2876,24 +2913,24 @@
         return false;
       }
       try {
-        debugLog("Wywołuję MargonemAPI.e2.startE2()");
+        debugLog("WywoĹ‚ujÄ™ MargonemAPI.e2.startE2()");
         const result = window.MargonemAPI.e2.startE2();
         debugLog(`Wynik uruchomienia procesu E2: ${JSON.stringify(result)}`);
         if (result && result.error) {
-          debugLog(`Uruchomienie E2 zwróciło błąd: ${result.error}`, "error");
+          debugLog(`Uruchomienie E2 zwrĂłciĹ‚o bĹ‚Ä…d: ${result.error}`, "error");
           return false;
         }
         updatePanel();
         return true;
       } catch (error) {
-        debugLog(`Błąd podczas uruchamiania procesu E2: ${error.message}`, "error");
+        debugLog(`BĹ‚Ä…d podczas uruchamiania procesu E2: ${error.message}`, "error");
         return false;
       }
     }
     function stopE2Process() {
-      debugLog("Próba zatrzymania procesu E2");
+      debugLog("PrĂłba zatrzymania procesu E2");
       if (!ensureE2APIExists()) {
-        debugLog("Nie można zatrzymać E2: API nie jest dostępne", "error");
+        debugLog("Nie moĹĽna zatrzymaÄ‡ E2: API nie jest dostÄ™pne", "error");
         return false;
       }
       if (typeof window.MargonemAPI.e2.stopE2 !== "function") {
@@ -2906,7 +2943,7 @@
         updatePanel();
         return true;
       } catch (error) {
-        debugLog(`Błąd podczas zatrzymywania procesu E2: ${error.message}`, "error");
+        debugLog(`BĹ‚Ä…d podczas zatrzymywania procesu E2: ${error.message}`, "error");
         return false;
       }
     }
@@ -2951,7 +2988,7 @@
           });
         }
       } catch (error) {
-        debugLog(`Błąd podczas synchronizacji z API: ${error.message}`, "error");
+        debugLog(`BĹ‚Ä…d podczas synchronizacji z API: ${error.message}`, "error");
       }
       if (panelState.characters.length === 0) {
         panelState.characters = initializeCharactersFromEngine();
@@ -2980,7 +3017,7 @@
           const charId = this.getAttribute("data-id");
           const isChecked = this.checked;
           saveCharacterSelection(charId, isChecked, undefined);
-          debugLog(`Zmieniono stan postaci ${charId} na ${isChecked ? "włączony" : "wyłączony"}`);
+          debugLog(`Zmieniono stan postaci ${charId} na ${isChecked ? "wĹ‚Ä…czony" : "wyĹ‚Ä…czony"}`);
           const charItem = this.closest(".character-item");
           if (charItem) {
             charItem.style.border = `1px solid ${isChecked ? "#5d5243" : "#3c3527"}`;
@@ -3023,10 +3060,10 @@
       if (e2Btn) {
         e2Btn.addEventListener("click", function () {
           if (!ensureE2APIExists()) {
-            debugLog("Nie można przełączyć E2: API nie jest dostępne", "error");
+            debugLog("Nie moĹĽna przeĹ‚Ä…czyÄ‡ E2: API nie jest dostÄ™pne", "error");
             return;
           }
-          debugLog(`Kliknięto przycisk E2, obecny stan: ${panelState.active ? "aktywny" : "nieaktywny"}`);
+          debugLog(`KlikniÄ™to przycisk E2, obecny stan: ${panelState.active ? "aktywny" : "nieaktywny"}`);
           let success = false;
           try {
             if (panelState.active) {
@@ -3040,23 +3077,23 @@
               this.style.background = `linear-gradient(to bottom, ${willBeActive ? "#6b4242, #431f1f" : "#4a6b42, #2f431f"})`;
               this.style.borderColor = willBeActive ? "#8d5252" : "#5d8d52";
             } else {
-              debugLog("Nie udało się przełączyć stanu E2", "error");
+              debugLog("Nie udaĹ‚o siÄ™ przeĹ‚Ä…czyÄ‡ stanu E2", "error");
             }
           } catch (error) {
-            debugLog(`Błąd podczas przełączania E2: ${error.message}`, "error");
+            debugLog(`BĹ‚Ä…d podczas przeĹ‚Ä…czania E2: ${error.message}`, "error");
           }
         });
       }
       const refreshBtn = content.querySelector("#refreshCharsBtn");
       if (refreshBtn) {
         refreshBtn.addEventListener("click", function () {
-          this.textContent = "Ładowanie...";
+          this.textContent = "Ĺadowanie...";
           this.disabled = true;
           setTimeout(() => {
-            debugLog("Odświeżanie listy postaci");
+            debugLog("OdĹ›wieĹĽanie listy postaci");
             try {
               if (ensureE2APIExists() && typeof window.MargonemAPI.e2.initializeCharacters === "function") {
-                debugLog("Wywołuję API initializeCharacters");
+                debugLog("WywoĹ‚ujÄ™ API initializeCharacters");
                 window.MargonemAPI.e2.initializeCharacters();
               }
               panelState.characters = initializeCharactersFromEngine();
@@ -3068,12 +3105,12 @@
                   }
                 });
                 updatePanel();
-                this.textContent = "Odśwież";
+                this.textContent = "OdĹ›wieĹĽ";
                 this.disabled = false;
               }, 100);
             } catch (error) {
-              debugLog(`Błąd podczas odświeżania: ${error.message}`, "error");
-              this.textContent = "Odśwież";
+              debugLog(`BĹ‚Ä…d podczas odĹ›wieĹĽania: ${error.message}`, "error");
+              this.textContent = "OdĹ›wieĹĽ";
               this.disabled = false;
             }
           }, 100);
@@ -3088,7 +3125,7 @@
     }
     function updatePanel() {
       if (isAnySelectOpen()) {
-        debugLog("Pomijam aktualizację panelu: lista rozwijana jest otwarta");
+        debugLog("Pomijam aktualizacjÄ™ panelu: lista rozwijana jest otwarta");
         return;
       }
       panelState.characters.forEach(char => {
@@ -3113,7 +3150,7 @@
     const updateInterval = setInterval(() => {
       if (!document.contains(content)) {
         clearInterval(updateInterval);
-        debugLog("Panel usunięty z DOM, czyszczę interwał");
+        debugLog("Panel usuniÄ™ty z DOM, czyszczÄ™ interwaĹ‚");
         return;
       }
       if (isAnySelectOpen()) {
@@ -3188,22 +3225,22 @@
       }
       if (data.success && data.expires) {
         msgElem.style.color = "green";
-        msgElem.innerText = "Rejestracja udana, odśwież stronę";
+        msgElem.innerText = "Rejestracja udana, odĹ›wieĹĽ stronÄ™";
         localStorage.setItem("tm_license", licenseKey);
         localStorage.setItem("tm_license_expiration", data.expires);
-      } else if (data.message && data.message.indexOf("Licencja jest już zarejestrowana") !== -1) {
+      } else if (data.message && data.message.indexOf("Licencja jest juĹĽ zarejestrowana") !== -1) {
         msgElem.style.color = "orange";
-        msgElem.innerText = "Licencja już zarejestrowana, odśwież stronę";
+        msgElem.innerText = "Licencja juĹĽ zarejestrowana, odĹ›wieĹĽ stronÄ™";
         localStorage.setItem("tm_license", licenseKey);
       } else {
         msgElem.style.color = "red";
-        msgElem.innerText = "Błąd: " + data.message;
+        msgElem.innerText = "BĹ‚Ä…d: " + data.message;
       }
     }).catch(err => {
       const msgElem = document.getElementById("tm-license-message");
       if (msgElem) {
         msgElem.style.color = "red";
-        msgElem.innerText = "Błąd: " + err;
+        msgElem.innerText = "BĹ‚Ä…d: " + err;
       }
     });
   }
@@ -3286,7 +3323,7 @@
             mapData,
             Expowiska
           } = await loadGameData();
-          console.debug("Dane gry załadowane:", {
+          console.debug("Dane gry zaĹ‚adowane:", {
             mapMapCount: Object.keys(window.mapData).length,
             ExpowiskaCount: Object.keys(window.Expowiska).length,
             e2Count: Object.keys(window.e2).length
@@ -3372,7 +3409,7 @@
   }
   async function loadGameData() {
     try {
-      console.debug("Rozpoczęcie ładowania danych gry...");
+      console.debug("RozpoczÄ™cie Ĺ‚adowania danych gry...");
       const MAPDATA_KEY = "tm_mapdata";
       const EXPOWISKA_KEY = "tm_expowiska";
       const E2_KEY = "tm_e2";
@@ -3395,14 +3432,14 @@
         });
         const checksumData = await response.json();
         if (checksumData.valid) {
-          console.debug("Checksum zgodny, używam danych z localStorage");
+          console.debug("Checksum zgodny, uĹĽywam danych z localStorage");
           fetchNewData = false;
           const mapData = JSON.parse(storedMapData);
           const Expowiska = JSON.parse(storedExpowiska);
           window.e2 = JSON.parse(storedE2);
           window.mapData = mapData;
           window.Expowiska = Expowiska;
-          console.debug("Dane załadowane z localStorage");
+          console.debug("Dane zaĹ‚adowane z localStorage");
           return {
             mapData,
             Expowiska,
@@ -3415,7 +3452,7 @@
         console.debug("Brak danych w localStorage, pobieram nowe dane");
       }
       if (fetchNewData) {
-        console.debug("Wysyłanie żądania do serwera o dane gry");
+        console.debug("WysyĹ‚anie ĹĽÄ…dania do serwera o dane gry");
         const response = await fetch(`${serverUrl}/gameData`, {
           method: "GET",
           headers: {
@@ -3424,7 +3461,7 @@
         });
         const gameData = await response.json();
         if (!gameData.mapData || !gameData.Expowiska || !gameData.e2) {
-          throw new Error("Niepełne dane otrzymane z serwera");
+          throw new Error("NiepeĹ‚ne dane otrzymane z serwera");
         }
         localStorage.setItem(MAPDATA_KEY, JSON.stringify(gameData.mapData));
         localStorage.setItem(EXPOWISKA_KEY, JSON.stringify(gameData.Expowiska));
@@ -3437,7 +3474,7 @@
         window.e2 = gameData.e2;
         window.mapData = mapData;
         window.Expowiska = Expowiska;
-        console.debug("Nowe dane zapisane w localStorage i załadowane");
+        console.debug("Nowe dane zapisane w localStorage i zaĹ‚adowane");
         return {
           mapData,
           Expowiska,
@@ -3445,13 +3482,13 @@
         };
       }
     } catch (error) {
-      console.error("Błąd podczas ładowania danych gry:", error);
+      console.error("BĹ‚Ä…d podczas Ĺ‚adowania danych gry:", error);
       try {
         const storedMapData = localStorage.getItem("tm_mapdata");
         const storedExpowiska = localStorage.getItem("tm_expowiska");
         const storedE2 = localStorage.getItem("tm_e2");
         if (storedMapData && storedExpowiska && storedE2) {
-          console.debug("Używam danych z localStorage jako awaryjne rozwiązanie");
+          console.debug("UĹĽywam danych z localStorage jako awaryjne rozwiÄ…zanie");
           const mapData = JSON.parse(storedMapData);
           const Expowiska = JSON.parse(storedExpowiska);
           window.e2 = JSON.parse(storedE2);
@@ -3464,9 +3501,9 @@
           };
         }
       } catch (fallbackError) {
-        console.error("Błąd podczas próby załadowania awaryjnych danych:", fallbackError);
+        console.error("BĹ‚Ä…d podczas prĂłby zaĹ‚adowania awaryjnych danych:", fallbackError);
       }
-      console.warn("Nie udało się załadować danych, używam pustych obiektów");
+      console.warn("Nie udaĹ‚o siÄ™ zaĹ‚adowaÄ‡ danych, uĹĽywam pustych obiektĂłw");
       return {
         mapData: {},
         Expowiska: {},
@@ -3491,9 +3528,9 @@
       window.MargonemAPI.heroPositionMonitor.init();
       initialize();
       function initializeE2Panel(retryCount = 0, maxRetries = 5) {
-        // console.log(`[E2] Próba inicjalizacji panelu (${retryCount + 1}/${maxRetries + 1})`);
+        // console.log(`[E2] PrĂłba inicjalizacji panelu (${retryCount + 1}/${maxRetries + 1})`);
         if (window.e2Panel) {
-          // console.log("[E2] Panel już istnieje, aktualizuję");
+          // console.log("[E2] Panel juĹĽ istnieje, aktualizujÄ™");
           window.e2Panel.remove();
           window.e2Panel = null;
         }
@@ -3503,26 +3540,26 @@
         if (!apiAvailable || !e2DataAvailable || !panelClassAvailable) {
           if (retryCount < maxRetries) {
             const delay = Math.pow(2, retryCount) * 1000;
-            console.warn(`[E2] Brak wymaganych obiektów, kolejna próba za ${delay / 1000}s...`);
+            console.warn(`[E2] Brak wymaganych obiektĂłw, kolejna prĂłba za ${delay / 1000}s...`);
             console.warn(`[E2] API: ${apiAvailable}, E2 Data: ${e2DataAvailable}, DraggablePanel: ${panelClassAvailable}`);
             setTimeout(() => {
               initializeE2Panel(retryCount + 1, maxRetries);
             }, delay);
             return false;
           } else {
-            console.error("[E2] Nie udało się zainicjalizować panelu po wszystkich próbach!");
+            console.error("[E2] Nie udaĹ‚o siÄ™ zainicjalizowaÄ‡ panelu po wszystkich prĂłbach!");
             return false;
           }
         }
         try {
           window.e2Panel = createE2Panel();
-          // console.log("[E2] Panel zainicjalizowany pomyślnie");
+          // console.log("[E2] Panel zainicjalizowany pomyĹ›lnie");
           return true;
         } catch (error) {
-          console.error("[E2] Błąd podczas tworzenia panelu:", error);
+          console.error("[E2] BĹ‚Ä…d podczas tworzenia panelu:", error);
           if (retryCount < maxRetries) {
             const delay = Math.pow(2, retryCount) * 1000;
-            console.warn(`[E2] Ponowna próba za ${delay / 1000}s...`);
+            console.warn(`[E2] Ponowna prĂłba za ${delay / 1000}s...`);
             setTimeout(() => {
               initializeE2Panel(retryCount + 1, maxRetries);
             }, delay);
@@ -3540,17 +3577,17 @@
             }
           }
         } catch (error) {
-          console.error("[E2] Błąd podczas sprawdzania API:", error);
+          console.error("[E2] BĹ‚Ä…d podczas sprawdzania API:", error);
         }
       }, 3000);
       setTimeout(() => {
         if (panelInitInterval) {
           clearInterval(panelInitInterval);
-          console.warn("[E2] Przekroczono limit czasu oczekiwania na inicjalizację panelu");
+          console.warn("[E2] Przekroczono limit czasu oczekiwania na inicjalizacjÄ™ panelu");
         }
       }, 120000);
     } catch (err) {
-      console.error("Błąd w funkcji main:", err);
+      console.error("BĹ‚Ä…d w funkcji main:", err);
       initialize();
     }
   }
@@ -3566,7 +3603,7 @@
       try {
         localStorage.setItem(key, JSON.stringify(value));
       } catch (error) {
-        console.error("Błąd zapisywania do localStorage:", error);
+        console.error("BĹ‚Ä…d zapisywania do localStorage:", error);
       }
     }
     function getFromLocalStorage(key, defaultValue = null) {
@@ -3578,7 +3615,7 @@
           return defaultValue;
         }
       } catch (error) {
-        console.error("Błąd odczytywania z localStorage:", error);
+        console.error("BĹ‚Ä…d odczytywania z localStorage:", error);
         return defaultValue;
       }
     }
@@ -3747,7 +3784,7 @@
             }
 
             .referral-benefits li:before {
-                content: "→";
+                content: "â†’";
                 position: absolute;
                 left: 0;
                 color: #ffcc80;
@@ -3811,10 +3848,10 @@
       header.id = "margonem-news-header";
       const title = document.createElement("div");
       title.id = "margonem-news-title";
-      title.textContent = "Aktualności i Polecenia";
+      title.textContent = "AktualnoĹ›ci i Polecenia";
       const closeButton = document.createElement("div");
       closeButton.id = "margonem-news-close";
-      closeButton.textContent = "✕";
+      closeButton.textContent = "âś•";
       closeButton.onclick = function () {
         newsContainer.style.display = "none";
         saveToLocalStorage(WINDOW_CLOSED_KEY, true);
@@ -3832,21 +3869,21 @@
       referralSection.id = "referral-section";
       const referralTitle = document.createElement("h2");
       referralTitle.className = "section-title";
-      referralTitle.textContent = "Program Poleceń";
+      referralTitle.textContent = "Program PoleceĹ„";
       const referralContent = document.createElement("div");
       referralContent.className = "referral-content";
       referralContent.innerHTML = `
-            <p><span class="referral-highlight">Zarabiaj, polecając NexosBota znajomym!</span> Każda osoba, która kupi licencję z Twojego polecenia, to <span class="referral-highlight">10 zł zniżki</span> na Twój abonament.</p>
+            <p><span class="referral-highlight">Zarabiaj, polecajÄ…c NexosBota znajomym!</span> KaĹĽda osoba, ktĂłra kupi licencjÄ™ z Twojego polecenia, to <span class="referral-highlight">10 zĹ‚ zniĹĽki</span> na TwĂłj abonament.</p>
 
             <ul class="referral-benefits">
-                <li>Za każde polecenie otrzymujesz 10 zł rabatu na kolejne odnowienia</li>
-                <li>Poleć 3 osoby i zyskaj <span class="referral-highlight">miesiąc korzystania ZA DARMO!</span></li>
-                <li>Możesz też sprzedać tak uzyskaną licencję i <span class="referral-highlight">zarobić PRAWDZIWE PIENIĄDZE!</span></li>
-                <li>Brak limitu zniżek - im więcej poleceń, tym dłużej korzystasz bez opłat</li>
-                <li>Program działa bezterminowo - zniżki sumują się miesiąc do miesiąca</li>
+                <li>Za kaĹĽde polecenie otrzymujesz 10 zĹ‚ rabatu na kolejne odnowienia</li>
+                <li>PoleÄ‡ 3 osoby i zyskaj <span class="referral-highlight">miesiÄ…c korzystania ZA DARMO!</span></li>
+                <li>MoĹĽesz teĹĽ sprzedaÄ‡ tak uzyskanÄ… licencjÄ™ i <span class="referral-highlight">zarobiÄ‡ PRAWDZIWE PIENIÄ„DZE!</span></li>
+                <li>Brak limitu zniĹĽek - im wiÄ™cej poleceĹ„, tym dĹ‚uĹĽej korzystasz bez opĹ‚at</li>
+                <li>Program dziaĹ‚a bezterminowo - zniĹĽki sumujÄ… siÄ™ miesiÄ…c do miesiÄ…ca</li>
             </ul>
 
-            <a href="https://nexosbot.com/system_polecen" class="cta-button">ZDOBĄDŹ SWÓJ LINK POLECAJĄCY</a>
+            <a href="https://nexosbot.com/system_polecen" class="cta-button">ZDOBÄ„DĹą SWĂ“J LINK POLECAJÄ„CY</a>
         `;
       referralSection.appendChild(referralTitle);
       referralSection.appendChild(referralContent);
@@ -3889,7 +3926,7 @@
     function updateNewsContent(container, newsItem) {
       const newsSection = container.querySelector("#news-section");
       if (!newsSection) {
-        console.error("Nie znaleziono sekcji wiadomości w kontenerze:", container);
+        console.error("Nie znaleziono sekcji wiadomoĹ›ci w kontenerze:", container);
         return;
       }
       const sectionTitle = newsSection.querySelector(".section-title");
@@ -3938,12 +3975,12 @@
           }
           serverResponse = await response.json();
         } catch (apiError) {
-          console.error("Błąd pobierania danych z API:", apiError);
+          console.error("BĹ‚Ä…d pobierania danych z API:", apiError);
           serverResponse = {
             lastUpdate: new Date().toLocaleDateString("pl-PL"),
             news: [{
               title: "Aktualizacja NexosBot",
-              text: "Nie udało się pobrać najnowszych aktualności. Spróbuj ponownie później lub sprawdź stronę nexosbot.com.",
+              text: "Nie udaĹ‚o siÄ™ pobraÄ‡ najnowszych aktualnoĹ›ci. SprĂłbuj ponownie pĂłĹşniej lub sprawdĹş stronÄ™ nexosbot.com.",
               date: new Date().toLocaleDateString("pl-PL")
             }]
           };
@@ -3967,7 +4004,7 @@
         }
         saveToLocalStorage(LAST_UPDATE_KEY, serverResponse.lastUpdate);
       } catch (error) {
-        console.error("Błąd ładowania aktualności:", error);
+        console.error("BĹ‚Ä…d Ĺ‚adowania aktualnoĹ›ci:", error);
       }
     }
     function initialize() {
